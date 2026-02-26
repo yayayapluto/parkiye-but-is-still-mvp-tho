@@ -12,10 +12,11 @@ import (
 
 // Config is the top-level application configuration.
 type Config struct {
-	App      AppConfig
-	Database DatabaseConfig
-	JWT      JWTConfig
-	Server   ServerConfig
+	App           AppConfig
+	Database      DatabaseConfig
+	JWT           JWTConfig
+	Server        ServerConfig
+	Observability ObservabilityConfig // ← ADD THIS
 }
 
 type AppConfig struct {
@@ -50,6 +51,16 @@ type ServerConfig struct {
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
 	IdleTimeout  time.Duration
+}
+
+// ADD THIS NEW STRUCT
+type ObservabilityConfig struct {
+	EnableTracing   bool
+	GrafanaPassword string
+	PrometheusPort  int
+	GrafanaPort     int
+	LokiPort        int
+	LogLevel        string
 }
 
 // LoadEnv loads .env file from the given paths (first found wins).
@@ -103,6 +114,15 @@ func Load() (*Config, error) {
 			WriteTimeout: getEnvDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),
 			IdleTimeout:  getEnvDuration("SERVER_IDLE_TIMEOUT", 60*time.Second),
 		},
+		// ADD THIS SECTION
+		Observability: ObservabilityConfig{
+			EnableTracing:   getEnvBool("ENABLE_TRACING", false),
+			GrafanaPassword: getEnv("GRAFANA_PASSWORD", "admin"),
+			PrometheusPort:  getEnvInt("PROMETHEUS_PORT", 9090),
+			GrafanaPort:     getEnvInt("GRAFANA_PORT", 3000),
+			LokiPort:        getEnvInt("LOKI_PORT", 3100),
+			LogLevel:        getEnv("OBSERVABILITY_LOG_LEVEL", "info"),
+		},
 	}
 
 	return cfg, nil
@@ -113,6 +133,17 @@ func (c *Config) IsDevelopment() bool { return c.App.Env == "development" }
 
 // IsProduction returns true when APP_ENV=production.
 func (c *Config) IsProduction() bool { return c.App.Env == "production" }
+
+// ADD THESE HELPER METHODS
+func (c *Config) IsTracingEnabled() bool { return c.Observability.EnableTracing }
+
+func (c *Config) GetObservabilityURLs() map[string]string {
+	return map[string]string{
+		"prometheus": fmt.Sprintf("http://localhost:%d", c.Observability.PrometheusPort),
+		"grafana":    fmt.Sprintf("http://localhost:%d", c.Observability.GrafanaPort),
+		"loki":       fmt.Sprintf("http://localhost:%d", c.Observability.LokiPort),
+	}
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
