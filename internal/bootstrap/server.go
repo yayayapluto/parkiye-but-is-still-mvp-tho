@@ -1,20 +1,6 @@
 package bootstrap
 
 import (
-	"parkieee/internal/modules/audit"
-	"parkieee/internal/modules/auth"
-	"parkieee/internal/modules/fee"
-	"parkieee/internal/modules/gate"
-	"parkieee/internal/modules/ocr"
-	"parkieee/internal/modules/override"
-	"parkieee/internal/modules/payment"
-	"parkieee/internal/modules/rfid"
-	"parkieee/internal/modules/transaction"
-	"parkieee/internal/modules/vehicle"
-	"parkieee/internal/modules/zone"
-	"parkieee/pkg/middleware"
-	"parkieee/pkg/response"
-
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/etag"
@@ -30,13 +16,13 @@ func NewServer(container *Container) *fiber.App {
 		ReadTimeout:  container.Config.Server.ReadTimeout,
 		WriteTimeout: container.Config.Server.WriteTimeout,
 		IdleTimeout:  container.Config.Server.IdleTimeout,
-		ErrorHandler: errorHandler,
+		//ErrorHandler: errorHandler,
 	})
 
 	// Global middleware
 	app.Use(recover.New())
 	app.Use(requestid.New())
-	app.Use(container.Log.Middleware())
+	//app.Use(container.Log.Middleware())
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "*",
 		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS,PATCH",
@@ -52,33 +38,33 @@ func NewServer(container *Container) *fiber.App {
 	}
 
 	// Health check
-	app.Get("/health", func(c *fiber.Ctx) error {
-		return response.OK(c, fiber.Map{
-			"status": "ok",
-			"env":    container.Config.App.Env,
-		})
-	})
+	//app.Get("/health", func(c *fiber.Ctx) error {
+	//	return response.OK(c, fiber.Map{
+	//		"status": "ok",
+	//		"env":    container.Config.App.Env,
+	//	})
+	//})
 
 	// API v1 routes
-	api := app.Group("/api/v1")
+	//api := app.Group("/api/v1")
 
 	// Register module routes (in dependency order)
-	auth.RegisterRoutes(api, container)
-	zone.RegisterRoutes(api, container)
-	gate.RegisterRoutes(api, container)
-	vehicle.RegisterRoutes(api, container)
-	rfid.RegisterRoutes(api, container)
-	fee.RegisterRoutes(api, container)
-	transaction.RegisterRoutes(api, container)
-	payment.RegisterRoutes(api, container)
-	override.RegisterRoutes(api, container)
-	ocr.RegisterRoutes(api, container)
-	audit.RegisterRoutes(api, container)
+	//auth.RegisterRoutes(api, container)
+	//zone.RegisterRoutes(api, container)
+	//gate.RegisterRoutes(api, container)
+	//vehicle.RegisterRoutes(api, container)
+	//rfid.RegisterRoutes(api, container)
+	//fee.RegisterRoutes(api, container)
+	//transaction.RegisterRoutes(api, container)
+	//payment.RegisterRoutes(api, container)
+	//override.RegisterRoutes(api, container)
+	//ocr.RegisterRoutes(api, container)
+	//audit.RegisterRoutes(api, container)
 
 	return app
 }
 
 // Global error handler
-func errorHandler(c *fiber.Ctx, err error) error {
-	return response.Error(c, fiber.StatusInternalServerError, err.Error())
-}
+//func errorHandler(c *fiber.Ctx, err error) error {
+//	return response.Error(c, fiber.StatusInternalServerError, err.Error())
+//}

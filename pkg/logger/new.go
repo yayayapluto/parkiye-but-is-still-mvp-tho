@@ -1,7 +1,6 @@
 package logger
 
 import (
-	"context"
 	"io"
 	"log/slog"
 	"os"
@@ -16,7 +15,7 @@ func New(cfg Config) (Logger, error) {
 	for _, path := range cfg.OutputPaths {
 		var w io.Writer
 		var err error
-		
+
 		switch path {
 		case "stdout":
 			w = os.Stdout
@@ -41,7 +40,7 @@ func New(cfg Config) (Logger, error) {
 				}
 			}
 		}
-		
+
 		handlerOpts := &slog.HandlerOptions{
 			Level:     cfg.Level,
 			AddSource: cfg.AddSource,
@@ -57,13 +56,13 @@ func New(cfg Config) (Logger, error) {
 		}
 		handlers = append(handlers, handler)
 	}
-	
+
 	var finalHandler slog.Handler
 	if len(handlers) == 1 {
 		finalHandler = handlers[0]
 	} else {
 		finalHandler = slog.Handler(teeHandler(handlers))
 	}
-	
+
 	return &SlogLogger{logger: slog.New(finalHandler)}, nil
 }

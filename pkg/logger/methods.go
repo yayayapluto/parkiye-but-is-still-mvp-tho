@@ -1,6 +1,9 @@
 package logger
 
-import "context"
+import (
+	"context"
+	"os"
+)
 
 func (l *SlogLogger) Info(ctx context.Context, msg string, args ...any) {
 	l.logger.InfoContext(ctx, msg, args...)

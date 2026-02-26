@@ -1,6 +1,9 @@
 package logger
 
-import "context"
+import (
+	"context"
+	"log/slog"
+)
 
 // Logger defines the minimal logging interface used by the application.
 type Logger interface {

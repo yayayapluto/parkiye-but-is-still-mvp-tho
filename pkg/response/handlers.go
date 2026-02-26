@@ -1,10 +1,11 @@
 package response
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gofiber/fiber/v2"
-	"parkieee/pkg/errors"
+	cErrors "parkieee/pkg/errors"
 )
 
 func Success(c *fiber.Ctx, message string, data any) error {
@@ -101,7 +102,7 @@ func InternalError(c *fiber.Ctx, message string) error {
 	})
 }
 
-func AppErrorHandler(c *fiber.Ctx, appErr *errors.AppError) error {
+func AppErrorHandler(c *fiber.Ctx, appErr *cErrors.AppError) error {
 	return c.Status(appErr.Status).JSON(ErrorResponse{
 		Success: false,
 		Meta: Meta{
@@ -112,11 +113,26 @@ func AppErrorHandler(c *fiber.Ctx, appErr *errors.AppError) error {
 	})
 }
 
+// Fixed ErrorHandler - properly handles error checking
 func ErrorHandler(c *fiber.Ctx, err error) error {
-	if appErr, ok := errors.AsAppError(err); ok {
+	// Try to convert to AppError
+	var appErr *cErrors.AppError
+	if errors.As(err, &appErr) {
 		return AppErrorHandler(c, appErr)
 	}
 
+	// Handle Fiber error
+	if e, ok := err.(*fiber.Error); ok {
+		return c.Status(e.Code).JSON(ErrorResponse{
+			Success: false,
+			Meta: Meta{
+				Code:    http.StatusText(e.Code),
+				Message: e.Message,
+			},
+		})
+	}
+
+	// Default internal error
 	return c.Status(http.StatusInternalServerError).JSON(ErrorResponse{
 		Success: false,
 		Meta: Meta{

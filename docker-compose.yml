@@ -23,41 +23,6 @@ services:
     networks:
       - parkieee_net
 
-  # ── Observability stack (uncomment for non-MVP) ────────────────────────────
-  # prometheus:
-  #   image: prom/prometheus:latest
-  #   container_name: parkieee_prometheus
-  #   ports:
-  #     - "9090:9090"
-  #   volumes:
-  #     - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-  #   networks:
-  #     - parkieee_net
-
-  # grafana:
-  #   image: grafana/grafana:latest
-  #   container_name: parkieee_grafana
-  #   ports:
-  #     - "3000:3000"
-  #   networks:
-  #     - parkieee_net
-
-  # loki:
-  #   image: grafana/loki:latest
-  #   container_name: parkieee_loki
-  #   ports:
-  #     - "3100:3100"
-  #   networks:
-  #     - parkieee_net
-
-  # tempo:
-  #   image: grafana/tempo:latest
-  #   container_name: parkieee_tempo
-  #   ports:
-  #     - "3200:3200"
-  #   networks:
-  #     - parkieee_net
-
 volumes:
   postgres_data:
     driver: local

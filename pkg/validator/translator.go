@@ -1,5 +1,9 @@
 package validator
 
+import (
+	"fmt"
+)
+
 // MessageTranslator converts field/tag/param into a human-readable string.
 type MessageTranslator func(field, tag, param string) string
 

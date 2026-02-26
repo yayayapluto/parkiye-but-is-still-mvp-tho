@@ -2,6 +2,7 @@ package logger
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -52,9 +53,9 @@ type samplingHandler struct {
 }
 
 type samplingCounter struct {
-	mu      sync.Mutex
-	count   int
-	last    time.Time
+	mu    sync.Mutex
+	count int
+	last  time.Time
 }
 
 func newSamplingHandler(inner slog.Handler, cfg *SamplingConfig) slog.Handler {

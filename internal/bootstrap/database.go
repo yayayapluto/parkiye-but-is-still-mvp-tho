@@ -3,7 +3,7 @@ package bootstrap
 import (
 	"parkieee/database"
 	"parkieee/pkg/config"
-	"parkieee/pkg/logger"
+	//"parkieee/pkg/logger"
 
 	"gorm.io/gorm"
 )
