@@ -10,7 +10,7 @@ import (
 )
 
 // New constructs a Logger based on provided Config.
-func New(cfg Config) (Logger, error) {
+func New(cfg *Config) (Logger, error) {
 	var handlers []slog.Handler
 	for _, path := range cfg.OutputPaths {
 		var w io.Writer

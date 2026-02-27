@@ -5,18 +5,21 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/etag"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
+	"github.com/gofiber/fiber/v2/middleware/monitor"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
+	"parkieee/pkg/response"
 )
 
 // NewServer creates and configures the Fiber application
 func NewServer(container *Container) *fiber.App {
 	app := fiber.New(fiber.Config{
-		AppName:      container.Config.App.Name,
-		ReadTimeout:  container.Config.Server.ReadTimeout,
-		WriteTimeout: container.Config.Server.WriteTimeout,
-		IdleTimeout:  container.Config.Server.IdleTimeout,
-		//ErrorHandler: errorHandler,
+		AppName:           container.Config.App.Name,
+		ReadTimeout:       container.Config.Server.ReadTimeout,
+		WriteTimeout:      container.Config.Server.WriteTimeout,
+		IdleTimeout:       container.Config.Server.IdleTimeout,
+		EnablePrintRoutes: true,
+		ErrorHandler:      errorHandler,
 	})
 
 	// Global middleware
@@ -28,6 +31,7 @@ func NewServer(container *Container) *fiber.App {
 		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS,PATCH",
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 	}))
+	app.Get("/metrics", monitor.New())
 
 	// Production-only middleware
 	if container.Config.IsProduction() {
@@ -38,12 +42,12 @@ func NewServer(container *Container) *fiber.App {
 	}
 
 	// Health check
-	//app.Get("/health", func(c *fiber.Ctx) error {
-	//	return response.OK(c, fiber.Map{
-	//		"status": "ok",
-	//		"env":    container.Config.App.Env,
-	//	})
-	//})
+	app.Get("/health", func(c *fiber.Ctx) error {
+		return response.Success(c, "ok", fiber.Map{
+			"status": "ok",
+			"env":    container.Config.App.Env,
+		})
+	})
 
 	// API v1 routes
 	//api := app.Group("/api/v1")
@@ -65,6 +69,6 @@ func NewServer(container *Container) *fiber.App {
 }
 
 // Global error handler
-//func errorHandler(c *fiber.Ctx, err error) error {
-//	return response.Error(c, fiber.StatusInternalServerError, err.Error())
-//}
+func errorHandler(c *fiber.Ctx, err error) error {
+	return response.ErrorHandler(c, err)
+}

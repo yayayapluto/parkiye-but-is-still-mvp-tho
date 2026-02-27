@@ -3,8 +3,11 @@ package config
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
+	"parkieee/pkg/logger"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -17,6 +20,7 @@ type Config struct {
 	JWT           JWTConfig
 	Server        ServerConfig
 	Observability ObservabilityConfig // ← ADD THIS
+	Logger        LoggerConfig
 }
 
 type AppConfig struct {
@@ -61,6 +65,19 @@ type ObservabilityConfig struct {
 	GrafanaPort     int
 	LokiPort        int
 	LogLevel        string
+}
+
+type LoggerConfig struct {
+	Level       string // "debug"|"info"|"warn"|"error"
+	AddSource   bool
+	JSONFormat  bool
+	OutputPaths []string // e.g. ["stdout", "/var/log/app.log"]
+
+	// File rotation (opsional, hanya aktif kalau OutputPaths ada file path)
+	FileMaxSize    int // MB, default 100
+	FileMaxBackups int // default 3
+	FileMaxAge     int // days, default 28
+	FileCompress   bool
 }
 
 // LoadEnv loads .env file from the given paths (first found wins).
@@ -123,6 +140,16 @@ func Load() (*Config, error) {
 			LokiPort:        getEnvInt("LOKI_PORT", 3100),
 			LogLevel:        getEnv("OBSERVABILITY_LOG_LEVEL", "info"),
 		},
+		Logger: LoggerConfig{
+			Level:          getEnv("LOG_LEVEL", "info"),
+			AddSource:      getEnvBool("LOG_ADD_SOURCE", false),
+			JSONFormat:     getEnvBool("LOG_JSON_FORMAT", false),
+			OutputPaths:    getEnvStringSlice("LOG_OUTPUT_PATHS", []string{"stdout"}),
+			FileMaxSize:    getEnvInt("LOG_FILE_MAX_SIZE", 100),
+			FileMaxBackups: getEnvInt("LOG_FILE_MAX_BACKUPS", 3),
+			FileMaxAge:     getEnvInt("LOG_FILE_MAX_AGE", 28),
+			FileCompress:   getEnvBool("LOG_FILE_COMPRESS", true),
+		},
 	}
 
 	return cfg, nil
@@ -142,6 +169,40 @@ func (c *Config) GetObservabilityURLs() map[string]string {
 		"prometheus": fmt.Sprintf("http://localhost:%d", c.Observability.PrometheusPort),
 		"grafana":    fmt.Sprintf("http://localhost:%d", c.Observability.GrafanaPort),
 		"loki":       fmt.Sprintf("http://localhost:%d", c.Observability.LokiPort),
+	}
+}
+
+func (c *Config) ToLoggerConfig() *logger.Config {
+	level := slog.LevelInfo
+	switch c.Logger.Level {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	}
+
+	var fileConfig *logger.FileConfig
+	for _, path := range c.Logger.OutputPaths {
+		if path != "stdout" && path != "stderr" {
+			fileConfig = &logger.FileConfig{
+				Path:       path,
+				MaxSize:    c.Logger.FileMaxSize,
+				MaxBackups: c.Logger.FileMaxBackups,
+				MaxAge:     c.Logger.FileMaxAge,
+				Compress:   c.Logger.FileCompress,
+			}
+			break
+		}
+	}
+
+	return &logger.Config{
+		Level:       level,
+		AddSource:   c.Logger.AddSource,
+		JSONFormat:  c.Logger.JSONFormat,
+		OutputPaths: c.Logger.OutputPaths,
+		FileConfig:  fileConfig,
 	}
 }
 
@@ -196,4 +257,19 @@ func getEnvDuration(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return d
+}
+
+func getEnvStringSlice(key string, fallback []string) []string {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	parts := strings.Split(v, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
