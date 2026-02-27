@@ -17,8 +17,15 @@ func newLogger(cfg *config.Config) (logger.Logger, error) {
 		level = slog.LevelError
 	}
 
+	// Di development: stdout pakai text, file pakai JSON
+	// Di production: semua JSON
+	outputPaths := cfg.Logger.OutputPaths
+	if len(outputPaths) == 0 {
+		outputPaths = []string{"stdout"}
+	}
+
 	var fileConfig *logger.FileConfig
-	for _, path := range cfg.Logger.OutputPaths {
+	for _, path := range outputPaths {
 		if path != "stdout" && path != "stderr" {
 			fileConfig = &logger.FileConfig{
 				Path:       path,
@@ -35,7 +42,7 @@ func newLogger(cfg *config.Config) (logger.Logger, error) {
 		Level:       level,
 		AddSource:   cfg.Logger.AddSource,
 		JSONFormat:  cfg.Logger.JSONFormat,
-		OutputPaths: cfg.Logger.OutputPaths,
+		OutputPaths: outputPaths,
 		FileConfig:  fileConfig,
 	})
 }

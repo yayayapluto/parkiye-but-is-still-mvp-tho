@@ -4,20 +4,20 @@ import "log/slog"
 
 // Config holds top-level logger configuration.
 type Config struct {
-	Level        slog.Level
-	AddSource    bool
-	JSONFormat   bool
-	OutputPaths  []string
-	FileConfig   *FileConfig
-	Sampling     *SamplingConfig
+	Level       slog.Level
+	AddSource   bool
+	JSONFormat  bool
+	OutputPaths []string
+	FileConfig  *FileConfig
+	Sampling    *SamplingConfig
 }
 
 // FileConfig configures file-based log rotation.
 type FileConfig struct {
 	Path       string
-	MaxSize    int  // MB
+	MaxSize    int // MB
 	MaxBackups int
-	MaxAge     int  // days
+	MaxAge     int // days
 	Compress   bool
 }
 

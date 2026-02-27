@@ -62,10 +62,26 @@ services:
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"
     volumes:
+      - ./scripts/prometheus.yml:/etc/prometheus/prometheus.yml:ro  # ← tambah ini
       - prometheus_data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"                         # ← biar bisa scrape app local
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
+    networks:
+      - parkieee_net
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: parkieee_promtail
+    restart: unless-stopped
+    volumes:
+      - ./storage/logs:/var/log/app:ro
+      - ./scripts/promtail.yml:/etc/promtail/config.yml:ro          # ← tambah ini
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
     networks:
       - parkieee_net
 
@@ -80,6 +96,7 @@ services:
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./scripts/grafana/provisioning:/etc/grafana/provisioning:ro  # ← tambah ini
     depends_on:
       - prometheus
       - loki
@@ -95,18 +112,6 @@ services:
     command: -config.file=/etc/loki/local-config.yaml
     volumes:
       - loki_data:/loki
-    networks:
-      - parkieee_net
-
-  promtail:
-    image: grafana/promtail:latest
-    container_name: parkieee_promtail
-    restart: unless-stopped
-    volumes:
-      - ./storage/logs:/var/log/app:ro
-    command: -config.file=/etc/promtail/config.yml
-    depends_on:
-      - loki
     networks:
       - parkieee_net
 

@@ -31,6 +31,8 @@ func NewServer(container *Container) *fiber.App {
 		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS,PATCH",
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 	}))
+
+	initObservability(app)
 	app.Get("/metrics", monitor.New())
 
 	// Production-only middleware
@@ -48,7 +50,6 @@ func NewServer(container *Container) *fiber.App {
 			"env":    container.Config.App.Env,
 		})
 	})
-
 	// API v1 routes
 	//api := app.Group("/api/v1")
 

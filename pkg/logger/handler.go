@@ -49,7 +49,7 @@ func (t teeHandler) WithGroup(name string) slog.Handler {
 type samplingHandler struct {
 	inner  slog.Handler
 	cfg    *SamplingConfig
-	counts sync.Map // map[string]*samplingCounter
+	counts sync.Map
 }
 
 type samplingCounter struct {
@@ -59,10 +59,7 @@ type samplingCounter struct {
 }
 
 func newSamplingHandler(inner slog.Handler, cfg *SamplingConfig) slog.Handler {
-	return &samplingHandler{
-		inner: inner,
-		cfg:   cfg,
-	}
+	return &samplingHandler{inner: inner, cfg: cfg}
 }
 
 func (h *samplingHandler) Enabled(ctx context.Context, level slog.Level) bool {
@@ -88,17 +85,9 @@ func (h *samplingHandler) Handle(ctx context.Context, r slog.Record) error {
 }
 
 func (h *samplingHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &samplingHandler{
-		inner:  h.inner.WithAttrs(attrs),
-		cfg:    h.cfg,
-		counts: sync.Map{},
-	}
+	return &samplingHandler{inner: h.inner.WithAttrs(attrs), cfg: h.cfg}
 }
 
 func (h *samplingHandler) WithGroup(name string) slog.Handler {
-	return &samplingHandler{
-		inner:  h.inner.WithGroup(name),
-		cfg:    h.cfg,
-		counts: sync.Map{},
-	}
+	return &samplingHandler{inner: h.inner.WithGroup(name), cfg: h.cfg}
 }
