@@ -1,6 +1,4 @@
 services:
-
-  # ── PostgreSQL ──────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: parkieee_postgres
@@ -23,38 +21,37 @@ services:
     networks:
       - parkieee_net
 
-  # ── API Service (for full Docker mode) ─────────────────────────────────────
-#  app:
-#    build:
-#      context: .
-#      dockerfile: Dockerfile
-#    container_name: parkieee_api
-#    restart: unless-stopped
-#    ports:
-#      - "${SERVER_PORT:-8080}:8080"
-#    environment:
-#      APP_ENV: ${APP_ENV:-development}
-#      APP_NAME: ${APP_NAME:-parkieee}
-#      APP_DEBUG: ${APP_DEBUG:-true}
-#      SERVER_HOST: ${SERVER_HOST:-0.0.0.0}
-#      SERVER_PORT: ${SERVER_PORT:-8080}
-#      DB_HOST: postgres
-#      DB_PORT: 5432
-#      DB_USER: ${DB_USER:-postgres}
-#      DB_PASSWORD: ${DB_PASSWORD:-postgres}
-#      DB_NAME: ${DB_NAME:-parkieee}
-#      DB_SSLMODE: ${DB_SSLMODE:-disable}
-#      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-#      ENABLE_TRACING: false
-#    volumes:
-#      - ./storage/logs:/app/storage/logs
-#    depends_on:
-#      postgres:
-#        condition: service_healthy
-#    networks:
-#      - parkieee_net
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: parkieee_api
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    environment:
+      APP_ENV:        ${APP_ENV:-production}
+      APP_NAME:       ${APP_NAME:-parkieee}
+      APP_DEBUG:      ${APP_DEBUG:-false}
+      SERVER_HOST:    ${SERVER_HOST:-0.0.0.0}
+      SERVER_PORT:    ${SERVER_PORT:-8080}
+      DB_HOST:        postgres
+      DB_PORT:        5432
+      DB_USER:        ${DB_USER:-postgres}
+      DB_PASSWORD:    ${DB_PASSWORD:-postgres}
+      DB_NAME:        ${DB_NAME:-parkieee}
+      DB_SSLMODE:     ${DB_SSLMODE:-disable}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      ENABLE_TRACING: ${ENABLE_TRACING:-true}
+      TEMPO_ENDPOINT: tempo:4318
+    volumes:
+      - ./storage/logs:/app/storage/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - parkieee_net
 
-  # ── Observability Stack ────────────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:latest
     container_name: parkieee_prometheus
@@ -62,10 +59,10 @@ services:
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"
     volumes:
-      - ./scripts/prometheus.yml:/etc/prometheus/prometheus.yml:ro  # ← tambah ini
+      - ./scripts/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     extra_hosts:
-      - "host.docker.internal:host-gateway"                         # ← biar bisa scrape app local
+      - "host.docker.internal:host-gateway"
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -78,7 +75,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./storage/logs:/var/log/app:ro
-      - ./scripts/promtail.yml:/etc/promtail/config.yml:ro          # ← tambah ini
+      - ./scripts/promtail.yml:/etc/promtail/config.yml:ro
     command: -config.file=/etc/promtail/config.yml
     depends_on:
       - loki
@@ -96,7 +93,7 @@ services:
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./scripts/grafana/provisioning:/etc/grafana/provisioning:ro  # ← tambah ini
+      - ./scripts/grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
       - prometheus
       - loki
@@ -121,9 +118,9 @@ services:
     container_name: parkieee_tempo
     restart: unless-stopped
     ports:
-      - "3200:3200"   # Tempo HTTP API
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP  ← app kirim trace ke sini
+      - "3200:3200"
+      - "4317:4317"
+      - "4318:4318"
     volumes:
       - ./scripts/tempo.yml:/etc/tempo/tempo.yml:ro
       - tempo_data:/var/tempo

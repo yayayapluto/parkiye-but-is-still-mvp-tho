@@ -8,7 +8,6 @@ MAKEFLAGS += --no-print-directory
 help:
 	@echo ""
 	@echo "PARKIEEE - available commands"
-	@echo "------------------------------------------------"
 	@echo ""
 	@echo "Docker"
 	@echo "  make up           Start all services (postgres + observability)"
@@ -32,32 +31,36 @@ help:
 up:
 	docker compose up -d
 	@echo "OK All services started"
-	@echo "  PostgreSQL -> localhost:${DB_PORT}"
-	@echo "  Prometheus -> http://localhost:${PROMETHEUS_PORT}"
+	@echo "  PostgreSQL -> http://localhost:${DB_PORT}"
 	@echo "  Grafana    -> http://localhost:${GRAFANA_PORT}"
+	@echo "  Prometheus -> http://localhost:${PROMETHEUS_PORT}"
 	@echo "  Loki       -> http://localhost:${LOKI_PORT}"
 
 down:
 	docker compose down -v
 	@echo "OK All services stopped"
 
-dev: migrate-seed up
+wait-db:
+	@echo "Waiting for postgres to be ready..."
+	@until docker compose exec -T postgres pg_isready -U ${DB_USER} -d ${DB_NAME} > /dev/null 2>&1; do \
+		sleep 1; \
+	done
+	@echo "Postgres is ready"
+
+dev: up wait-db migrate-seed
 	@clear
-	@echo "------------------------------------------------"
 	@echo "DEVELOPMENT MODE"
-	@echo "------------------------------------------------"
 	@echo ""
 	@echo "Infrastructure (Docker):"
-	@echo "  PostgreSQL : localhost:${DB_PORT}"
-	@echo "  Prometheus : http://localhost:${PROMETHEUS_PORT}"
+	@#echo "  PostgreSQL : localhost:${DB_PORT}"
 	@echo "  Grafana    : http://localhost:${GRAFANA_PORT}"
+	@echo "  Prometheus : http://localhost:${PROMETHEUS_PORT}"
 	@echo "  Loki       : http://localhost:${LOKI_PORT}"
 	@echo ""
 	@echo "API (Local):"
 	@echo "  URL        : http://localhost:${SERVER_PORT}"
 	@echo "  Metrics    : http://localhost:${SERVER_PORT}/metrics"
 	@echo ""
-	@echo "------------------------------------------------"
 	@echo "Starting API locally..."
 	@go run ./cmd/api
 
@@ -83,16 +86,15 @@ refresh:
 	@clear
 	@$(MAKE) down
 	@$(MAKE) up
+	@$(MAKE) wait-db
 	@clear
-	@sleep 3
 	@$(MAKE) run
 
 setup:
 	@if [ ! -f .env ]; then cp .env.example .env && echo "OK .env created from .env.example - edit JWT_SECRET_KEY!"; fi
 	@$(MAKE) tidy
 	@$(MAKE) up
-	@echo "Waiting for postgres to be ready..."
-	@sleep 3
+	@$(MAKE) wait-db
 	@$(MAKE) migrate-seed
 	@echo ""
 	@echo "OK Setup complete! Run 'make dev' to start development."

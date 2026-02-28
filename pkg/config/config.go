@@ -55,6 +55,7 @@ type ServerConfig struct {
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
 	IdleTimeout  time.Duration
+	PrintRoutes  bool
 }
 
 // ADD THIS NEW STRUCT
@@ -131,6 +132,7 @@ func Load() (*Config, error) {
 			ReadTimeout:  getEnvDuration("SERVER_READ_TIMEOUT", 30*time.Second),
 			WriteTimeout: getEnvDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),
 			IdleTimeout:  getEnvDuration("SERVER_IDLE_TIMEOUT", 60*time.Second),
+			PrintRoutes:  getEnvBool("SERVER_PRINT_ROUTES", false),
 		},
 		// ADD THIS SECTION
 		Observability: ObservabilityConfig{
