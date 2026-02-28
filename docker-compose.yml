@@ -100,6 +100,7 @@ services:
     depends_on:
       - prometheus
       - loki
+      - tempo
     networks:
       - parkieee_net
 
@@ -115,6 +116,21 @@ services:
     networks:
       - parkieee_net
 
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: parkieee_tempo
+    restart: unless-stopped
+    ports:
+      - "3200:3200"   # Tempo HTTP API
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP  ← app kirim trace ke sini
+    volumes:
+      - ./scripts/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo_data:/var/tempo
+    command: -config.file=/etc/tempo/tempo.yml
+    networks:
+      - parkieee_net
+
 volumes:
   postgres_data:
     driver: local
@@ -123,6 +139,8 @@ volumes:
   grafana_data:
     driver: local
   loki_data:
+    driver: local
+  tempo_data:
     driver: local
 
 networks:

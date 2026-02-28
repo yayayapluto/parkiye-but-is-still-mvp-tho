@@ -64,6 +64,7 @@ type ObservabilityConfig struct {
 	PrometheusPort  int
 	GrafanaPort     int
 	LokiPort        int
+	TempoPort       int
 	LogLevel        string
 }
 
@@ -138,6 +139,7 @@ func Load() (*Config, error) {
 			PrometheusPort:  getEnvInt("PROMETHEUS_PORT", 9090),
 			GrafanaPort:     getEnvInt("GRAFANA_PORT", 3000),
 			LokiPort:        getEnvInt("LOKI_PORT", 3100),
+			TempoPort:       getEnvInt("TEMPO_PORT", 4318), // ← tambah ini (OTLP HTTP)
 			LogLevel:        getEnv("OBSERVABILITY_LOG_LEVEL", "info"),
 		},
 		Logger: LoggerConfig{

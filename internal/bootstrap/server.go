@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"github.com/gofiber/contrib/otelfiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/etag"
@@ -32,7 +33,8 @@ func NewServer(container *Container) *fiber.App {
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 	}))
 
-	initObservability(app)
+	initObservability(app, container)
+	app.Use(otelfiber.Middleware())
 	app.Get("/metrics", monitor.New())
 
 	// Production-only middleware

@@ -1,4 +1,4 @@
-.PHONY: help up down dev migrate migrate-seed seed tidy build run setup
+.PHONY: help up down dev migrate migrate-seed seed tidy build run setup nih-orang refresh
 
 include .env
 export
@@ -79,6 +79,14 @@ build:
 run:
 	go run ./cmd/api
 
+refresh:
+	@clear
+	@$(MAKE) down
+	@$(MAKE) up
+	@clear
+	@sleep 3
+	@$(MAKE) run
+
 setup:
 	@if [ ! -f .env ]; then cp .env.example .env && echo "OK .env created from .env.example - edit JWT_SECRET_KEY!"; fi
 	@$(MAKE) tidy
@@ -88,3 +96,6 @@ setup:
 	@$(MAKE) migrate-seed
 	@echo ""
 	@echo "OK Setup complete! Run 'make dev' to start development."
+
+nih-orang:
+	@echo "WAKAKAKAKKAKAKA"
