@@ -23,7 +23,7 @@ type Provider struct {
 // Call Shutdown() on app exit.
 func New(ctx context.Context, serviceName, endpoint string) (*Provider, error) {
 	exporter, err := otlptracehttp.New(ctx,
-		otlptracehttp.WithEndpoint("localhost:4318"),
+		otlptracehttp.WithEndpoint(endpoint),
 		otlptracehttp.WithInsecure(),
 	)
 	if err != nil {
