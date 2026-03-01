@@ -82,14 +82,22 @@ func (r *gateRepository) FindByID(ctx context.Context, id uuid.UUID) (*Gate, err
 	return &gate, errors.FromDB(err, "gate not found")
 }
 
-func (r *gateRepository) FindByZoneID(ctx context.Context, zoneID uuid.UUID, onlyActive bool) ([]Gate, error) {
+func (r *gateRepository) FindByZoneID(ctx context.Context, zoneID uuid.UUID, onlyActive bool, page, pageSize int) ([]Gate, int64, error) {
 	var gates []Gate
-	q := r.db.WithContext(ctx).Where("zone_id = ?", zoneID)
+	var total int64
+
+	q := r.db.WithContext(ctx).Model(&Gate{}).Where("zone_id = ?", zoneID)
 	if onlyActive {
 		q = q.Where("is_active = ?", true)
 	}
-	err := q.Order("name ASC").Find(&gates).Error
-	return gates, errors.FromDB(err, "")
+
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, errors.FromDB(err, "")
+	}
+
+	offset := (page - 1) * pageSize
+	err := q.Order("name ASC").Offset(offset).Limit(pageSize).Find(&gates).Error
+	return gates, total, errors.FromDB(err, "")
 }
 
 func (r *gateRepository) Create(ctx context.Context, gate *Gate) error {

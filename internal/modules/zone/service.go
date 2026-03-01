@@ -104,11 +104,11 @@ func (s *service) GetGate(ctx context.Context, id uuid.UUID) (*Gate, error) {
 	return s.gateRepo.FindByID(ctx, id)
 }
 
-func (s *service) ListGates(ctx context.Context, zoneID uuid.UUID, onlyActive bool) ([]Gate, error) {
+func (s *service) ListGates(ctx context.Context, zoneID uuid.UUID, onlyActive bool, page, pageSize int) ([]Gate, int64, error) {
 	if _, err := s.zoneRepo.FindByID(ctx, zoneID); err != nil {
-		return nil, errors.New(errors.ErrNotFound, "zone not found")
+		return nil, 0, errors.New(errors.ErrNotFound, "zone not found")
 	}
-	return s.gateRepo.FindByZoneID(ctx, zoneID, onlyActive)
+	return s.gateRepo.FindByZoneID(ctx, zoneID, onlyActive, page, pageSize)
 }
 
 func (s *service) CreateGate(ctx context.Context, req *CreateGateRequest, actorID uuid.UUID) (*Gate, error) {

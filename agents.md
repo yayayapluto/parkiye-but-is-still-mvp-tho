@@ -284,32 +284,36 @@ Seed data (idempotent):
 
 ## What's Done / What's Not
 
-| Area                                 | Status                            |
-|--------------------------------------|-----------------------------------|
-| `pkg/types`                          | ✅ done                            |
-| `pkg/config`                         | ✅ done                            |
-| `pkg/logger`                         | ✅ done                            |
-| `pkg/errors`                         | ✅ done                            |
-| `pkg/response`                       | ✅ done                            |
-| `pkg/validator`                      | ✅ done                            |
-| `pkg/metrics`                        | ✅ done                            |
-| `pkg/tracer`                         | ✅ done                            |
-| `pkg/middleware/auth.go`             | ✅ done                            |
-| `pkg/helpers`                        | ⬜ empty — add utilities as needed |
-| `database/migrate.go` + `seed.go`    | ✅ done                            |
-| `internal/bootstrap/*`               | ✅ done                            |
-| `cmd/api/main.go`                    | ✅ done                            |
-| `internal/modules/*/domain.go`       | ✅ done (all 11 modules)           |
-| `internal/modules/*/ports.go`        | ⬜ finished: auth, zone            |
-| `internal/modules/*/repository.go`   | ⬜ finished: auth, zone            |
-| `internal/modules/*/service.go`      | ⬜ finished: auth, zone            |
-| `internal/modules/*/dto.go`          | ⬜ finished: auth, zone            |
-| `internal/modules/*/handler.go`      | ⬜ finished: auth, zone            |
-| `internal/modules/*/http_adapter.go` | ⬜ finished: auth, zone            |
-| `internal/modules/*/routes.go`       | ⬜ finished: auth, zone            |
+| Area                                 | Status                                                      |
+|--------------------------------------|-------------------------------------------------------------|
+| `pkg/types`                          | ✅ done                                                      |
+| `pkg/config`                         | ✅ done                                                      |
+| `pkg/logger`                         | ✅ done                                                      |
+| `pkg/errors`                         | ✅ done                                                      |
+| `pkg/response`                       | ✅ done — paginated response, prev/next links always present |
+| `pkg/validator`                      | ✅ done                                                      |
+| `pkg/metrics`                        | ✅ done                                                      |
+| `pkg/tracer`                         | ✅ done                                                      |
+| `pkg/middleware/auth.go`             | ✅ done                                                      |
+| `pkg/helpers`                        | ⬜ empty — add utilities as needed                           |
+| `database/migrate.go`                | ✅ done                                                      |
+| `database/seed.go`                   | ✅ done — gofakeit, all 11 modules, 25–80 rows per entity    |
+| `internal/bootstrap/*`               | ✅ done — container wires auth + zone modules                |
+| `cmd/api/main.go`                    | ✅ done                                                      |
+| `internal/modules/*/domain.go`       | ✅ done (all 11 modules)                                     |
+| `internal/modules/*/ports.go`        | ⬜ finished: auth, zone, vehicle                             |
+| `internal/modules/*/repository.go`   | ⬜ finished: auth, zone, vehicle                             |
+| `internal/modules/*/service.go`      | ⬜ finished: auth, zone, vehicle                             |
+| `internal/modules/*/dto.go`          | ⬜ finished: auth, zone, vehicle                             |
+| `internal/modules/*/handler.go`      | ⬜ finished: auth, zone, vehicle                             |
+| `internal/modules/*/http_adapter.go` | ⬜ finished: auth, zone, vehicle                             |
+| `internal/modules/*/routes.go`       | ⬜ finished: auth, zone, vehicle                             |
+| `docs/Parkieee - Auth.*`             | ✅ done — biasa + tests (edge cases)                         |
+| `docs/Parkieee - Zone.*`             | ✅ done — biasa + tests (edge cases)                         |
+| `docs/Parkieee - Vehicle.*`          | ✅ done — biasa + full test suite                            |
 
 **Next:** implement modules in dependency order:
-`auth` ✅ → `zone` ✅ → `gate` → `vehicle` → `rfid` → `fee` → `transaction` → `payment` → `override` → `ocr` → `audit`
+`auth` ✅ → `zone` ✅ → `vehicle` ✅ → `rfid` → `fee` → `transaction` → `payment` → `override` → `ocr` → `audit`
 
 ---
 

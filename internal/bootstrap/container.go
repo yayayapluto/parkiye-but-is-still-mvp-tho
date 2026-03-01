@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"parkieee/internal/modules/auth"
+	"parkieee/internal/modules/vehicle"
 	"parkieee/internal/modules/zone"
 	"parkieee/pkg/config"
 	"parkieee/pkg/logger"
@@ -30,6 +31,10 @@ type Container struct {
 	GateDeviceRepo  zone.GateDeviceRepositoryPort
 	CapacityLogRepo zone.CapacityLogRepositoryPort
 	ZoneService     zone.ServicePort
+
+	VehicleTypeRepo vehicle.VehicleTypeRepositoryPort
+	VehicleRepo     vehicle.VehicleRepositoryPort
+	VehicleService  vehicle.ServicePort
 }
 
 func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
@@ -48,8 +53,10 @@ func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
 	if err := container.initAuthModule(); err != nil {
 		return nil, err
 	}
-
 	if err := container.initZoneModule(); err != nil {
+		return nil, err
+	}
+	if err := container.initVehicleModule(); err != nil {
 		return nil, err
 	}
 
@@ -90,6 +97,13 @@ func (c *Container) initZoneModule() error {
 		c.DB,
 		c.Log,
 	)
+	return nil
+}
+
+func (c *Container) initVehicleModule() error {
+	c.VehicleTypeRepo = vehicle.NewVehicleTypeRepository(c.DB)
+	c.VehicleRepo = vehicle.NewVehicleRepository(c.DB)
+	c.VehicleService = vehicle.NewService(c.VehicleTypeRepo, c.VehicleRepo, c.Log)
 	return nil
 }
 

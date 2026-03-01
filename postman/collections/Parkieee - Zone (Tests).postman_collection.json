@@ -6,7 +6,7 @@
   },
   "item": [
     {
-      "name": "Zone",
+      "name": "1. Zone",
       "item": [
         {
           "name": "List Zones - Happy Path",
@@ -924,10 +924,13 @@
           "response": []
         }
       ],
-      "id": "10c9393e-7f65-44ef-affa-4bfc8ad64ced"
+      "id": "10c9393e-7f65-44ef-affa-4bfc8ad64ced",
+      "auth": {
+        "type": "noauth"
+      }
     },
     {
-      "name": "Gate",
+      "name": "2. Gate",
       "item": [
         {
           "name": "[Setup] Buat Zone untuk Gate Tests",
@@ -1279,10 +1282,25 @@
             {
               "listen": "test",
               "script": {
+                "id": "7a7189e9-bcdd-46a0-b7e4-73234be08ac7",
                 "exec": [
                   "pm.test('status 404', () => pm.response.to.have.status(404));"
                 ],
-                "type": "text/javascript"
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "e853673b-d5a7-4c98-97a1-117ffe75af93",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
               }
             }
           ],
@@ -1301,7 +1319,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Gate X\",\n  \"gate_type\": \"entry\"\n}"
+              "raw": "{\n  \"name\": \"Gate X\",\n  \"gate_type\": \"entry\",\n  \"zone_id\": \"00000000-0000-0000-0000-000000000000\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/zones/00000000-0000-0000-0000-000000000000/gates",
@@ -1681,16 +1699,31 @@
       "id": "56d17622-3b66-4038-a603-dba976443a90"
     },
     {
-      "name": "[Setup] Login",
+      "name": "0. [Setup] Login",
       "event": [
         {
           "listen": "test",
           "script": {
+            "id": "65ea240b-46de-4580-9247-088a4c657bb5",
             "exec": [
               "pm.test('status 200', () => pm.response.to.have.status(200));",
               "pm.collectionVariables.set('token', pm.response.json().data.token);"
             ],
-            "type": "text/javascript"
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "id": "3a6caa9e-fc61-473b-af87-eb58fb72b760",
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
           }
         }
       ],
@@ -1721,19 +1754,30 @@
       "response": []
     }
   ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
   "variable": [
     {
-      "id": "7bf7611c-429b-4382-afc7-ac59811aa047",
+      "id": "bdcd1a9c-37d2-4912-953f-7a087ea728e4",
       "key": "token",
-      "value": ""
+      "value": "",
+      "type": "default"
     },
     {
-      "id": "da8d51ed-56cb-438c-bea6-5bcc35436c41",
+      "id": "642bfa68-f853-440e-a31a-ab2603e9cf5e",
       "key": "zoneId",
       "value": ""
     },
     {
-      "id": "106bbac5-7ef7-4281-a158-9f6ba9377f8d",
+      "id": "8a10090e-2459-4f55-a24a-c6fa311632cc",
       "key": "gateId",
       "value": ""
     }

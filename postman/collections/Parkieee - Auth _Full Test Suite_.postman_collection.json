@@ -583,18 +583,32 @@
             {
               "listen": "test",
               "script": {
+                "id": "ba2d6ed8-1e03-4c1e-b84e-3d8f50f0b620",
                 "exec": [
                   "pm.test('status 201', () => pm.response.to.have.status(201));",
                   "pm.test('user created', () => {",
                   "  const data = pm.response.json().data;",
                   "  pm.expect(data.id).to.be.a('string');",
-                  "  pm.expect(data.email).to.eql('newuser@parkieee.local');",
+                  "  pm.expect(data.email).to.eql('kindanewuser@parkieee.local');",
                   "  pm.expect(data.is_active).to.be.true;",
                   "  pm.collectionVariables.set('created_user_id', data.id);",
                   "});"
                 ],
                 "type": "text/javascript",
-                "id": "ba2d6ed8-1e03-4c1e-b84e-3d8f50f0b620"
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "43b0d880-466a-4373-9e09-6a338a77ee7e",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
               }
             }
           ],
@@ -613,7 +627,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"New User\",\n  \"email\": \"newuser@parkieee.local\",\n  \"password\": \"Password@123!\",\n  \"role_id\": \"{{role_id}}\"\n}"
+              "raw": "{\n  \"name\": \"New User\",\n  \"email\": \"kindanewuser@parkieee.local\",\n  \"password\": \"Password@123!\",\n  \"role_id\": \"{{role_id}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/auth/users/",
@@ -1772,33 +1786,38 @@
   ],
   "variable": [
     {
-      "id": "00d74f68-d3c7-4d3b-b279-a579d467b44f",
+      "id": "fa6aa69f-c598-49d5-99b5-12fd991cb273",
       "key": "base_url",
       "value": "http://localhost:8080/api/v1"
     },
     {
-      "id": "24ff6787-235a-471a-8c48-c3e26517dc92",
-      "key": "token",
-      "value": ""
-    },
-    {
-      "id": "bd22e300-5c03-4d32-a61d-3b7275eb1834",
-      "key": "admin_token",
-      "value": ""
-    },
-    {
-      "id": "0185ef59-d663-42e0-be95-5b8ec02aa1f4",
+      "id": "b8ca3cf5-2b85-4d1c-896f-fc60e24fbe1e",
       "key": "created_user_id",
       "value": ""
     },
     {
-      "id": "5f9b9c78-1490-42b7-a1a5-4284bc84eecd",
+      "id": "b5e6045d-52b3-45e2-8d62-ae7222fcbf48",
       "key": "role_id",
       "value": ""
     },
     {
-      "id": "f8d5a16d-fa7b-4cae-a6ae-8b1d8d0f9093",
+      "id": "ac45d833-3aab-4bca-8e50-75c4eb5c14c0",
       "key": "permission_id",
+      "value": ""
+    },
+    {
+      "id": "93361e4f-07cd-4dee-ba4a-a9d58a841471",
+      "key": "token",
+      "value": ""
+    },
+    {
+      "id": "06aaceb4-e147-43aa-8121-ab12bf1e0d04",
+      "key": "admin_token",
+      "value": ""
+    },
+    {
+      "id": "042fda13-b329-4936-924b-28e7720359c1",
+      "key": "token_before_logout",
       "value": ""
     }
   ]

@@ -21,38 +21,38 @@ services:
     networks:
       - parkieee_net
 
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: parkieee_api
-    restart: unless-stopped
-    ports:
-      - "${SERVER_PORT:-8080}:8080"
-    environment:
-      APP_ENV: ${APP_ENV:-production}
-      APP_NAME: ${APP_NAME:-parkieee}
-      APP_DEBUG: ${APP_DEBUG:-false}
-      SERVER_HOST: ${SERVER_HOST:-0.0.0.0}
-      SERVER_PORT: ${SERVER_PORT:-8080}
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-postgres}
-      DB_NAME: ${DB_NAME:-parkieee}
-      DB_SSLMODE: ${DB_SSLMODE:-disable}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-      ENABLE_TRACING: ${ENABLE_TRACING:-true}
-      TEMPO_ENDPOINT: tempo:4318
-      ENABLE_PROFILING: ${ENABLE_PROFILING:-true}
-      PYROSCOPE_ENDPOINT: http://pyroscope:4040
-    volumes:
-      - ./storage/logs:/app/storage/logs
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - parkieee_net
+  #  app:
+  #    build:
+  #      context: .
+  #      dockerfile: Dockerfile
+  #    container_name: parkieee_api
+  #    restart: unless-stopped
+  #    ports:
+  #      - "${SERVER_PORT:-8080}:8080"
+  #    environment:
+  #      APP_ENV: ${APP_ENV:-production}
+  #      APP_NAME: ${APP_NAME:-parkieee}
+  #      APP_DEBUG: ${APP_DEBUG:-false}
+  #      SERVER_HOST: ${SERVER_HOST:-0.0.0.0}
+  #      SERVER_PORT: ${SERVER_PORT:-8080}
+  #      DB_HOST: postgres
+  #      DB_PORT: 5432
+  #      DB_USER: ${DB_USER:-postgres}
+  #      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+  #      DB_NAME: ${DB_NAME:-parkieee}
+  #      DB_SSLMODE: ${DB_SSLMODE:-disable}
+  #      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+  #      ENABLE_TRACING: ${ENABLE_TRACING:-true}
+  #      TEMPO_ENDPOINT: tempo:4318
+  #      ENABLE_PROFILING: ${ENABLE_PROFILING:-true}
+  #      PYROSCOPE_ENDPOINT: http://pyroscope:4040
+  #    volumes:
+  #      - ./storage/logs:/app/storage/logs
+  #    depends_on:
+  #      postgres:
+  #        condition: service_healthy
+  #    networks:
+  #      - parkieee_net
 
   pyroscope:
     image: grafana/pyroscope:latest

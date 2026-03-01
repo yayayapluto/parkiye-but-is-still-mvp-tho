@@ -19,11 +19,11 @@ type PaginationRequest struct {
 }
 
 type PaginationLinks struct {
-	Self  string `json:"self"`
-	First string `json:"first"`
-	Last  string `json:"last"`
-	Next  string `json:"next,omitempty"`
-	Prev  string `json:"prev,omitempty"`
+	Self  string  `json:"self"`
+	First string  `json:"first"`
+	Last  string  `json:"last"`
+	Next  *string `json:"next"`
+	Prev  *string `json:"prev"`
 }
 
 type PaginationMeta struct {
@@ -85,16 +85,29 @@ func GeneratePagination(
 
 	builder := newPaginationBuilder(baseURL, route).withQueryParams(queryParams)
 
+	next := ""
+	prev := ""
+	if currentPage < totalPages {
+		next = builder.buildURL(currentPage + 1)
+	}
+	if currentPage > 1 {
+		prev = builder.buildURL(currentPage - 1)
+	}
+
+	var nextPtr, prevPtr *string
+	if next != "" {
+		nextPtr = &next
+	}
+	if prev != "" {
+		prevPtr = &prev
+	}
+
 	links := PaginationLinks{
 		Self:  builder.buildURL(currentPage),
 		First: builder.buildURL(1),
 		Last:  builder.buildURL(totalPages),
-	}
-	if currentPage < totalPages {
-		links.Next = builder.buildURL(currentPage + 1)
-	}
-	if currentPage > 1 {
-		links.Prev = builder.buildURL(currentPage - 1)
+		Next:  nextPtr,
+		Prev:  prevPtr,
 	}
 
 	return Pagination{

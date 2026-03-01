@@ -1,6 +1,8 @@
 package zone
 
 import (
+	"fmt"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"parkieee/pkg/middleware"
@@ -132,8 +134,9 @@ func (h *handler) listGates(c *fiber.Ctx) error {
 	}
 
 	onlyActive := c.QueryBool("active", true)
+	pagReq := response.ParsePaginationRequest(c)
 
-	gates, err := h.svc.ListGates(c.Context(), zoneID, onlyActive)
+	gates, total, err := h.svc.ListGates(c.Context(), zoneID, onlyActive, pagReq.Page, pagReq.PageSize)
 	if err != nil {
 		return err
 	}
@@ -143,7 +146,16 @@ func (h *handler) listGates(c *fiber.Ctx) error {
 		res = append(res, toGateResponse(&gates[i]))
 	}
 
-	return response.Success(c, "ok", res)
+	pagination := response.GeneratePagination(
+		response.GetBaseURL(c),
+		fmt.Sprintf("/api/v1/zones/%s/gates", zoneID),
+		pagReq.Page,
+		pagReq.PageSize,
+		total,
+		map[string]string{"active": c.Query("active", "true")},
+	)
+
+	return response.Paginated(c, "ok", res, pagination)
 }
 
 func (h *handler) getGate(c *fiber.Ctx) error {

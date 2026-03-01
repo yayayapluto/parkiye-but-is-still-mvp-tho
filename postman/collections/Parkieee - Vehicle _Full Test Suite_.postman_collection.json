@@ -1,0 +1,1447 @@
+{
+  "info": {
+    "_postman_id": "3c23fb90-bbc5-48fa-9697-031612dd38bc",
+    "name": "Parkieee - Vehicle (Full Test Suite)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Vehicle Types",
+      "item": [
+        {
+          "name": "List Vehicle Types - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('returns seeded types', () => {",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data).to.be.an('array').with.lengthOf.at.least(3);",
+                  "  const names = data.map(d => d.name);",
+                  "  pm.expect(names).to.include.members(['motorcycle', 'car', 'truck']);",
+                  "  pm.collectionVariables.set('vtype_id', data[0].id);",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "0d465903-e749-448f-b4a6-1116aa95ae99"
+              }
+            }
+          ],
+          "id": "ff8981d7-150f-4ae7-a9f8-1fea562c9c11",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicle-types",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicle-types"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Vehicle Types - no token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript",
+                "id": "217c958d-1a25-4a90-9693-d8dfc07aa3ea"
+              }
+            }
+          ],
+          "id": "c1f017dd-3edb-4f65-a30d-81c0bcce866d",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/vehicle-types",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicle-types"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Vehicle Type - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('has fields', () => {",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d.id).to.be.a('string');",
+                  "  pm.expect(d.name).to.be.a('string');",
+                  "  pm.expect(d.minimum_fee).to.be.a('number');",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "a01bc304-cafc-4aa4-9d64-79f5e1296703"
+              }
+            }
+          ],
+          "id": "68aec6fb-aad3-4be2-a1d4-1f443674f6bf",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicle-types/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicle-types",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{vtype_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Vehicle Type - not found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript",
+                "id": "9f117d7c-b19d-48ad-ad85-29f0e186e68c"
+              }
+            }
+          ],
+          "id": "abb43ea7-56a3-49ed-bf1b-abf32f3bbeb6",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicle-types/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicle-types",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "00000000-0000-0000-0000-000000000000"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Vehicle Type - invalid uuid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "a26d11cc-390e-4232-8a01-744a613c3931"
+              }
+            }
+          ],
+          "id": "535eadc4-bff5-43bd-8867-3fc79bbd4ea7",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicle-types/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicle-types",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "not-a-uuid"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Vehicle Type - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('created', () => {",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d.name).to.eql('bus');",
+                  "  pm.expect(d.minimum_fee).to.eql(15000);",
+                  "  pm.collectionVariables.set('vtype_custom_id', d.id);",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "b055b19b-29d3-44fa-9501-30b10c2b2681"
+              }
+            }
+          ],
+          "id": "8fc87893-a98d-44a2-86d4-5bb4191340fd",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"bus\",\n  \"minimum_fee\": 15000,\n  \"description\": \"Bus dan kendaraan besar lainnya\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicle-types",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicle-types"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Vehicle Type - duplicate name",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));"
+                ],
+                "type": "text/javascript",
+                "id": "fe69d153-15f9-46a7-baf4-ea8e99405ba5"
+              }
+            }
+          ],
+          "id": "bb894249-2ef3-4606-aeea-fd82494a20b9",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"motorcycle\",\n  \"minimum_fee\": 2000\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicle-types",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicle-types"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Vehicle Type - missing name",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "1c1b6b72-c7fb-4ed8-b1e5-15a38f34e44c"
+              }
+            }
+          ],
+          "id": "3418c4b6-5f2f-42ec-8532-2610005982e8",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"minimum_fee\": 5000\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicle-types",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicle-types"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Vehicle Type - negative minimum_fee",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "3776e72f-f5da-480d-aec2-07fbb539b973"
+              }
+            }
+          ],
+          "id": "28a7039f-0567-477a-8514-6a2d8027bf77",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"van\",\n  \"minimum_fee\": -1000\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicle-types",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicle-types"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Vehicle Type - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('updated', () => {",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d.minimum_fee).to.eql(20000);",
+                  "  pm.expect(d.description).to.eql('Updated description');",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "f28b0503-9590-4762-8582-91ad2f34c3ef"
+              }
+            }
+          ],
+          "id": "6fe83bc6-81ae-4dd9-b529-e1a093fdcb1f",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"minimum_fee\": 20000,\n  \"description\": \"Updated description\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicle-types/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicle-types",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{vtype_custom_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Vehicle Type - not found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript",
+                "id": "8be09b4c-4a5f-41d3-9383-be36e5cc0f2a"
+              }
+            }
+          ],
+          "id": "40f58ccd-82c6-463f-be3e-4f48719ddb2f",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"minimum_fee\": 20000\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicle-types/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicle-types",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "00000000-0000-0000-0000-000000000000"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Vehicle Type - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript",
+                "id": "53973a74-f8b5-4b8f-b099-71d6791965d2"
+              }
+            }
+          ],
+          "id": "6a138d12-f20e-4f7a-82c3-6b38a8b21c88",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicle-types/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicle-types",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{vtype_custom_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Vehicle Type - not found (already deleted)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript",
+                "id": "deb6f7d6-d79a-40f1-8ad3-4411c9702ef0"
+              }
+            }
+          ],
+          "id": "760a05df-4b53-41a6-8997-767cf81db728",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicle-types/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicle-types",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{vtype_custom_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "1c9cb9ed-28e1-4b59-a833-5869cf2f2cbd"
+    },
+    {
+      "name": "2. Vehicles",
+      "item": [
+        {
+          "name": "Upsert Vehicle - success (create)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('vehicle created', () => {",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d.plate_number).to.eql('B1234ABC');",
+                  "  pm.expect(d.source).to.eql('manual_override');",
+                  "  pm.expect(d.vehicle_type).to.be.an('object');",
+                  "  pm.collectionVariables.set('vehicle_id', d.id);",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "4ff21319-6c88-43e3-ae76-48ecc4821ac3"
+              }
+            }
+          ],
+          "id": "7f608de0-0e84-4dd8-b6cc-15d42f7d58a2",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate_number\": \"B1234ABC\",\n  \"vehicle_type_id\": \"{{vtype_id}}\",\n  \"source\": \"manual_override\",\n  \"notes\": \"Test vehicle\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upsert Vehicle - idempotent (same plate)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('same vehicle returned', () => {",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d.id).to.eql(pm.collectionVariables.get('vehicle_id'));",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "6e316448-564d-4fe0-8575-e20300c35839"
+              }
+            }
+          ],
+          "id": "acf86db9-d41e-44bd-9ee8-c35271dbe563",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate_number\": \"B1234ABC\",\n  \"vehicle_type_id\": \"{{vtype_id}}\",\n  \"source\": \"manual_override\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upsert Vehicle - plate normalized uppercase",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('plate uppercased', () => {",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d.plate_number).to.eql('B5678XYZ');",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "e60e490a-6b3c-40ef-a60b-4939928262b1"
+              }
+            }
+          ],
+          "id": "f37454f5-ff6d-44d8-ae6e-ce9ab1f78cb2",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate_number\": \"b5678xyz\",\n  \"vehicle_type_id\": \"{{vtype_id}}\",\n  \"source\": \"ocr\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upsert Vehicle - missing plate",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "51f79adf-bdea-43b8-ba55-98bf64475dd5"
+              }
+            }
+          ],
+          "id": "d7a7e615-b803-4a56-93f3-e811c29f328f",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicle_type_id\": \"{{vtype_id}}\",\n  \"source\": \"ocr\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upsert Vehicle - invalid source",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "e31e198a-2cbb-43f5-a071-2de10a645d34"
+              }
+            }
+          ],
+          "id": "6c1371d3-ffc9-4deb-82d9-5b483ec27fe4",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate_number\": \"B9999ZZZ\",\n  \"vehicle_type_id\": \"{{vtype_id}}\",\n  \"source\": \"unknown\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upsert Vehicle - invalid vehicle_type_id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript",
+                "id": "818b18ef-a8b1-4573-8d51-6642cabd5c8f"
+              }
+            }
+          ],
+          "id": "478f0316-cb36-474d-8015-796a354581d8",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate_number\": \"B0000GHO\",\n  \"vehicle_type_id\": \"00000000-0000-0000-0000-000000000000\",\n  \"source\": \"ocr\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Vehicles - all",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('paginated response', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.data).to.be.an('array');",
+                  "  pm.expect(body.meta).to.have.property('total');",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "84c39c68-1a12-4b0c-9f5b-943321e97ae7"
+              }
+            }
+          ],
+          "id": "455d11b5-7dc0-4919-a570-8c8dd07af13f",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Vehicles - filter by type_id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('all same type', () => {",
+                  "  const data = pm.response.json().data;",
+                  "  data.forEach(v => pm.expect(v.vehicle_type.id).to.eql(pm.collectionVariables.get('vtype_id')));",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "1e121d74-055e-4adb-8915-dcc1fe3c48fe"
+              }
+            }
+          ],
+          "id": "feae6f1d-71cb-4533-8047-f11c410870ba",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicles?type_id={{vtype_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles"
+              ],
+              "query": [
+                {
+                  "key": "type_id",
+                  "value": "{{vtype_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Vehicles - invalid type_id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "6b8b655d-a7bf-4498-8155-eb03d2f0eee1"
+              }
+            }
+          ],
+          "id": "eb3cd97b-341c-48eb-9b0d-dc03d091d07c",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicles?type_id=not-a-uuid",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles"
+              ],
+              "query": [
+                {
+                  "key": "type_id",
+                  "value": "not-a-uuid"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Vehicle - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('correct vehicle', () => {",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d.id).to.eql(pm.collectionVariables.get('vehicle_id'));",
+                  "  pm.expect(d.vehicle_type).to.be.an('object');",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "a5f32e0d-01d2-4ad8-88f3-16fa0e34eb7b"
+              }
+            }
+          ],
+          "id": "9441bf59-29f0-498e-b392-033c900fa584",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicles/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{vehicle_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Vehicle - not found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript",
+                "id": "3d043db5-03ba-4b63-8631-3eba3ec45cbc"
+              }
+            }
+          ],
+          "id": "4a6d3ded-12ae-4b42-bd9d-22b93014d2f6",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicles/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "00000000-0000-0000-0000-000000000000"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Vehicle By Plate - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('correct plate', () => {",
+                  "  pm.expect(pm.response.json().data.plate_number).to.eql('B1234ABC');",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "5a33f714-8711-421b-8631-0db8533e233a"
+              }
+            }
+          ],
+          "id": "700f283d-efc6-493c-886f-3a14953f568b",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicles/plate/:plate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles",
+                "plate",
+                ":plate"
+              ],
+              "variable": [
+                {
+                  "key": "plate",
+                  "value": "B1234ABC"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Vehicle By Plate - case insensitive",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('found case insensitive', () => {",
+                  "  pm.expect(pm.response.json().data.plate_number).to.eql('B1234ABC');",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "50377b7a-2ac9-432d-9cf3-a046452defd4"
+              }
+            }
+          ],
+          "id": "577e476b-df88-4ada-896a-922736ced18a",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicles/plate/:plate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles",
+                "plate",
+                ":plate"
+              ],
+              "variable": [
+                {
+                  "key": "plate",
+                  "value": "b1234abc"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Vehicle By Plate - not found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript",
+                "id": "1d8a0d2a-e57b-483c-ba3f-1b61a779b9b4"
+              }
+            }
+          ],
+          "id": "908952d7-7d74-4692-9ed4-c2485fdce6ad",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicles/plate/:plate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles",
+                "plate",
+                ":plate"
+              ],
+              "variable": [
+                {
+                  "key": "plate",
+                  "value": "XXXXXX"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Vehicle - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('notes updated', () => {",
+                  "  pm.expect(pm.response.json().data.notes).to.eql('Updated notes');",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "82a7da23-a46f-4c4f-928f-c9fcd0ee2218"
+              }
+            }
+          ],
+          "id": "5f8fcff8-f5eb-41cc-a85e-7f4df8b8052c",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Updated notes\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicles/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{vehicle_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Vehicle - invalid vehicle_type_id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript",
+                "id": "89bdccda-a36b-444d-8636-96e4d565d96e"
+              }
+            }
+          ],
+          "id": "6ef20e5d-08bf-4312-8c79-e6ae7c4a959e",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicle_type_id\": \"00000000-0000-0000-0000-000000000000\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicles/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{vehicle_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Vehicle - not found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript",
+                "id": "c68ca989-c3f0-46c0-bfee-93c7483bda38"
+              }
+            }
+          ],
+          "id": "4a552b67-31c3-4190-8cad-e514ad36b32b",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"ghost\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicles/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "vehicles",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "00000000-0000-0000-0000-000000000000"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "3fbffe24-d133-449b-ab80-b6d40b45da13"
+    },
+    {
+      "name": "0. Setup - Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json().data;",
+              "pm.collectionVariables.set('token', data.token);"
+            ],
+            "type": "text/javascript",
+            "id": "c26ffb25-4429-47ee-909d-afa84bead64d"
+          }
+        }
+      ],
+      "id": "b08eb45e-aa00-45ee-aea8-f3f05dc94a07",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@parkieee.local\",\n  \"password\": \"Admin@123!\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "id": "f7e65a03-1e5e-406e-b343-0d65784dc537",
+      "key": "base_url",
+      "value": "http://localhost:8080/api/v1"
+    },
+    {
+      "id": "871e6536-d2b8-4eb6-afdb-221c2d66ca06",
+      "key": "token",
+      "value": ""
+    },
+    {
+      "id": "b0e927f6-58bb-403f-ac06-b0670f16526c",
+      "key": "vtype_id",
+      "value": ""
+    },
+    {
+      "id": "02c3625f-d6c3-4df5-88ce-5a012efeae8b",
+      "key": "vtype_custom_id",
+      "value": ""
+    },
+    {
+      "id": "d59da637-e797-4bc7-a38e-bd1380b769ab",
+      "key": "vehicle_id",
+      "value": ""
+    }
+  ]
+}

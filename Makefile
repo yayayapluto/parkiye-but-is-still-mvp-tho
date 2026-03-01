@@ -53,6 +53,7 @@ dev: up wait-db migrate-seed
 	@echo "DEVELOPMENT MODE"
 	@echo ""
 	@echo "Infrastructure (Docker):"
+	@echo "  PostgreSQL : localhost:${DB_PORT}"
 	@echo "  Grafana    : http://localhost:${GRAFANA_PORT}"
 	@echo "  Prometheus : http://localhost:${PROMETHEUS_PORT}"
 	@echo "  Loki       : http://localhost:${LOKI_PORT}"
@@ -62,7 +63,7 @@ dev: up wait-db migrate-seed
 	@echo "  Metrics    : http://localhost:${SERVER_PORT}/metrics"
 	@echo ""
 	@echo "Starting API locally..."
-	@$(MAKE) run
+	@exec go run cmd/api/main.go
 
 migrate:
 	go run ./cmd/migrate
