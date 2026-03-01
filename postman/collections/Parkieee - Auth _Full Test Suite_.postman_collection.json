@@ -1,0 +1,1805 @@
+{
+  "info": {
+    "_postman_id": "5146c9e0-3069-46c0-9006-760770a9ba79",
+    "name": "Parkieee - Auth (Tests)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Login",
+      "item": [
+        {
+          "name": "Login - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success true', () => pm.expect(pm.response.json().success).to.be.true);",
+                  "pm.test('has token', () => {",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data.token).to.be.a('string').and.not.empty;",
+                  "  pm.expect(data.expires_at).to.be.a('string');",
+                  "  pm.expect(data.user.email).to.eql('admin@parkieee.local');",
+                  "  pm.collectionVariables.set('token', data.token);",
+                  "  pm.collectionVariables.set('admin_token', data.token);",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "f9c03486-575b-4b84-8ce1-05c4141da339"
+              }
+            }
+          ],
+          "id": "04df5248-7fb6-458d-8f9f-4797e266486b",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@parkieee.local\",\n  \"password\": \"Admin@123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login - wrong password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('success false', () => pm.expect(pm.response.json().success).to.be.false);"
+                ],
+                "type": "text/javascript",
+                "id": "11256438-3cdb-4d67-9322-64af841a5c99"
+              }
+            }
+          ],
+          "id": "7a49bc2e-3ebc-402b-bae2-af51b52f2d3e",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@parkieee.local\",\n  \"password\": \"wrongpassword\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login - user not found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('success false', () => pm.expect(pm.response.json().success).to.be.false);"
+                ],
+                "type": "text/javascript",
+                "id": "e572295d-0611-4044-a6db-005398ce1e75"
+              }
+            }
+          ],
+          "id": "d93f0d8e-e8f8-4fb9-a9b3-0c1fc2574b6a",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"notexist@parkieee.local\",\n  \"password\": \"Admin@123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login - invalid email format",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('validation error', () => pm.expect(pm.response.json().success).to.be.false);"
+                ],
+                "type": "text/javascript",
+                "id": "22defcde-9405-47a8-afa1-a97f44b33cc6"
+              }
+            }
+          ],
+          "id": "2703ed1b-d110-46bf-a874-903302e3c436",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"notanemail\",\n  \"password\": \"Admin@123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login - missing fields",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "34d4286a-0d17-4b30-952f-2ce394863522"
+              }
+            }
+          ],
+          "id": "afd56429-bf58-4ded-bc5d-75b79cc38514",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login - password too short",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "fcb136ad-9fdb-4852-8675-6da4f1f45d86"
+              }
+            }
+          ],
+          "id": "5d369dfa-960c-404f-9061-42d3daf96f91",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@parkieee.local\",\n  \"password\": \"short\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "127ce5f2-4e6e-4c8d-a771-4d62fd537de1"
+    },
+    {
+      "name": "2. Me",
+      "item": [
+        {
+          "name": "Me - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('has user data', () => {",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data.id).to.be.a('string');",
+                  "  pm.expect(data.email).to.eql('admin@parkieee.local');",
+                  "  pm.expect(data.role).to.be.an('object');",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "ed0de40e-b128-496c-ad3f-7ab3b0908179"
+              }
+            }
+          ],
+          "id": "3ff47c0b-f65a-44b6-9189-2e12be4eebce",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Me - no token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript",
+                "id": "d4992c59-a76c-41bb-a6a5-510d4f650b39"
+              }
+            }
+          ],
+          "id": "4c0d7140-85d3-448e-a65d-c1f627a38126",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Me - invalid token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript",
+                "id": "a1085f8a-d337-4aa3-8673-5a72a40c109c"
+              }
+            }
+          ],
+          "id": "0b0bd6bc-0785-4b57-91c5-faa88d39d50a",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer invalidtoken.abc.xyz"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Me - malformed authorization header",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript",
+                "id": "7ed615f1-b109-4295-8bb8-bf791c21d52b"
+              }
+            }
+          ],
+          "id": "37d9fc64-9987-4dc1-b7ff-d1967527dcda",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "c343edf8-d8eb-4fc4-a133-28e6eddac41c"
+    },
+    {
+      "name": "3. Roles",
+      "item": [
+        {
+          "name": "Get All Roles - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('returns array', () => {",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data).to.be.an('array').and.not.empty;",
+                  "  pm.collectionVariables.set('role_id', data[0].id);",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "a2a31cdf-252c-41b4-b766-9153f8c4c021"
+              }
+            }
+          ],
+          "id": "1628282c-2781-4ef1-aa00-fafe36abcda1",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/roles/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "roles",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Roles - no token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript",
+                "id": "8920c56c-e27f-4bf3-8a37-454521535052"
+              }
+            }
+          ],
+          "id": "af8c8658-e172-4e93-9389-5293b1f57adc",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/roles/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "roles",
+                ""
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "c916a2fd-77bf-40bb-8999-ff57dbea7ead"
+    },
+    {
+      "name": "4. Permissions",
+      "item": [
+        {
+          "name": "Get All Permissions - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('returns array', () => {",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data).to.be.an('array').and.not.empty;",
+                  "  pm.collectionVariables.set('permission_id', data[0].id);",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "4fd6c46d-939c-44e1-a988-d63765c0ef9e"
+              }
+            }
+          ],
+          "id": "530ab9ee-af35-4743-b310-b8ae0b4ef9ed",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/permissions/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "permissions",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Permissions - no token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript",
+                "id": "49d304dc-7224-431b-9432-d690e082c812"
+              }
+            }
+          ],
+          "id": "7bf91cb0-4a83-4202-a9f3-1cf7d6ac14e5",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/permissions/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "permissions",
+                ""
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "c2012f33-68c6-43e6-a6fe-38672b70238b"
+    },
+    {
+      "name": "5. User Management",
+      "item": [
+        {
+          "name": "Create User - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('user created', () => {",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data.id).to.be.a('string');",
+                  "  pm.expect(data.email).to.eql('newuser@parkieee.local');",
+                  "  pm.expect(data.is_active).to.be.true;",
+                  "  pm.collectionVariables.set('created_user_id', data.id);",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "ba2d6ed8-1e03-4c1e-b84e-3d8f50f0b620"
+              }
+            }
+          ],
+          "id": "aac20136-962f-4ef7-abb2-c3c5d4bfe096",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New User\",\n  \"email\": \"newuser@parkieee.local\",\n  \"password\": \"Password@123!\",\n  \"role_id\": \"{{role_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/users/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "users",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create User - missing fields",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "cfc7f6bc-261a-47e4-ba2e-3bf61aa3ed53"
+              }
+            }
+          ],
+          "id": "b35f14eb-d6f1-4477-bf53-fa471b3b5d6f",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"No Email\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/users/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "users",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create User - invalid role_id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript",
+                "id": "4e420ba7-360d-42e4-af75-cd200df5923b"
+              }
+            }
+          ],
+          "id": "2c7b9014-0bcb-4330-a648-17eacfc3fc4a",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test\",\n  \"email\": \"test2@parkieee.local\",\n  \"password\": \"Password@123!\",\n  \"role_id\": \"00000000-0000-0000-0000-000000000000\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/users/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "users",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create User - no token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript",
+                "id": "119753fd-6414-44a6-bb23-d7d17bf9dcb4"
+              }
+            }
+          ],
+          "id": "2f8f1ee9-e001-4267-8b9b-5513769823fb",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test\",\n  \"email\": \"test3@parkieee.local\",\n  \"password\": \"Password@123!\",\n  \"role_id\": \"{{role_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/users/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "users",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update User - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('user updated', () => {",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data.name).to.eql('Updated Name');",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "77e1003d-820f-4179-ba7c-620cbcd64541"
+              }
+            }
+          ],
+          "id": "1f78693c-3c31-4ac0-bb29-6b7f1f2a8d99",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/users/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{created_user_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update User - invalid uuid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "c86121ca-da3f-4f1e-b81c-d5e9adb8afcb"
+              }
+            }
+          ],
+          "id": "9a762289-b751-4063-a7e8-891fda5733a0",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/users/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "not-a-uuid"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update User - not found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript",
+                "id": "eb96ecf9-45b2-45c1-bde6-60bc6863a3bd"
+              }
+            }
+          ],
+          "id": "2780c5f3-9fa7-4148-96fa-f62dad20d394",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ghost\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/users/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "00000000-0000-0000-0000-000000000000"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate User - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('deactivated', () => pm.expect(pm.response.json().success).to.be.true);"
+                ],
+                "type": "text/javascript",
+                "id": "31ce26e3-5bcc-4e53-a8b1-ab63abc8a75e"
+              }
+            }
+          ],
+          "id": "25257278-b32b-4411-bc37-b39cd12f3019",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/users/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{created_user_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate User - deactivate self",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 403', () => pm.response.to.have.status(403));"
+                ],
+                "type": "text/javascript",
+                "id": "4d830027-c7e5-4eb2-9ad3-f8e33e781296"
+              }
+            }
+          ],
+          "id": "4ae06970-d91e-4f8b-a281-f97fb86d376e",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/users/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{created_user_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate User - invalid uuid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "396a8ee5-1b5b-4f03-8b96-5d699025704c"
+              }
+            }
+          ],
+          "id": "a3b70c00-804e-4a8f-a9c6-6bfd9b91029d",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/users/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "not-a-uuid"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "e0164ace-70c2-4dd8-b66d-ea5be6ae892b"
+    },
+    {
+      "name": "6. Role Permissions",
+      "item": [
+        {
+          "name": "Assign Permission - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('permission assigned', () => pm.expect(pm.response.json().success).to.be.true);"
+                ],
+                "type": "text/javascript",
+                "id": "da4362ef-7006-4620-86f0-ac149a6f6895"
+              }
+            }
+          ],
+          "id": "34ee5a9c-1b8b-4551-8f12-c210de0d4604",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permission_id\": \"{{permission_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/roles/:id/permissions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "roles",
+                ":id",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{role_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Assign Permission - idempotent (assign same again)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200 (idempotent)', () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript",
+                "id": "3603cc94-1820-4e97-973d-7a856de590c7"
+              }
+            }
+          ],
+          "id": "07c7771a-9f7f-4431-a863-958442305489",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permission_id\": \"{{permission_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/roles/:id/permissions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "roles",
+                ":id",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{role_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Assign Permission - invalid role id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "885f60de-fd15-4236-8bb4-dcbb07538b6f"
+              }
+            }
+          ],
+          "id": "4118e572-ddc3-41d0-a9a8-9c6d0fedc915",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permission_id\": \"{{permission_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/roles/:id/permissions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "roles",
+                ":id",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "not-a-uuid"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Assign Permission - role not found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript",
+                "id": "f675b51f-88ee-481d-bb30-9022581878ec"
+              }
+            }
+          ],
+          "id": "beb24c84-66a0-4ba2-a312-d86e35ff44b2",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permission_id\": \"{{permission_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/roles/:id/permissions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "roles",
+                ":id",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "00000000-0000-0000-0000-000000000000"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Assign Permission - missing permission_id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "f1c7e42a-6f38-4b85-b242-a9d54325b252"
+              }
+            }
+          ],
+          "id": "9fd1365e-9b58-45fd-a5c5-3feedc43264e",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/roles/:id/permissions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "roles",
+                ":id",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{role_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Permission - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('permission revoked', () => pm.expect(pm.response.json().success).to.be.true);"
+                ],
+                "type": "text/javascript",
+                "id": "c75f999d-898c-4c93-82f8-29aea1b3854b"
+              }
+            }
+          ],
+          "id": "b373b4af-ac06-4417-8a2f-bc930c354bd3",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permission_id\": \"{{permission_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/roles/:id/permissions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "roles",
+                ":id",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{role_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Permission - not found (already revoked)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript",
+                "id": "8d1cf764-cac6-4d84-99d1-bcac2d9678f5"
+              }
+            }
+          ],
+          "id": "2bcce049-259b-4666-9e1a-366e91d9952c",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permission_id\": \"{{permission_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/roles/:id/permissions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "roles",
+                ":id",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{role_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "ceef08a5-18d1-4311-a0d3-e8b4e1a8b301"
+    },
+    {
+      "name": "7. Change Password",
+      "item": [
+        {
+          "name": "Change Password - success",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript",
+                "id": "75f9123e-dca7-433c-9c6b-a9bcb8d81ddb"
+              }
+            }
+          ],
+          "id": "16fa748e-7fd3-4611-86fa-eaf9c2e2f794",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"old_password\": \"Admin@123!\",\n  \"new_password\": \"NewAdmin@123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/change-password",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "change-password"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password - wrong old password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript",
+                "id": "ad45f28f-3ad9-4cec-9d85-d5b697cc5b53"
+              }
+            }
+          ],
+          "id": "fd7c8f83-4b38-41af-9a64-ff83d32734af",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"old_password\": \"wrongpassword\",\n  \"new_password\": \"NewAdmin@123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/change-password",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "change-password"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password - new password too short",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "c7c5325d-bbe0-426a-b872-f04b0fe537ff"
+              }
+            }
+          ],
+          "id": "9bc00dc8-20b2-48a1-9596-ea4b3cccd701",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"old_password\": \"Admin@123!\",\n  \"new_password\": \"short\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/change-password",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "change-password"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password - re-login with new password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('new token issued', () => {",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data.token).to.be.a('string').and.not.empty;",
+                  "  pm.collectionVariables.set('token', data.token);",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "82abf382-ca59-4265-9931-779883f04a8b"
+              }
+            }
+          ],
+          "id": "d3258bf1-ae27-4c24-829a-d35236df5f84",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@parkieee.local\",\n  \"password\": \"NewAdmin@123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password - restore original",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript",
+                "id": "e9dcde74-875f-411a-8009-d7e37f7c57f0"
+              }
+            }
+          ],
+          "id": "cf7cf359-03a4-442a-b518-5aa372598d8d",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"old_password\": \"NewAdmin@123!\",\n  \"new_password\": \"Admin@123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/change-password",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "change-password"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "959d28c5-dba1-4197-a2dd-9a1cab36638a"
+    },
+    {
+      "name": "8. Logout",
+      "item": [
+        {
+          "name": "Logout - success",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.collectionVariables.set('token_before_logout', pm.collectionVariables.get('token'));"
+                ],
+                "type": "text/javascript",
+                "id": "b73f0178-b18c-445e-bde2-9b80c5a3d08c"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('logout successful', () => pm.expect(pm.response.json().success).to.be.true);"
+                ],
+                "type": "text/javascript",
+                "id": "11cec7b9-3104-47ab-96c6-1ed73c984617"
+              }
+            }
+          ],
+          "id": "fb4a6d9e-45e6-43ea-b1c7-020ad49f7b76",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout - token revoked (use same token again)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401 after logout', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript",
+                "id": "f3c715c4-a098-4440-b395-81b799d44531"
+              }
+            }
+          ],
+          "id": "f7bbd4fe-1c61-4205-a0b8-9253947d2708",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_before_logout}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout - no token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript",
+                "id": "38000da1-4f6d-4686-924f-87dd374b2f4e"
+              }
+            }
+          ],
+          "id": "22deb908-85c9-49de-a0af-e72683b3b488",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "35f75d45-6967-4cb6-910d-7db4b8253f5b"
+    }
+  ],
+  "variable": [
+    {
+      "id": "00d74f68-d3c7-4d3b-b279-a579d467b44f",
+      "key": "base_url",
+      "value": "http://localhost:8080/api/v1"
+    },
+    {
+      "id": "24ff6787-235a-471a-8c48-c3e26517dc92",
+      "key": "token",
+      "value": ""
+    },
+    {
+      "id": "bd22e300-5c03-4d32-a61d-3b7275eb1834",
+      "key": "admin_token",
+      "value": ""
+    },
+    {
+      "id": "0185ef59-d663-42e0-be95-5b8ec02aa1f4",
+      "key": "created_user_id",
+      "value": ""
+    },
+    {
+      "id": "5f9b9c78-1490-42b7-a1a5-4284bc84eecd",
+      "key": "role_id",
+      "value": ""
+    },
+    {
+      "id": "f8d5a16d-fa7b-4cae-a6ae-8b1d8d0f9093",
+      "key": "permission_id",
+      "value": ""
+    }
+  ]
+}

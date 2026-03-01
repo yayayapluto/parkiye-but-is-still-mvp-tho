@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	authDomain "parkieee/internal/modules/auth"
+	zoneDomain "parkieee/internal/modules/zone"
 	"parkieee/pkg/types"
 )
 
@@ -27,6 +28,9 @@ func Seed(db *gorm.DB) error {
 	}
 	if err := seedAdminUser(db); err != nil {
 		return fmt.Errorf("seed admin user: %w", err)
+	}
+	if err := seedZones(db); err != nil {
+		return fmt.Errorf("seed zones: %w", err)
 	}
 	return nil
 }
@@ -124,6 +128,103 @@ func seedAdminUser(db *gorm.DB) error {
 	}
 
 	return db.Create(admin).Error
+}
+
+func seedZones(db *gorm.DB) error {
+	adminID := deterministicUUID("seed:admin")
+
+	zones := []zoneDomain.Zone{
+		{
+			ID:            deterministicUUID("zone:motor"),
+			Name:          "Parkir Motor",
+			Description:   "Area parkir sepeda motor lantai 1",
+			Capacity:      200,
+			AdditionalFee: 0,
+			IsActive:      true,
+			CreatedBy:     &adminID,
+		},
+		{
+			ID:            deterministicUUID("zone:mobil"),
+			Name:          "Parkir Mobil",
+			Description:   "Area parkir mobil lantai 2",
+			Capacity:      80,
+			AdditionalFee: 2000,
+			IsActive:      true,
+			CreatedBy:     &adminID,
+		},
+		{
+			ID:            deterministicUUID("zone:vip"),
+			Name:          "Parkir VIP",
+			Description:   "Area parkir VIP covered basement",
+			Capacity:      20,
+			AdditionalFee: 5000,
+			IsActive:      true,
+			CreatedBy:     &adminID,
+		},
+	}
+
+	if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&zones).Error; err != nil {
+		return err
+	}
+
+	gates := []zoneDomain.Gate{
+		{
+			ID:           deterministicUUID("gate:motor-in"),
+			ZoneID:       deterministicUUID("zone:motor"),
+			Name:         "Gate Motor Masuk",
+			GateType:     types.GateTypeEntry,
+			LocationDesc: "Pintu masuk utara",
+			IsActive:     true,
+			CreatedBy:    &adminID,
+		},
+		{
+			ID:           deterministicUUID("gate:motor-out"),
+			ZoneID:       deterministicUUID("zone:motor"),
+			Name:         "Gate Motor Keluar",
+			GateType:     types.GateTypeExit,
+			LocationDesc: "Pintu keluar selatan",
+			IsActive:     true,
+			CreatedBy:    &adminID,
+		},
+		{
+			ID:           deterministicUUID("gate:mobil-in"),
+			ZoneID:       deterministicUUID("zone:mobil"),
+			Name:         "Gate Mobil Masuk",
+			GateType:     types.GateTypeEntry,
+			LocationDesc: "Pintu masuk barat",
+			IsActive:     true,
+			CreatedBy:    &adminID,
+		},
+		{
+			ID:           deterministicUUID("gate:mobil-out"),
+			ZoneID:       deterministicUUID("zone:mobil"),
+			Name:         "Gate Mobil Keluar",
+			GateType:     types.GateTypeExit,
+			LocationDesc: "Pintu keluar timur",
+			IsActive:     true,
+			CreatedBy:    &adminID,
+		},
+		{
+			ID:           deterministicUUID("gate:vip-in"),
+			ZoneID:       deterministicUUID("zone:vip"),
+			Name:         "Gate VIP Masuk",
+			GateType:     types.GateTypeEntry,
+			LocationDesc: "Pintu masuk basement",
+			IsActive:     true,
+			CreatedBy:    &adminID,
+		},
+		{
+			ID:           deterministicUUID("gate:vip-out"),
+			ZoneID:       deterministicUUID("zone:vip"),
+			Name:         "Gate VIP Keluar",
+			GateType:     types.GateTypeExit,
+			LocationDesc: "Pintu keluar basement",
+			IsActive:     true,
+			CreatedBy:    &adminID,
+		},
+	}
+
+	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&gates).Error
 }
 
 var seedNamespace = uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8") // uuid.NamespaceDNS

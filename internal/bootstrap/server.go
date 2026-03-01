@@ -10,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 	"parkieee/internal/modules/auth"
+	"parkieee/internal/modules/zone"
 	"parkieee/pkg/response"
 )
 
@@ -21,6 +22,7 @@ func NewServer(container *Container) *fiber.App {
 		IdleTimeout:       container.Config.Server.IdleTimeout,
 		EnablePrintRoutes: container.Config.Server.PrintRoutes,
 		ErrorHandler:      errorHandler,
+		StrictRouting:     false,
 	})
 
 	app.Use(recover.New())
@@ -51,6 +53,7 @@ func NewServer(container *Container) *fiber.App {
 
 	api := app.Group("/api/v1")
 	auth.RegisterRoutes(api, container.AuthService, container.Validator)
+	zone.RegisterRoutes(api, container.ZoneService, container.AuthService, container.Validator)
 
 	return app
 }

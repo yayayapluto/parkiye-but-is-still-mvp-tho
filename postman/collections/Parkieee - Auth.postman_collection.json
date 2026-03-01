@@ -1,0 +1,405 @@
+{
+  "info": {
+    "_postman_id": "5a65a3ea-cccf-42a5-a148-c2a39a7f85c3",
+    "name": "Parkieee - Auth",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Create User",
+          "id": "d0b431b7-f8ea-4212-ac13-39e04b6a3014",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Operator\",\n  \"email\": \"john@parkieee.local\",\n  \"password\": \"Operator@123!\",\n  \"role_id\": \"<role-uuid>\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/users/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "users",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update User",
+          "id": "41057186-9efa-418d-9ea6-a5e64fcda690",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Updated\",\n  \"email\": \"john.updated@parkieee.local\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/users/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<user-uuid>"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate User",
+          "id": "43459cca-8101-474d-abbb-0bd4fc66d420",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/users/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<user-uuid>"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "5b458524-4ca8-4481-8210-2c21e7bd4e5d"
+    },
+    {
+      "name": "Roles",
+      "item": [
+        {
+          "name": "Get All Roles",
+          "id": "1bb30629-64ee-432d-a635-f63793d8fab0",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/roles/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "roles",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Assign Permission to Role",
+          "id": "72f38f2d-b236-49c5-b149-4fb06d750c96",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permission_id\": \"<permission-uuid>\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/roles/:id/permissions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "roles",
+                ":id",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<role-uuid>"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Permission from Role",
+          "id": "4b145cd8-3fd1-458b-b547-81a3243ffeb9",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permission_id\": \"<permission-uuid>\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/roles/:id/permissions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "roles",
+                ":id",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "<role-uuid>"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "bc41ba11-ddb2-49d7-80eb-fbc31444e6cf"
+    },
+    {
+      "name": "Permissions",
+      "item": [
+        {
+          "name": "Get All Permissions",
+          "id": "cea8341b-1a5c-422c-9322-8ab65c417526",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/permissions/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "permissions",
+                ""
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "d0d775e8-fc4e-47d5-8be6-f45722ee2962"
+    },
+    {
+      "name": "Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const res = pm.response.json();",
+              "if (res.data && res.data.token) {",
+              "  pm.collectionVariables.set('token', res.data.token);",
+              "}"
+            ],
+            "type": "text/javascript",
+            "id": "f3ed7b13-a095-475b-aa6d-cc9a461bbb06"
+          }
+        }
+      ],
+      "id": "ae3df159-a74b-4200-9a27-cfd719a6a669",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@parkieee.local\",\n  \"password\": \"Admin@123!\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Logout",
+      "id": "1b19852e-6d87-4281-8639-82e4db02f9bd",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/auth/logout",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "auth",
+            "logout"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Me",
+      "id": "3182a919-f270-4b2b-bdaf-7a02892aa413",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/auth/me",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "auth",
+            "me"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Change Password",
+      "id": "0fe3b4c5-c87a-4281-ab8c-8a5ba4eaa6ec",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"old_password\": \"Admin@123!\",\n  \"new_password\": \"NewPassword@123!\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/change-password",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "auth",
+            "change-password"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "id": "713acbf9-ad8a-4015-a0e8-391c201ceb6e",
+      "key": "base_url",
+      "value": "http://localhost:8080/api/v1"
+    },
+    {
+      "id": "fac34a81-2e79-4627-97d0-1cc5ed422983",
+      "key": "token",
+      "value": ""
+    }
+  ]
+}

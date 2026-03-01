@@ -1,4 +1,4 @@
-.PHONY: help up down dev migrate migrate-seed seed tidy build run setup nih-orang refresh
+.PHONY: help up down wait-db dev migrate migrate-seed seed tidy kill build run refresh setup nih-orang
 
 include .env
 export
@@ -14,7 +14,8 @@ help:
 	@echo "  make down         Stop all services"
 	@echo ""
 	@echo "Development"
-	@echo "  make dev          Start infrastructure + run API locally"
+	@echo "  make dev          Start infrastructure + migrate + seed + run API"
+	@echo "  make refresh      Restart infrastructure + run API"
 	@echo ""
 	@echo "Database"
 	@echo "  make migrate      Run AutoMigrate (create/alter tables)"
@@ -23,15 +24,15 @@ help:
 	@echo ""
 	@echo "Go"
 	@echo "  make tidy         go mod tidy"
+	@echo "  make kill         Kill running API process"
 	@echo "  make build        Build API binary"
-	@echo "  make run          Run API locally (go run)"
+	@echo "  make run          Kill + build + run API"
 	@echo "  make setup        First time setup (copy .env, migrate, seed)"
 	@echo ""
 
 up:
 	docker compose up -d
 	@echo "OK All services started"
-	@echo "  PostgreSQL -> http://localhost:${DB_PORT}"
 	@echo "  Grafana    -> http://localhost:${GRAFANA_PORT}"
 	@echo "  Prometheus -> http://localhost:${PROMETHEUS_PORT}"
 	@echo "  Loki       -> http://localhost:${LOKI_PORT}"
@@ -52,7 +53,6 @@ dev: up wait-db migrate-seed
 	@echo "DEVELOPMENT MODE"
 	@echo ""
 	@echo "Infrastructure (Docker):"
-	@#echo "  PostgreSQL : localhost:${DB_PORT}"
 	@echo "  Grafana    : http://localhost:${GRAFANA_PORT}"
 	@echo "  Prometheus : http://localhost:${PROMETHEUS_PORT}"
 	@echo "  Loki       : http://localhost:${LOKI_PORT}"
@@ -62,7 +62,7 @@ dev: up wait-db migrate-seed
 	@echo "  Metrics    : http://localhost:${SERVER_PORT}/metrics"
 	@echo ""
 	@echo "Starting API locally..."
-	@go run ./cmd/api
+	@$(MAKE) run
 
 migrate:
 	go run ./cmd/migrate
@@ -76,26 +76,20 @@ seed:
 tidy:
 	go mod tidy
 
-build:
-	go build -o bin/api ./cmd/api
+kill:
+	-taskkill //F //IM api.exe 2>NUL || true
 
-run:
-	go run ./cmd/api
+build: tidy
+	go build -o bin/api.exe ./cmd/api
 
-refresh:
-	@clear
-	@$(MAKE) down
-	@$(MAKE) up
-	@$(MAKE) wait-db
-	@clear
-	@$(MAKE) run
+run: kill build
+	./bin/api.exe
+
+refresh: down up wait-db run
 
 setup:
 	@if [ ! -f .env ]; then cp .env.example .env && echo "OK .env created from .env.example - edit JWT_SECRET_KEY!"; fi
-	@$(MAKE) tidy
-	@$(MAKE) up
-	@$(MAKE) wait-db
-	@$(MAKE) migrate-seed
+	@$(MAKE) tidy up wait-db migrate-seed
 	@echo ""
 	@echo "OK Setup complete! Run 'make dev' to start development."
 

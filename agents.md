@@ -300,16 +300,16 @@ Seed data (idempotent):
 | `internal/bootstrap/*`               | ✅ done                            |
 | `cmd/api/main.go`                    | ✅ done                            |
 | `internal/modules/*/domain.go`       | ✅ done (all 11 modules)           |
-| `internal/modules/*/ports.go`        | ⬜ finished module: auth           |
-| `internal/modules/*/repository.go`   | ⬜ finished module: auth           |
-| `internal/modules/*/service.go`      | ⬜ finished module: auth           |
-| `internal/modules/*/dto.go`          | ⬜ finished module: auth           |
-| `internal/modules/*/handler.go`      | ⬜ finished module: auth           |
-| `internal/modules/*/http_adapter.go` | ⬜ finished module: auth           |
-| `internal/modules/*/routes.go`       | ⬜ finished module: auth           |
+| `internal/modules/*/ports.go`        | ⬜ finished: auth, zone            |
+| `internal/modules/*/repository.go`   | ⬜ finished: auth, zone            |
+| `internal/modules/*/service.go`      | ⬜ finished: auth, zone            |
+| `internal/modules/*/dto.go`          | ⬜ finished: auth, zone            |
+| `internal/modules/*/handler.go`      | ⬜ finished: auth, zone            |
+| `internal/modules/*/http_adapter.go` | ⬜ finished: auth, zone            |
+| `internal/modules/*/routes.go`       | ⬜ finished: auth, zone            |
 
 **Next:** implement modules in dependency order:
-`auth` → `zone` → `gate` → `vehicle` → `rfid` → `fee` → `transaction` → `payment` → `override` → `ocr` → `audit`
+`auth` ✅ → `zone` ✅ → `gate` → `vehicle` → `rfid` → `fee` → `transaction` → `payment` → `override` → `ocr` → `audit`
 
 ---
 

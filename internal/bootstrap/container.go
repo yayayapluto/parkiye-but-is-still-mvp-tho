@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"parkieee/internal/modules/auth"
+	"parkieee/internal/modules/zone"
 	"parkieee/pkg/config"
 	"parkieee/pkg/logger"
 	"parkieee/pkg/validator"
@@ -23,6 +24,12 @@ type Container struct {
 	AuthLoginLogRepo   auth.LoginLogRepositoryPort
 	AuthLoginStatsRepo auth.LoginStatsRepositoryPort
 	AuthService        auth.ServicePort
+
+	ZoneRepo        zone.ZoneRepositoryPort
+	GateRepo        zone.GateRepositoryPort
+	GateDeviceRepo  zone.GateDeviceRepositoryPort
+	CapacityLogRepo zone.CapacityLogRepositoryPort
+	ZoneService     zone.ServicePort
 }
 
 func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
@@ -39,6 +46,10 @@ func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
 	}
 
 	if err := container.initAuthModule(); err != nil {
+		return nil, err
+	}
+
+	if err := container.initZoneModule(); err != nil {
 		return nil, err
 	}
 
@@ -62,6 +73,21 @@ func (c *Container) initAuthModule() error {
 		c.AuthLoginLogRepo,
 		c.AuthLoginStatsRepo,
 		c.Config,
+		c.Log,
+	)
+	return nil
+}
+
+func (c *Container) initZoneModule() error {
+	c.ZoneRepo = zone.NewZoneRepository(c.DB)
+	c.GateRepo = zone.NewGateRepository(c.DB)
+	c.GateDeviceRepo = zone.NewGateDeviceRepository(c.DB)
+	c.CapacityLogRepo = zone.NewCapacityLogRepository(c.DB)
+	c.ZoneService = zone.NewService(
+		c.ZoneRepo,
+		c.GateRepo,
+		c.CapacityLogRepo,
+		c.DB,
 		c.Log,
 	)
 	return nil
