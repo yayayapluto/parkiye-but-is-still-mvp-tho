@@ -44,11 +44,24 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       ENABLE_TRACING: ${ENABLE_TRACING:-true}
       TEMPO_ENDPOINT: tempo:4318
+      ENABLE_PROFILING: ${ENABLE_PROFILING:-true}
+      PYROSCOPE_ENDPOINT: http://pyroscope:4040
     volumes:
       - ./storage/logs:/app/storage/logs
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - parkieee_net
+
+  pyroscope:
+    image: grafana/pyroscope:latest
+    container_name: parkieee_pyroscope
+    restart: unless-stopped
+    ports:
+      - "${PYROSCOPE_PORT:-4040}:4040"
+    volumes:
+      - pyroscope_data:/data
     networks:
       - parkieee_net
 
@@ -98,6 +111,7 @@ services:
       - prometheus
       - loki
       - tempo
+      - pyroscope
     networks:
       - parkieee_net
 
@@ -138,6 +152,8 @@ volumes:
   loki_data:
     driver: local
   tempo_data:
+    driver: local
+  pyroscope_data:
     driver: local
 
 networks:

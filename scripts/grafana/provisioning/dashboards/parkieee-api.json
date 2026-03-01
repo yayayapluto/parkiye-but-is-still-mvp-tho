@@ -1,81 +1,52 @@
 {
-  "title": "Parkieee API",
-  "uid": "parkieee-api",
-  "tags": ["parkieee"],
+  "title": "Parkieee Logs",
+  "uid": "parkieee-logs",
+  "tags": ["parkieee", "logs"],
   "timezone": "Asia/Jakarta",
   "refresh": "10s",
   "schemaVersion": 38,
   "panels": [
     {
       "id": 1,
-      "title": "Request Rate (req/s)",
+      "title": "Log Volume by Level",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 6 },
       "targets": [
         {
-          "datasource": "Prometheus",
-          "expr": "sum(rate(parkieee_http_requests_total[1m])) by (method, path)",
-          "legendFormat": "{{method}} {{path}}"
+          "datasource": "Loki",
+          "expr": "sum(count_over_time({job=\"parkieee\"}[1m])) by (level)",
+          "legendFormat": "{{level}}"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "error" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "warn" },  "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "info" },  "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "debug" }, "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }] }
+        ]
+      }
     },
     {
       "id": 2,
-      "title": "Error Rate (%)",
-      "type": "timeseries",
-      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "title": "Error Logs",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 10 },
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": true, "showTime": true, "sortOrder": "Descending" },
       "targets": [
         {
-          "datasource": "Prometheus",
-          "expr": "sum(rate(parkieee_http_requests_total{status=~\"4..|5..\"}[1m])) / sum(rate(parkieee_http_requests_total[1m])) * 100",
-          "legendFormat": "error rate"
+          "datasource": "Loki",
+          "expr": "{job=\"parkieee\", level=\"error\"}",
+          "legendFormat": ""
         }
       ]
     },
     {
       "id": 3,
-      "title": "Request Duration P99 (s)",
-      "type": "timeseries",
-      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "expr": "histogram_quantile(0.99, sum(rate(parkieee_http_request_duration_seconds_bucket[1m])) by (le, path))",
-          "legendFormat": "p99 {{path}}"
-        }
-      ]
-    },
-    {
-      "id": 4,
-      "title": "Active Requests",
-      "type": "stat",
-      "gridPos": { "x": 12, "y": 8, "w": 6, "h": 8 },
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "expr": "parkieee_http_active_requests",
-          "legendFormat": "active"
-        }
-      ]
-    },
-    {
-      "id": 5,
-      "title": "DB Query Duration P99 (s)",
-      "type": "timeseries",
-      "gridPos": { "x": 18, "y": 8, "w": 6, "h": 8 },
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "expr": "histogram_quantile(0.99, sum(rate(parkieee_db_query_duration_seconds_bucket[1m])) by (le, operation))",
-          "legendFormat": "p99 {{operation}}"
-        }
-      ]
-    },
-    {
-      "id": 6,
-      "title": "App Logs",
+      "title": "All Logs",
       "type": "logs",
-      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 10 },
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 12 },
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": true, "showTime": true, "sortOrder": "Descending" },
       "targets": [
         {
           "datasource": "Loki",
@@ -84,5 +55,36 @@
         }
       ]
     }
-  ]
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "level",
+        "type": "custom",
+        "label": "Level",
+        "current": { "text": "All", "value": "" },
+        "options": [
+          { "text": "All",   "value": "" },
+          { "text": "error", "value": "error" },
+          { "text": "warn",  "value": "warn" },
+          { "text": "info",  "value": "info" },
+          { "text": "debug", "value": "debug" }
+        ]
+      },
+      {
+        "name": "module",
+        "type": "custom",
+        "label": "Module",
+        "current": { "text": "All", "value": "" },
+        "options": [
+          { "text": "All",         "value": "" },
+          { "text": "auth",        "value": "auth" },
+          { "text": "zone",        "value": "zone" },
+          { "text": "gate",        "value": "gate" },
+          { "text": "transaction", "value": "transaction" },
+          { "text": "payment",     "value": "payment" }
+        ]
+      }
+    ]
+  }
 }

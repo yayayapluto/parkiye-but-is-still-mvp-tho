@@ -13,19 +13,19 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Config is the top-level application configuration.
 type Config struct {
-	App           AppConfig
-	Database      DatabaseConfig
-	JWT           JWTConfig
-	Server        ServerConfig
-	Observability ObservabilityConfig // ← ADD THIS
-	Logger        LoggerConfig
+	App       AppConfig
+	Database  DatabaseConfig
+	JWT       JWTConfig
+	Server    ServerConfig
+	Tracing   TracingConfig
+	Profiling ProfilingConfig
+	Logger    LoggerConfig
 }
 
 type AppConfig struct {
 	Name  string
-	Env   string // "development" | "staging" | "production"
+	Env   string
 	Debug bool
 }
 
@@ -36,7 +36,7 @@ type DatabaseConfig struct {
 	Password               string
 	Name                   string
 	SSLMode                string
-	LogLevel               string // "silent"|"error"|"warn"|"info"
+	LogLevel               string
 	MaxOpenConns           int
 	MaxIdleConns           int
 	ConnMaxLifetimeSeconds int
@@ -58,33 +58,27 @@ type ServerConfig struct {
 	PrintRoutes  bool
 }
 
-// ADD THIS NEW STRUCT
-type ObservabilityConfig struct {
-	EnableTracing   bool
-	GrafanaPassword string
-	PrometheusPort  int
-	GrafanaPort     int
-	LokiPort        int
-	TempoPort       int
-	LogLevel        string
+type TracingConfig struct {
+	Enabled  bool
+	Endpoint string
+}
+
+type ProfilingConfig struct {
+	Enabled           bool
+	PyroscopeEndpoint string
 }
 
 type LoggerConfig struct {
-	Level       string // "debug"|"info"|"warn"|"error"
-	AddSource   bool
-	JSONFormat  bool
-	OutputPaths []string // e.g. ["stdout", "/var/log/app.log"]
-
-	// File rotation (opsional, hanya aktif kalau OutputPaths ada file path)
-	FileMaxSize    int // MB, default 100
-	FileMaxBackups int // default 3
-	FileMaxAge     int // days, default 28
+	Level          string
+	AddSource      bool
+	JSONFormat     bool
+	OutputPaths    []string
+	FileMaxSize    int
+	FileMaxBackups int
+	FileMaxAge     int
 	FileCompress   bool
 }
 
-// LoadEnv loads .env file from the given paths (first found wins).
-// Call this once at the very start of main() before calling Load().
-// Safe to call in production — if no .env file is found, it silently skips.
 func LoadEnv(files ...string) {
 	if len(files) == 0 {
 		files = []string{".env"}
@@ -95,12 +89,9 @@ func LoadEnv(files ...string) {
 			return
 		}
 	}
-	// No .env file found — rely on OS environment (normal for production containers)
 	log.Println("config: no .env file found, using OS environment variables")
 }
 
-// Load reads configuration from environment variables.
-// Call LoadEnv() before Load() to populate variables from a .env file.
 func Load() (*Config, error) {
 	cfg := &Config{
 		App: AppConfig{
@@ -132,17 +123,15 @@ func Load() (*Config, error) {
 			ReadTimeout:  getEnvDuration("SERVER_READ_TIMEOUT", 30*time.Second),
 			WriteTimeout: getEnvDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),
 			IdleTimeout:  getEnvDuration("SERVER_IDLE_TIMEOUT", 60*time.Second),
-			PrintRoutes:  getEnvBool("SERVER_PRINT_ROUTES", false),
+			PrintRoutes:  getEnvBool("SERVER_PRINT_ROUTES", true),
 		},
-		// ADD THIS SECTION
-		Observability: ObservabilityConfig{
-			EnableTracing:   getEnvBool("ENABLE_TRACING", false),
-			GrafanaPassword: getEnv("GRAFANA_PASSWORD", "admin"),
-			PrometheusPort:  getEnvInt("PROMETHEUS_PORT", 9090),
-			GrafanaPort:     getEnvInt("GRAFANA_PORT", 3000),
-			LokiPort:        getEnvInt("LOKI_PORT", 3100),
-			TempoPort:       getEnvInt("TEMPO_PORT", 4318), // ← tambah ini (OTLP HTTP)
-			LogLevel:        getEnv("OBSERVABILITY_LOG_LEVEL", "info"),
+		Tracing: TracingConfig{
+			Enabled:  getEnvBool("ENABLE_TRACING", false),
+			Endpoint: getEnv("TEMPO_ENDPOINT", "localhost:4318"),
+		},
+		Profiling: ProfilingConfig{
+			Enabled:           getEnvBool("ENABLE_PROFILING", false),
+			PyroscopeEndpoint: getEnv("PYROSCOPE_ENDPOINT", "http://localhost:4040"),
 		},
 		Logger: LoggerConfig{
 			Level:          getEnv("LOG_LEVEL", "info"),
@@ -159,39 +148,30 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-// IsDevelopment returns true when APP_ENV=development.
 func (c *Config) IsDevelopment() bool { return c.App.Env == "development" }
-
-// IsProduction returns true when APP_ENV=production.
-func (c *Config) IsProduction() bool { return c.App.Env == "production" }
-
-// ADD THESE HELPER METHODS
-func (c *Config) IsTracingEnabled() bool { return c.Observability.EnableTracing }
-
-func (c *Config) GetObservabilityURLs() map[string]string {
-	return map[string]string{
-		"prometheus": fmt.Sprintf("http://localhost:%d", c.Observability.PrometheusPort),
-		"grafana":    fmt.Sprintf("http://localhost:%d", c.Observability.GrafanaPort),
-		"loki":       fmt.Sprintf("http://localhost:%d", c.Observability.LokiPort),
-	}
-}
+func (c *Config) IsProduction() bool  { return c.App.Env == "production" }
 
 func (c *Config) ToLoggerConfig() *logger.Config {
-	level := slog.LevelInfo
-	switch c.Logger.Level {
+	lvl := slog.LevelInfo
+	switch strings.ToLower(c.Logger.Level) {
 	case "debug":
-		level = slog.LevelDebug
+		lvl = slog.LevelDebug
 	case "warn":
-		level = slog.LevelWarn
+		lvl = slog.LevelWarn
 	case "error":
-		level = slog.LevelError
+		lvl = slog.LevelError
 	}
 
-	var fileConfig *logger.FileConfig
-	for _, path := range c.Logger.OutputPaths {
-		if path != "stdout" && path != "stderr" {
-			fileConfig = &logger.FileConfig{
-				Path:       path,
+	cfg := &logger.Config{
+		Level:       lvl,
+		AddSource:   c.Logger.AddSource,
+		OutputPaths: c.Logger.OutputPaths,
+	}
+
+	for _, p := range c.Logger.OutputPaths {
+		if p != "stdout" && p != "stderr" {
+			cfg.FileConfig = &logger.FileConfig{
+				Path:       p,
 				MaxSize:    c.Logger.FileMaxSize,
 				MaxBackups: c.Logger.FileMaxBackups,
 				MaxAge:     c.Logger.FileMaxAge,
@@ -201,16 +181,8 @@ func (c *Config) ToLoggerConfig() *logger.Config {
 		}
 	}
 
-	return &logger.Config{
-		Level:       level,
-		AddSource:   c.Logger.AddSource,
-		JSONFormat:  c.Logger.JSONFormat,
-		OutputPaths: c.Logger.OutputPaths,
-		FileConfig:  fileConfig,
-	}
+	return cfg
 }
-
-// ── helpers ──────────────────────────────────────────────────────────────────
 
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
@@ -222,21 +194,9 @@ func getEnv(key, fallback string) string {
 func getEnvRequired(key string) string {
 	v := os.Getenv(key)
 	if v == "" {
-		panic(fmt.Sprintf("required environment variable %q is not set", key))
+		log.Fatalf("config: required env variable %s is not set", key)
 	}
 	return v
-}
-
-func getEnvBool(key string, fallback bool) bool {
-	v := os.Getenv(key)
-	if v == "" {
-		return fallback
-	}
-	b, err := strconv.ParseBool(v)
-	if err != nil {
-		return fallback
-	}
-	return b
 }
 
 func getEnvInt(key string, fallback int) int {
@@ -249,6 +209,18 @@ func getEnvInt(key string, fallback int) int {
 		return fallback
 	}
 	return i
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return fallback
+	}
+	return b
 }
 
 func getEnvDuration(key string, fallback time.Duration) time.Duration {
@@ -268,12 +240,13 @@ func getEnvStringSlice(key string, fallback []string) []string {
 	if v == "" {
 		return fallback
 	}
-	parts := strings.Split(v, ",")
-	result := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if trimmed := strings.TrimSpace(p); trimmed != "" {
-			result = append(result, trimmed)
-		}
-	}
-	return result
+	return strings.Split(v, ",")
+}
+
+func (c *Config) DSN() string {
+	return fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s TimeZone=Asia/Jakarta",
+		c.Database.Host, c.Database.Port, c.Database.User,
+		c.Database.Password, c.Database.Name, c.Database.SSLMode,
+	)
 }
