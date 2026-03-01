@@ -1,1 +1,604 @@
 package transaction
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
+	feeDomain "parkieee/internal/modules/fee"
+	rfidDomain "parkieee/internal/modules/rfid"
+	vehicleDomain "parkieee/internal/modules/vehicle"
+	zoneDomain "parkieee/internal/modules/zone"
+	"parkieee/pkg/errors"
+	"parkieee/pkg/logger"
+	"parkieee/pkg/qr"
+	"parkieee/pkg/types"
+)
+
+type service struct {
+	db        *gorm.DB
+	txRepo    TransactionRepositoryPort
+	logRepo   TransactionLogRepositoryPort
+	log       logger.Logger
+	baseURL   string
+	placeName string
+	qrSecret  string
+
+	// Cross-module service ports injected for reads only.
+	// Writes that must be atomic go through raw tx via the zone domain struct.
+	zoneSvc      zoneDomain.ServicePort
+	zoneGateRepo zoneDomain.GateRepositoryPort
+	zoneRepo     zoneDomain.ZoneRepositoryPort
+	rfidSvc      rfidDomain.ServicePort
+	feeSvc       feeDomain.ServicePort
+	vehicleSvc   vehicleDomain.ServicePort
+}
+
+func NewService(
+	db *gorm.DB,
+	txRepo TransactionRepositoryPort,
+	logRepo TransactionLogRepositoryPort,
+	zoneSvc zoneDomain.ServicePort,
+	zoneGateRepo zoneDomain.GateRepositoryPort,
+	zoneRepo zoneDomain.ZoneRepositoryPort,
+	rfidSvc rfidDomain.ServicePort,
+	feeSvc feeDomain.ServicePort,
+	vehicleSvc vehicleDomain.ServicePort,
+	log logger.Logger,
+	baseURL string,
+	placeName string,
+	qrSecret string,
+) ServicePort {
+	return &service{
+		db:           db,
+		txRepo:       txRepo,
+		logRepo:      logRepo,
+		log:          log,
+		baseURL:      baseURL,
+		placeName:    placeName,
+		qrSecret:     qrSecret,
+		zoneSvc:      zoneSvc,
+		zoneGateRepo: zoneGateRepo,
+		zoneRepo:     zoneRepo,
+		rfidSvc:      rfidSvc,
+		feeSvc:       feeSvc,
+		vehicleSvc:   vehicleSvc,
+	}
+}
+
+func (s *service) RecordEntry(ctx context.Context, req RecordEntryRequest, operatorID uuid.UUID) (*Transaction, error) {
+	gate, zone, err := s.validateEntryGate(ctx, req.EntryGateID)
+	if err != nil {
+		return nil, err
+	}
+
+	rfidCardID, err := s.resolveRFIDForEntry(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	capacity, err := s.checkZoneCapacity(ctx, gate, zone)
+	if err != nil {
+		return nil, err
+	}
+
+	var created *Transaction
+	now := time.Now()
+
+	dbErr := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		code, err := s.generateTransactionCode(ctx, tx, now)
+		if err != nil {
+			return err
+		}
+
+		t, err := buildEntryTransaction(ctx, s.log, req, code, rfidCardID, gate, now, s.baseURL, s.placeName, s.qrSecret)
+		if err != nil {
+			return err
+		}
+
+		if err := s.txRepo.Create(ctx, tx, t); err != nil {
+			return fmt.Errorf("create transaction: %w", err)
+		}
+
+		if err := s.logRepo.Append(ctx, tx, &TransactionLog{
+			TransactionID:     t.ID,
+			ToStatus:          string(types.TransactionStatusOpen),
+			Event:             types.EventEntryCreated,
+			TriggeredBy:       types.TriggeredByOperator,
+			TriggeredByUserID: &operatorID,
+			Note: fmt.Sprintf("entry via %s at gate %s (zone: %s)",
+				req.EntryMethod, gate.Name, zone.Name),
+		}); err != nil {
+			return fmt.Errorf("append entry log: %w", err)
+		}
+
+		if err := appendCapacityLog(ctx, tx, t.ID, gate.ZoneID, types.ZoneEventEntry, capacity.OccupiedCount, zone.Capacity); err != nil {
+			return fmt.Errorf("append capacity log: %w", err)
+		}
+
+		created = t
+		return nil
+	})
+
+	if dbErr != nil {
+		s.log.Error(ctx, "entry transaction rolled back",
+			"error", dbErr,
+			"gate_id", req.EntryGateID,
+			"entry_method", req.EntryMethod,
+		)
+		return nil, errors.Wrap(dbErr, errors.ErrDatabaseError, "failed to record entry")
+	}
+
+	s.log.Info(ctx, "entry recorded",
+		"tx_id", created.ID,
+		"tx_code", created.TransactionCode,
+		"gate_id", req.EntryGateID,
+		"gate_name", gate.Name,
+		"zone_id", gate.ZoneID,
+		"zone_name", zone.Name,
+		"entry_method", req.EntryMethod,
+		"operator_id", operatorID,
+	)
+
+	return s.txRepo.FindByID(ctx, created.ID)
+}
+
+func (s *service) RecordExit(ctx context.Context, id uuid.UUID, req RecordExitRequest, operatorID uuid.UUID) (*Transaction, error) {
+	existing, err := s.txRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if existing.Status != types.TransactionStatusOpen {
+		return nil, errors.New(errors.ErrValidation, fmt.Sprintf(
+			"transaction is not open (current status: %s)", existing.Status,
+		))
+	}
+
+	exitGate, err := s.validateExitGate(ctx, req.ExitGateID, existing.ZoneID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.validateRFIDForExit(ctx, req, existing); err != nil {
+		return nil, err
+	}
+
+	vehicleTypeID, err := s.resolveVehicleTypeForFee(ctx, existing, req)
+	if err != nil {
+		return nil, err
+	}
+
+	exitAt := time.Now()
+
+	calculatedFee, err := s.calculateExitFee(ctx, existing, vehicleTypeID, exitAt)
+	if err != nil {
+		return nil, err
+	}
+
+	zone, capacity, err := s.loadZoneAndCapacity(ctx, existing.ZoneID)
+	if err != nil {
+		return nil, err
+	}
+
+	durationMinutes := int(exitAt.Sub(existing.EntryAt).Minutes())
+
+	if err := s.commitExitWrites(ctx, existing, req, exitGate, operatorID, exitAt, calculatedFee, durationMinutes, zone, capacity); err != nil {
+		s.log.Error(ctx, "exit transaction rolled back",
+			"tx_id", id,
+			"exit_gate_id", req.ExitGateID,
+			"error", err,
+		)
+		return nil, errors.Wrap(err, errors.ErrDatabaseError, "failed to record exit")
+	}
+
+	s.log.Info(ctx, "exit recorded",
+		"tx_id", id,
+		"tx_code", existing.TransactionCode,
+		"exit_gate_id", req.ExitGateID,
+		"exit_gate_name", exitGate.Name,
+		"zone_id", existing.ZoneID,
+		"zone_name", zone.Name,
+		"exit_method", req.ExitMethod,
+		"duration_minutes", durationMinutes,
+		"calculated_fee", calculatedFee,
+		"vehicle_type_id", vehicleTypeID,
+		"operator_id", operatorID,
+	)
+
+	return s.txRepo.FindByID(ctx, id)
+}
+
+func (s *service) Cancel(ctx context.Context, id uuid.UUID, reason string, operatorID uuid.UUID) (*Transaction, error) {
+	existing, err := s.txRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Only open transactions can be cancelled; other statuses are terminal or already paid.
+	if existing.Status != types.TransactionStatusOpen {
+		return nil, errors.New(errors.ErrValidation, fmt.Sprintf(
+			"only open transactions can be cancelled (current status: %s)", existing.Status,
+		))
+	}
+
+	zone, err := s.zoneRepo.FindByID(ctx, existing.ZoneID)
+	if err != nil {
+		return nil, err
+	}
+
+	capacity, err := s.zoneSvc.GetCapacity(ctx, existing.ZoneID)
+	if err != nil {
+		return nil, err
+	}
+
+	dbErr := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		fromStatus := string(existing.Status)
+		existing.Status = types.TransactionStatusCancelled
+
+		if err := s.txRepo.Update(ctx, tx, existing); err != nil {
+			return fmt.Errorf("update transaction: %w", err)
+		}
+
+		if err := s.logRepo.Append(ctx, tx, &TransactionLog{
+			TransactionID:     existing.ID,
+			FromStatus:        &fromStatus,
+			ToStatus:          string(types.TransactionStatusCancelled),
+			Event:             types.EventExitRecorded,
+			TriggeredBy:       types.TriggeredByOperator,
+			TriggeredByUserID: &operatorID,
+			Note:              "cancelled: " + reason,
+		}); err != nil {
+			return fmt.Errorf("append cancel log: %w", err)
+		}
+
+		// Release the occupied slot back to the zone.
+		if err := appendCapacityLog(ctx, tx, existing.ID, existing.ZoneID, types.ZoneEventExit, capacity.OccupiedCount, zone.Capacity); err != nil {
+			return fmt.Errorf("append capacity log: %w", err)
+		}
+
+		return nil
+	})
+
+	if dbErr != nil {
+		s.log.Error(ctx, "cancel transaction rolled back",
+			"tx_id", id,
+			"error", dbErr,
+		)
+		return nil, errors.Wrap(dbErr, errors.ErrDatabaseError, "failed to cancel transaction")
+	}
+
+	s.log.Info(ctx, "transaction cancelled",
+		"tx_id", id,
+		"tx_code", existing.TransactionCode,
+		"reason", reason,
+		"operator_id", operatorID,
+	)
+
+	return s.txRepo.FindByID(ctx, id)
+}
+
+func (s *service) GetTransaction(ctx context.Context, id uuid.UUID) (*Transaction, error) {
+	return s.txRepo.FindByID(ctx, id)
+}
+
+func (s *service) GetByCode(ctx context.Context, code string) (*Transaction, error) {
+	return s.txRepo.FindByCode(ctx, code)
+}
+
+func (s *service) ListTransactions(ctx context.Context, filter ListFilter, page, pageSize int) ([]Transaction, int64, error) {
+	return s.txRepo.FindAll(ctx, filter, page, pageSize)
+}
+
+func (s *service) GetLogs(ctx context.Context, txID uuid.UUID) ([]TransactionLog, error) {
+	// Ensure transaction exists before returning logs.
+	if _, err := s.txRepo.FindByID(ctx, txID); err != nil {
+		return nil, err
+	}
+	return s.logRepo.FindByTransactionID(ctx, txID)
+}
+
+func (s *service) validateEntryGate(ctx context.Context, gateID uuid.UUID) (*zoneDomain.Gate, *zoneDomain.Zone, error) {
+	gate, err := s.zoneGateRepo.FindByID(ctx, gateID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if gate.GateType != types.GateTypeEntry {
+		return nil, nil, errors.New(errors.ErrValidation, "gate is not an entry gate")
+	}
+	if !gate.IsActive {
+		return nil, nil, errors.New(errors.ErrValidation, "entry gate is inactive")
+	}
+
+	zone, err := s.zoneRepo.FindByID(ctx, gate.ZoneID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !zone.IsActive {
+		return nil, nil, errors.New(errors.ErrValidation, "zone is inactive")
+	}
+
+	return gate, zone, nil
+}
+
+func (s *service) validateExitGate(ctx context.Context, gateID uuid.UUID, expectedZoneID uuid.UUID) (*zoneDomain.Gate, error) {
+	gate, err := s.zoneGateRepo.FindByID(ctx, gateID)
+	if err != nil {
+		return nil, errors.New(errors.ErrNotFound, "exit gate not found")
+	}
+	if gate.GateType != types.GateTypeExit {
+		return nil, errors.New(errors.ErrValidation, "gate is not an exit gate")
+	}
+	if !gate.IsActive {
+		return nil, errors.New(errors.ErrValidation, "exit gate is inactive")
+	}
+	if gate.ZoneID != expectedZoneID {
+		return nil, errors.New(errors.ErrValidation, "exit gate does not belong to the same zone as the entry gate")
+	}
+	return gate, nil
+}
+
+// resolveRFIDForEntry returns the card ID for RFID entries, or nil for QR entries.
+// Also guards against double-entry on the same card.
+func (s *service) resolveRFIDForEntry(ctx context.Context, req RecordEntryRequest) (*uuid.UUID, error) {
+	if req.EntryMethod == types.EntryMethodQR {
+		return nil, nil
+	}
+
+	if req.RFIDCardUID == "" {
+		return nil, errors.New(errors.ErrValidation, "rfid_card_uid is required for rfid entry method")
+	}
+	card, err := s.rfidSvc.GetCardByUID(ctx, req.RFIDCardUID)
+	if err != nil {
+		return nil, errors.New(errors.ErrNotFound, "rfid card not found")
+	}
+	if !card.IsActive {
+		return nil, errors.New(errors.ErrValidation, "rfid card is inactive")
+	}
+
+	if existing, err := s.txRepo.FindOpenByRFIDCard(ctx, card.ID); err == nil && existing != nil {
+		s.log.Info(ctx, "entry rejected: rfid card already has open transaction",
+			"card_id", card.ID,
+			"card_uid", req.RFIDCardUID,
+			"existing_tx_id", existing.ID,
+			"existing_tx_code", existing.TransactionCode,
+		)
+		return nil, errors.New(errors.ErrConflict, fmt.Sprintf(
+			"rfid card already has an open transaction: %s", existing.TransactionCode,
+		))
+	}
+
+	return &card.ID, nil
+}
+
+// validateRFIDForExit checks that the presented card matches the card used at entry.
+func (s *service) validateRFIDForExit(ctx context.Context, req RecordExitRequest, existing *Transaction) error {
+	if req.ExitMethod != types.ExitMethodRFID {
+		return nil
+	}
+	if req.RFIDCardUID == "" {
+		return errors.New(errors.ErrValidation, "rfid_card_uid is required for rfid exit method")
+	}
+	card, err := s.rfidSvc.GetCardByUID(ctx, req.RFIDCardUID)
+	if err != nil {
+		return errors.New(errors.ErrNotFound, "rfid card not found")
+	}
+	if !card.IsActive {
+		return errors.New(errors.ErrValidation, "rfid card is inactive")
+	}
+	if existing.RFIDCardID == nil || *existing.RFIDCardID != card.ID {
+		s.log.Info(ctx, "exit rejected: rfid card mismatch",
+			"tx_id", existing.ID,
+			"expected_card_id", existing.RFIDCardID,
+			"presented_card_id", card.ID,
+			"presented_card_uid", req.RFIDCardUID,
+		)
+		return errors.New(errors.ErrValidation, "rfid card does not match the card used at entry")
+	}
+	return nil
+}
+
+// resolveVehicleTypeForFee returns vehicle type ID for fee calculation.
+// Priority: vehicle already linked to transaction > vehicle_type_id from request.
+func (s *service) resolveVehicleTypeForFee(ctx context.Context, existing *Transaction, req RecordExitRequest) (uuid.UUID, error) {
+	if existing.VehicleID != nil {
+		vehicle, err := s.vehicleSvc.GetVehicle(ctx, *existing.VehicleID)
+		if err != nil {
+			return uuid.Nil, fmt.Errorf("get vehicle: %w", err)
+		}
+		return vehicle.VehicleTypeID, nil
+	}
+	if req.VehicleTypeID == nil {
+		return uuid.Nil, errors.New(errors.ErrValidation,
+			"vehicle_type_id is required: no vehicle has been linked to this transaction yet")
+	}
+	return *req.VehicleTypeID, nil
+}
+
+func (s *service) checkZoneCapacity(ctx context.Context, gate *zoneDomain.Gate, zone *zoneDomain.Zone) (*zoneDomain.ZoneCapacityResponse, error) {
+	capacity, err := s.zoneSvc.GetCapacity(ctx, gate.ZoneID)
+	if err != nil {
+		return nil, err
+	}
+	if capacity.AvailableCount <= 0 {
+		s.log.Info(ctx, "entry rejected: zone at full capacity",
+			"zone_id", gate.ZoneID,
+			"zone_name", zone.Name,
+			"capacity", capacity.Capacity,
+			"occupied", capacity.OccupiedCount,
+		)
+		return nil, errors.New(errors.ErrConflict, fmt.Sprintf(
+			"zone '%s' is at full capacity (%d/%d)", zone.Name, capacity.OccupiedCount, capacity.Capacity,
+		))
+	}
+	return capacity, nil
+}
+
+func (s *service) generateTransactionCode(ctx context.Context, tx *gorm.DB, now time.Time) (string, error) {
+	dateStr := now.Format("20060102")
+	prefix := "PKR-" + dateStr + "-"
+	count, err := s.txRepo.CountByDatePrefix(ctx, tx, prefix)
+	if err != nil {
+		return "", fmt.Errorf("count transactions: %w", err)
+	}
+	return fmt.Sprintf("PKR-%s-%05d", dateStr, count+1), nil
+}
+
+// calculateExitFee wraps CalculateFee with structured error logging.
+func (s *service) calculateExitFee(ctx context.Context, existing *Transaction, vehicleTypeID uuid.UUID, exitAt time.Time) (int, error) {
+	fee, err := s.feeSvc.CalculateFee(ctx, existing.ZoneID, vehicleTypeID, existing.EntryAt, exitAt)
+	if err != nil {
+		s.log.Error(ctx, "fee calculation failed",
+			"tx_id", existing.ID,
+			"zone_id", existing.ZoneID,
+			"vehicle_type_id", vehicleTypeID,
+			"entry_at", existing.EntryAt,
+			"exit_at", exitAt,
+			"error", err,
+		)
+		return 0, errors.New(errors.ErrInternal, "failed to calculate fee: "+err.Error())
+	}
+	return fee, nil
+}
+
+// buildEntryTransaction constructs the Transaction struct for a new entry.
+// For QR entries, the QR code text is derived from the transaction code so it is
+// always unique, and a PNG image is generated server-side.
+func buildEntryTransaction(ctx context.Context, log logger.Logger, req RecordEntryRequest, code string, rfidCardID *uuid.UUID, gate *zoneDomain.Gate, now time.Time, baseURL, placeName, qrSecret string) (*Transaction, error) {
+	var entryQR *string
+	var entryQRImage *string
+	if req.EntryMethod == types.EntryMethodQR {
+		qrText := "PARKIEEE-" + code
+		entryQR = &qrText
+		imgURL, err := qr.SaveTicket(ctx, log, baseURL, qrSecret, qr.TicketData{
+			TransactionCode: code,
+			PlaceName:       placeName,
+			EntryAt:         now,
+			QRText:          qrText,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("save ticket image: %w", err)
+		}
+		entryQRImage = &imgURL
+	}
+	var photoURL *string
+	if req.EntryPhotoURL != "" {
+		photoURL = &req.EntryPhotoURL
+	}
+	return &Transaction{
+		ID:               uuid.New(),
+		TransactionCode:  code,
+		EntryGateID:      req.EntryGateID,
+		EntryMethod:      req.EntryMethod,
+		RFIDCardID:       rfidCardID,
+		EntryQRCode:      entryQR,
+		EntryQRCodeImage: entryQRImage,
+		EntryAt:          now,
+		EntryPhotoURL:    photoURL,
+		ZoneID:           gate.ZoneID,
+		Status:           types.TransactionStatusOpen,
+	}, nil
+}
+
+func (s *service) loadZoneAndCapacity(ctx context.Context, zoneID uuid.UUID) (*zoneDomain.Zone, *zoneDomain.ZoneCapacityResponse, error) {
+	zone, err := s.zoneRepo.FindByID(ctx, zoneID)
+	if err != nil {
+		return nil, nil, err
+	}
+	capacity, err := s.zoneSvc.GetCapacity(ctx, zoneID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return zone, capacity, nil
+}
+
+func (s *service) commitExitWrites(
+	ctx context.Context,
+	existing *Transaction,
+	req RecordExitRequest,
+	exitGate *zoneDomain.Gate,
+	operatorID uuid.UUID,
+	exitAt time.Time,
+	calculatedFee int,
+	durationMinutes int,
+	zone *zoneDomain.Zone,
+	capacity *zoneDomain.ZoneCapacityResponse,
+) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		applyExitFields(existing, req, exitAt, calculatedFee)
+
+		if err := s.txRepo.Update(ctx, tx, existing); err != nil {
+			return fmt.Errorf("update transaction: %w", err)
+		}
+
+		fromStatus := string(types.TransactionStatusOpen)
+		if err := s.logRepo.Append(ctx, tx, &TransactionLog{
+			TransactionID:     existing.ID,
+			FromStatus:        &fromStatus,
+			ToStatus:          string(types.TransactionStatusAwaitingPayment),
+			Event:             types.EventPaymentInitiated,
+			TriggeredBy:       types.TriggeredByOperator,
+			TriggeredByUserID: &operatorID,
+			Note: fmt.Sprintf(
+				"exit via %s at gate %s | duration: %d min | fee: Rp%d",
+				req.ExitMethod, exitGate.Name, durationMinutes, calculatedFee,
+			),
+		}); err != nil {
+			return fmt.Errorf("append exit log: %w", err)
+		}
+
+		if err := appendCapacityLog(ctx, tx, existing.ID, existing.ZoneID, types.ZoneEventExit, capacity.OccupiedCount, zone.Capacity); err != nil {
+			return fmt.Errorf("append capacity log: %w", err)
+		}
+
+		return nil
+	})
+}
+
+// applyExitFields mutates existing with exit data before persisting.
+func applyExitFields(existing *Transaction, req RecordExitRequest, exitAt time.Time, calculatedFee int) {
+	existing.ExitGateID = &req.ExitGateID
+	existing.ExitMethod = &req.ExitMethod
+	existing.ExitAt = &exitAt
+	existing.CalculatedFee = &calculatedFee
+	existing.Status = types.TransactionStatusAwaitingPayment
+}
+
+// appendCapacityLog writes a zone_capacity_logs row within the given tx.
+// It computes the new counts from currentOccupied and the event type.
+func appendCapacityLog(
+	ctx context.Context,
+	tx *gorm.DB,
+	transactionID uuid.UUID,
+	zoneID uuid.UUID,
+	event types.ZoneEventType,
+	currentOccupied int,
+	zoneCapacity int,
+) error {
+	var occupied int
+	if event == types.ZoneEventEntry {
+		occupied = currentOccupied + 1
+	} else {
+		occupied = currentOccupied - 1
+		if occupied < 0 {
+			occupied = 0
+		}
+	}
+	available := zoneCapacity - occupied
+	if available < 0 {
+		available = 0
+	}
+
+	log := zoneDomain.ZoneCapacityLog{
+		ID:             uuid.New(),
+		ZoneID:         zoneID,
+		TransactionID:  transactionID,
+		EventType:      event,
+		OccupiedCount:  occupied,
+		AvailableCount: available,
+		RecordedAt:     time.Now(),
+	}
+	return tx.WithContext(ctx).Create(&log).Error
+}

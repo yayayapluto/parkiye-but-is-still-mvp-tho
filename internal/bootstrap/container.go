@@ -4,6 +4,7 @@ import (
 	"parkieee/internal/modules/auth"
 	"parkieee/internal/modules/fee"
 	"parkieee/internal/modules/rfid"
+	"parkieee/internal/modules/transaction"
 	"parkieee/internal/modules/vehicle"
 	"parkieee/internal/modules/zone"
 	"parkieee/pkg/config"
@@ -45,6 +46,10 @@ type Container struct {
 	FeeTierRepo     fee.FeeTierRepositoryPort
 	HolidayRateRepo fee.HolidayRateRepositoryPort
 	FeeService      fee.ServicePort
+
+	TransactionRepo    transaction.TransactionRepositoryPort
+	TransactionLogRepo transaction.TransactionLogRepositoryPort
+	TransactionService transaction.ServicePort
 }
 
 func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
@@ -73,6 +78,9 @@ func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
 		return nil, err
 	}
 	if err := container.initFeeModule(); err != nil {
+		return nil, err
+	}
+	if err := container.initTransactionModule(); err != nil {
 		return nil, err
 	}
 
@@ -134,6 +142,27 @@ func (c *Container) initFeeModule() error {
 	c.FeeTierRepo = fee.NewFeeTierRepository(c.DB)
 	c.HolidayRateRepo = fee.NewHolidayRateRepository(c.DB)
 	c.FeeService = fee.NewService(c.FeeConfigRepo, c.FeeTierRepo, c.HolidayRateRepo, c.Log)
+	return nil
+}
+
+func (c *Container) initTransactionModule() error {
+	c.TransactionRepo = transaction.NewTransactionRepository(c.DB)
+	c.TransactionLogRepo = transaction.NewTransactionLogRepository(c.DB)
+	c.TransactionService = transaction.NewService(
+		c.DB,
+		c.TransactionRepo,
+		c.TransactionLogRepo,
+		c.ZoneService,
+		c.GateRepo,
+		c.ZoneRepo,
+		c.RFIDService,
+		c.FeeService,
+		c.VehicleService,
+		c.Log,
+		c.Config.BaseURL(),
+		c.Config.App.PlaceName,
+		c.Config.App.QRSecret,
+	)
 	return nil
 }
 

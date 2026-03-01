@@ -49,7 +49,9 @@ internal/
   modules/<name>/           # one folder per domain (see Module Layout below)
 pkg/
   config/
-    config.go               # Config structs + Load() + env helpers
+    config.go               # Config structs + Load() + env helpers — PLACE_NAME, QR_SECRET added
+  qr/
+    qr.go                   # Ticket PNG generator — 512x512, Go Mono font, HMAC filename obfuscation
   errors/
     error.go                # AppError type + error codes
   helpers/                  # utilities — add as needed (currently empty)
@@ -203,6 +205,11 @@ cfg, err := config.Load()
 Required env (app panics without):
 
 - `JWT_SECRET_KEY` — min 32 chars
+- `QR_SECRET` — secret untuk HMAC obfuscation filename tiket parkir
+
+Optional env (ada default):
+
+- `PLACE_NAME` — nama tempat yang tampil di tiket (default: `Parkir`)
 
 ### Logger (`pkg/logger`)
 
@@ -303,39 +310,41 @@ Seed data (idempotent):
 
 ## What's Done / What's Not
 
-| Area                                 | Status                                                      |
-|--------------------------------------|-------------------------------------------------------------|
-| `pkg/types`                          | ✅ done                                                      |
-| `pkg/config`                         | ✅ done                                                      |
-| `pkg/logger`                         | ✅ done                                                      |
-| `pkg/errors`                         | ✅ done                                                      |
-| `pkg/response`                       | ✅ done — paginated response, prev/next links always present |
-| `pkg/validator`                      | ✅ done                                                      |
-| `pkg/metrics`                        | ✅ done                                                      |
-| `pkg/tracer`                         | ✅ done                                                      |
-| `pkg/middleware/auth.go`             | ✅ done                                                      |
-| `pkg/helpers`                        | ⬜ empty — add utilities as needed                           |
-| `pkg/types/date.go`                  | ✅ done — DateOnly type for YYYY-MM-DD JSON fields           |
-| `database/migrate.go`                | ✅ done                                                      |
-| `database/seed.go`                   | ✅ done — gofakeit, all 11 modules, 25–80 rows per entity    |
-| `internal/bootstrap/*`               | ✅ done — container wires auth + zone + vehicle + rfid + fee |
-| `cmd/api/main.go`                    | ✅ done                                                      |
-| `internal/modules/*/domain.go`       | ✅ done (all 11 modules)                                     |
-| `internal/modules/*/ports.go`        | ⬜ finished: auth, zone, vehicle, rfid, fee                  |
-| `internal/modules/*/repository.go`   | ⬜ finished: auth, zone, vehicle, rfid, fee                  |
-| `internal/modules/*/service.go`      | ⬜ finished: auth, zone, vehicle, rfid, fee                  |
-| `internal/modules/*/dto.go`          | ⬜ finished: auth, zone, vehicle, rfid, fee                  |
-| `internal/modules/*/handler.go`      | ⬜ finished: auth, zone, vehicle, rfid, fee                  |
-| `internal/modules/*/http_adapter.go` | ⬜ finished: auth, zone, vehicle, rfid, fee                  |
-| `internal/modules/*/routes.go`       | ⬜ finished: auth, zone, vehicle, rfid, fee                  |
-| `docs/Parkieee - Auth.*`             | ✅ done — biasa + full test suite                            |
-| `docs/Parkieee - Zone.*`             | ✅ done — biasa + full test suite                            |
-| `docs/Parkieee - Vehicle.*`          | ✅ done — biasa + full test suite                            |
-| `docs/Parkieee - RFID.*`             | ✅ done — biasa + full test suite                            |
-| `docs/Parkieee - Fee.*`              | ✅ done — full test suite (postman collection)               |
+| Area                                 | Status                                                                              |
+|--------------------------------------|-------------------------------------------------------------------------------------|
+| `pkg/types`                          | ✅ done                                                                              |
+| `pkg/config`                         | ✅ done                                                                              |
+| `pkg/logger`                         | ✅ done                                                                              |
+| `pkg/errors`                         | ✅ done                                                                              |
+| `pkg/response`                       | ✅ done — paginated response, prev/next links always present                         |
+| `pkg/validator`                      | ✅ done                                                                              |
+| `pkg/metrics`                        | ✅ done                                                                              |
+| `pkg/tracer`                         | ✅ done                                                                              |
+| `pkg/middleware/auth.go`             | ✅ done                                                                              |
+| `pkg/helpers`                        | ⬜ empty — add utilities as needed                                                   |
+| `pkg/types/date.go`                  | ✅ done — DateOnly type for YYYY-MM-DD JSON fields                                   |
+| `database/migrate.go`                | ✅ done                                                                              |
+| `database/seed.go`                   | ✅ done — gofakeit, all 11 modules, 25–80 rows per entity                            |
+| `internal/bootstrap/*`               | ✅ done — container wires auth + zone + vehicle + rfid + fee + transaction           |
+| `pkg/qr/`                            | ✅ done — 512x512 thermal ticket PNG, Go Mono font, HMAC-SHA256 filename obfuscation |
+| `cmd/api/main.go`                    | ✅ done                                                                              |
+| `internal/modules/*/domain.go`       | ✅ done (all 11 modules)                                                             |
+| `internal/modules/*/ports.go`        | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction                             |
+| `internal/modules/*/repository.go`   | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction                             |
+| `internal/modules/*/service.go`      | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction                             |
+| `internal/modules/*/dto.go`          | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction                             |
+| `internal/modules/*/handler.go`      | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction                             |
+| `internal/modules/*/http_adapter.go` | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction                             |
+| `internal/modules/*/routes.go`       | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction                             |
+| `docs/Parkieee - Auth.*`             | ✅ done — biasa + full test suite                                                    |
+| `docs/Parkieee - Zone.*`             | ✅ done — biasa + full test suite                                                    |
+| `docs/Parkieee - Vehicle.*`          | ✅ done — biasa + full test suite                                                    |
+| `docs/Parkieee - RFID.*`             | ✅ done — biasa + full test suite                                                    |
+| `docs/Parkieee - Fee.*`              | ✅ done — full test suite (postman collection)                                       |
+| `docs/Parkieee - Transaction.*`      | ✅ done — biasa + full test suite                                                    |
 
 **Next:** implement modules in dependency order:
-`auth` ✅ → `zone` ✅ → `vehicle` ✅ → `rfid` ✅ → `fee` ✅ → `transaction` → `payment` → `override` → `ocr` → `audit`
+`auth` ✅ → `zone` ✅ → `vehicle` ✅ → `rfid` ✅ → `fee` ✅ → `transaction` ✅ → `payment` → `override` → `ocr` → `audit`
 
 ---
 

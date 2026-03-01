@@ -24,9 +24,12 @@ type Config struct {
 }
 
 type AppConfig struct {
-	Name  string
-	Env   string
-	Debug bool
+	Name      string
+	Env       string
+	Debug     bool
+	URL       string // base URL, e.g. http://localhost:8080
+	PlaceName string // PLACE_NAME, shown on parking ticket
+	QRSecret  string // QR_SECRET, used to obfuscate ticket filenames
 }
 
 type DatabaseConfig struct {
@@ -95,9 +98,12 @@ func LoadEnv(files ...string) {
 func Load() (*Config, error) {
 	cfg := &Config{
 		App: AppConfig{
-			Name:  getEnv("APP_NAME", "parkieee"),
-			Env:   getEnv("APP_ENV", "development"),
-			Debug: getEnvBool("APP_DEBUG", true),
+			Name:      getEnv("APP_NAME", "parkieee"),
+			Env:       getEnv("APP_ENV", "development"),
+			Debug:     getEnvBool("APP_DEBUG", true),
+			URL:       getEnv("APP_URL", ""),
+			PlaceName: getEnv("PLACE_NAME", "Parkir"),
+			QRSecret:  getEnvRequired("QR_SECRET"),
 		},
 		Database: DatabaseConfig{
 			Host:                   getEnv("DB_HOST", "localhost"),
@@ -150,6 +156,19 @@ func Load() (*Config, error) {
 
 func (c *Config) IsDevelopment() bool { return c.App.Env == "development" }
 func (c *Config) IsProduction() bool  { return c.App.Env == "production" }
+
+// BaseURL returns APP_URL if set, otherwise constructs one from server host/port.
+// SERVER_HOST 0.0.0.0 is normalized to localhost for external URLs.
+func (c *Config) BaseURL() string {
+	if c.App.URL != "" {
+		return strings.TrimRight(c.App.URL, "/")
+	}
+	host := c.Server.Host
+	if host == "0.0.0.0" || host == "" {
+		host = "localhost"
+	}
+	return fmt.Sprintf("http://%s:%d", host, c.Server.Port)
+}
 
 func (c *Config) ToLoggerConfig() *logger.Config {
 	lvl := slog.LevelInfo

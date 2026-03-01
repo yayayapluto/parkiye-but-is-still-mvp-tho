@@ -1,19 +1,23 @@
 package bootstrap
 
 import (
+	"errors"
 	"github.com/gofiber/contrib/otelfiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/etag"
+	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/monitor"
-	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
+	"net/http"
 	"parkieee/internal/modules/auth"
 	"parkieee/internal/modules/fee"
 	"parkieee/internal/modules/rfid"
+	"parkieee/internal/modules/transaction"
 	"parkieee/internal/modules/vehicle"
 	"parkieee/internal/modules/zone"
+	pkgerrors "parkieee/pkg/errors"
 	"parkieee/pkg/response"
 )
 
@@ -28,7 +32,7 @@ func NewServer(container *Container) *fiber.App {
 		StrictRouting:     false,
 	})
 
-	app.Use(recover.New())
+	//app.Use(recover.New())
 	app.Use(requestid.New())
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "*",
@@ -47,6 +51,11 @@ func NewServer(container *Container) *fiber.App {
 		}))
 	}
 
+	app.Use("/storage", filesystem.New(filesystem.Config{
+		Root:   http.Dir("storage"),
+		Browse: false,
+	}))
+
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return response.Success(c, "ok", fiber.Map{
 			"status": "ok",
@@ -60,10 +69,17 @@ func NewServer(container *Container) *fiber.App {
 	vehicle.RegisterRoutes(api, container.VehicleService, container.AuthService, container.Validator)
 	rfid.RegisterRoutes(api, container.RFIDService, container.AuthService, container.Validator)
 	fee.RegisterRoutes(api, container.FeeService, container.AuthService, container.Validator)
+	transaction.RegisterRoutes(api, container.TransactionService, container.AuthService, container.Validator)
 
 	return app
 }
 
 func errorHandler(c *fiber.Ctx, err error) error {
+	// Log unhandled errors for debugging
+	var appErr *pkgerrors.AppError
+	var fiberErr *fiber.Error
+	if !errors.As(err, &appErr) && !errors.As(err, &fiberErr) {
+		c.Context().Logger().Printf("[UNHANDLED ERROR] %T: %v", err, err)
+	}
 	return response.ErrorHandler(c, err)
 }

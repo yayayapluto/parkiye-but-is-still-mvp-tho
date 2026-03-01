@@ -1787,7 +1787,7 @@
   "variable": [
     {
       "id": "fa6aa69f-c598-49d5-99b5-12fd991cb273",
-      "key": "base_url",
+      "key": "baseUrl",
       "value": "http://localhost:8080/api/v1"
     },
     {

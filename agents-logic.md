@@ -612,14 +612,6 @@ Semua tipe enum didefinisikan sebagai `type X string` di `pkg/types/`:
 
 Lihat `agents-prepare.md` untuk detail lengkap. Ringkasan:
 
-### Transaction (planned)
-
-- Entry: buat transaction `open`, queue OCRJob
-- Exit: hitung fee via `fee.CalculateFee`, status → `awaiting_payment`
-- Status transitions: semua lewat `TransactionLog`
-- TransactionCode: `PKR-YYYYMMDD-{5digit}`, sequence dari count hari ini
-- Unclosed flag: goroutine ticker 1 jam, threshold 8h→overnight, 24h→multi_day, 72h→suspicious
-
 ### Payment (planned)
 
 - Cash: hitung kembalian, langsung complete

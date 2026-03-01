@@ -17,6 +17,7 @@ type Transaction struct {
 	EntryMethod      types.EntryMethod `gorm:"type:varchar(10);not null"`           // "rfid"|"qr"
 	RFIDCardID       *uuid.UUID        `gorm:"type:uuid;index;column:rfid_card_id"` // null if entry_method = "qr"
 	EntryQRCode      *string           `gorm:"type:varchar(255);uniqueIndex"`       // null if entry_method = "rfid"
+	EntryQRCodeImage *string           `gorm:"type:text"`                           // base64 PNG of the QR code; null if entry_method = "rfid"
 	EntryAt          time.Time         `gorm:"not null"`
 	EntryPhotoURL    *string           `gorm:"type:text"` // null if camera failed
 	ExitGateID       *uuid.UUID        `gorm:"type:uuid;index"`

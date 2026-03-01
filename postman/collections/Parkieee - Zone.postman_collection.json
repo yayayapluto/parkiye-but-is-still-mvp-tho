@@ -1766,18 +1766,18 @@
   },
   "variable": [
     {
-      "id": "bdcd1a9c-37d2-4912-953f-7a087ea728e4",
+      "id": "7e218e32-f8f9-4e5e-b2b1-c9fb0cc13386",
       "key": "token",
       "value": "",
       "type": "default"
     },
     {
-      "id": "642bfa68-f853-440e-a31a-ab2603e9cf5e",
+      "id": "e1783060-122a-4312-a1eb-5e713363c970",
       "key": "zoneId",
       "value": ""
     },
     {
-      "id": "8a10090e-2459-4f55-a24a-c6fa311632cc",
+      "id": "31aea1f4-b240-44c5-9b50-b06c2c085726",
       "key": "gateId",
       "value": ""
     }
