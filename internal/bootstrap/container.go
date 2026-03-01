@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"parkieee/internal/modules/auth"
+	"parkieee/internal/modules/rfid"
 	"parkieee/internal/modules/vehicle"
 	"parkieee/internal/modules/zone"
 	"parkieee/pkg/config"
@@ -35,6 +36,9 @@ type Container struct {
 	VehicleTypeRepo vehicle.VehicleTypeRepositoryPort
 	VehicleRepo     vehicle.VehicleRepositoryPort
 	VehicleService  vehicle.ServicePort
+
+	RFIDCardRepo rfid.RFIDCardRepositoryPort
+	RFIDService  rfid.ServicePort
 }
 
 func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
@@ -57,6 +61,9 @@ func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
 		return nil, err
 	}
 	if err := container.initVehicleModule(); err != nil {
+		return nil, err
+	}
+	if err := container.initRFIDModule(); err != nil {
 		return nil, err
 	}
 
@@ -104,6 +111,12 @@ func (c *Container) initVehicleModule() error {
 	c.VehicleTypeRepo = vehicle.NewVehicleTypeRepository(c.DB)
 	c.VehicleRepo = vehicle.NewVehicleRepository(c.DB)
 	c.VehicleService = vehicle.NewService(c.VehicleTypeRepo, c.VehicleRepo, c.Log)
+	return nil
+}
+
+func (c *Container) initRFIDModule() error {
+	c.RFIDCardRepo = rfid.NewRFIDCardRepository(c.DB)
+	c.RFIDService = rfid.NewService(c.RFIDCardRepo, c.Log)
 	return nil
 }
 

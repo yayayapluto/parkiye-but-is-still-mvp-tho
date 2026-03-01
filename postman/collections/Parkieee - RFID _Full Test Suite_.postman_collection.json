@@ -1,0 +1,1095 @@
+{
+  "info": {
+    "_postman_id": "3d36bf4e-682c-48ac-a546-c32220de2c07",
+    "name": "Parkieee - RFID _Full Test Suite_",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "List Cards",
+      "item": [
+        {
+          "name": "List Cards - Happy Path (active=true)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "1ed39c0a-cb4b-45fe-b3a4-064607d4c534",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('data array', () => pm.expect(pm.response.json().data).to.be.an('array'));",
+                  "pm.test('pagination ada', () => pm.expect(pm.response.json().pagination).to.exist);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "6f0715c9-bdf8-41f6-8f16-6ab3edd5abb7",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "2ec65c86-aa5c-4e43-a771-5b7d16b5536d",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards?active=true&page=1&page_size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards"
+              ],
+              "query": [
+                {
+                  "key": "active",
+                  "value": "true",
+                  "uuid": "98885f42-5caa-4ce7-a102-6fe4adba90e9"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "uuid": "40696db8-4648-47ee-85a0-ccd93bb4c049"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10",
+                  "uuid": "5e9d75f0-83aa-470c-a4b6-cde1312f0528"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Cards - active=false",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "51aa0e23-6fce-4315-ac05-194086cae9a4",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "8fc2f6b6-5fbe-4a79-98cf-d747b9bd16e9",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "a8cc5adb-ba14-43bd-a075-6bc4effcdc26",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards?active=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards"
+              ],
+              "query": [
+                {
+                  "key": "active",
+                  "value": "false",
+                  "uuid": "e5bdc207-ae37-4bcf-bc83-f816258d63eb"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Cards - Tanpa Auth",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "f5f07ee7-c014-4dbd-9899-8efc6ebf9445",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "b8b9bf8b-50e8-4a99-99a1-259d5d683615",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "c662d85e-a102-49cc-8636-d4e4594f5294",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "82c8c49a-7214-459f-a115-b5f07e2f73b0"
+    },
+    {
+      "name": "Register or Get",
+      "item": [
+        {
+          "name": "Register - Happy Path (card baru)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json().data;",
+                  "pm.test('card_uid sesuai', () => pm.expect(d.card_uid).to.eql(pm.collectionVariables.get('cardUID')));",
+                  "pm.test('is_active true', () => pm.expect(d.is_active).to.be.true);",
+                  "pm.test('vehicle_id null', () => pm.expect(d.vehicle_id).to.be.null);",
+                  "pm.collectionVariables.set('cardId', d.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "e475634a-0dc2-4076-a844-5483e1263077",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"card_uid\": \"AB:CD:EF:99\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Register - Idempotent (UID sama → return existing)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('id sama dengan sebelumnya', () => pm.expect(pm.response.json().data.id).to.eql(pm.collectionVariables.get('cardId')));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "f19ba615-b703-400e-a2d0-d6342d165436",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"card_uid\": \"AB:CD:EF:99\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Register - card_uid Kosong",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "a6d65610-ca2b-4ab5-bb8a-90c4daf87072",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Register - card_uid Terlalu Pendek (< 4 char)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "f4bfa7e0-ec8d-4786-aab3-b35c5af5b312",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"card_uid\": \"AB\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Register - Tanpa Auth",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "d9823070-4a7f-45cf-8b4d-dec124990cfd",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"card_uid\": \"AB:CD:EF:99\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "09134bd6-dda4-4f2c-96ae-a27f93b88680"
+    },
+    {
+      "name": "Get Card",
+      "item": [
+        {
+          "name": "Get by ID - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('id sesuai', () => pm.expect(pm.response.json().data.id).to.eql(pm.collectionVariables.get('cardId')));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "4b2c4ebb-eaf2-4820-86dd-b9d9aa77bd29",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards/{{cardId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards",
+                "{{cardId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get by ID - Tidak Ada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "f53358de-0acb-417a-a60b-eb15e6041485",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards/00000000-0000-0000-0000-000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards",
+                "00000000-0000-0000-0000-000000000000"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get by ID - Bukan UUID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "3cbd47b9-90cf-4a6c-bda6-67a8a9d1e245",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards/bukan-uuid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards",
+                "bukan-uuid"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get by UID - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('card_uid sesuai', () => pm.expect(pm.response.json().data.card_uid).to.eql(pm.collectionVariables.get('cardUID')));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "9dd25eb1-ada4-4ac7-b4da-21e54c9737ec",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards/uid/{{cardUID}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards",
+                "uid",
+                "{{cardUID}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get by UID - Tidak Ada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "8787eedc-cc6f-4fb1-9809-a5ca17f7ca01",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards/uid/UID-TIDAK-ADA-XYZ",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards",
+                "uid",
+                "UID-TIDAK-ADA-XYZ"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "ad05e844-73d6-4c43-8d72-e3941da5144e"
+    },
+    {
+      "name": "Link Vehicle",
+      "item": [
+        {
+          "name": "Link Vehicle - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('vehicle_id terisi', () => pm.expect(pm.response.json().data.vehicle_id).to.eql(pm.collectionVariables.get('vehicleId')));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "7290b9f6-e871-4912-95ee-91b9f2a49d5d",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicle_id\": \"{{vehicleId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards/{{cardId}}/link-vehicle",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards",
+                "{{cardId}}",
+                "link-vehicle"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Link Vehicle - vehicle_id Kosong",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "d8d3ec54-1140-4011-b9c7-9ed197190310",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards/{{cardId}}/link-vehicle",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards",
+                "{{cardId}}",
+                "link-vehicle"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Link Vehicle - Card Tidak Ada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "b8b6eaec-f381-4b12-ba2f-05032ccf3df6",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicle_id\": \"{{vehicleId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards/00000000-0000-0000-0000-000000000000/link-vehicle",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards",
+                "00000000-0000-0000-0000-000000000000",
+                "link-vehicle"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Link Vehicle - Tanpa Permission rfid.manage",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 403 (jika login sebagai operator biasa)', () => {",
+                  "  pm.expect([200, 403]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "d1488680-aa55-492b-85b1-0a7223d15860",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicle_id\": \"{{vehicleId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards/{{cardId}}/link-vehicle",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards",
+                "{{cardId}}",
+                "link-vehicle"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "2a85010f-da90-46ff-9b85-691893002c1e"
+    },
+    {
+      "name": "Deactivate",
+      "item": [
+        {
+          "name": "Deactivate - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success true', () => pm.expect(pm.response.json().success).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "2910c789-08ae-4907-82b2-7cf584595189",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards/{{cardId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards",
+                "{{cardId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate - Sudah Inactive (idempotent → 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404 karena already inactive', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "b8d89b29-db78-44d5-b124-9239328a1857",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards/{{cardId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards",
+                "{{cardId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate - ID Tidak Ada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "b5725f6d-d24f-48e0-aac0-6f0852886ce4",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards/00000000-0000-0000-0000-000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards",
+                "00000000-0000-0000-0000-000000000000"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate - ID Bukan UUID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "21caede5-121d-4336-aa1a-03026a9bbf1d",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards/bukan-uuid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards",
+                "bukan-uuid"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate - Tanpa Auth",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "9b357e1b-589a-4212-b293-d9f571d63fdb",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rfid/cards/{{cardId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rfid",
+                "cards",
+                "{{cardId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "7456baf7-7dbd-411b-b114-5092846340ae"
+    },
+    {
+      "name": "[Setup] Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('token', pm.response.json().data.token);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "id": "6f541420-8850-49a2-b3e1-2802b2de5c0f",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@parkieee.local\",\n  \"password\": \"Admin@123!\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "[Setup] Ambil vehicleId dari list",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json().data;",
+              "if (data && data.length > 0) {",
+              "  pm.collectionVariables.set('vehicleId', data[0].id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "id": "4d1afcac-a1a1-417a-a895-4701a94a900d",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/vehicles?page=1&page_size=1",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "vehicles"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "page_size",
+              "value": "1"
+            }
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "id": "ea1d5b23-840f-4cb1-925f-dbe8883c295b",
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1"
+    },
+    {
+      "id": "cedcbb99-8509-4438-a05a-0b5b6b39a719",
+      "key": "token",
+      "value": ""
+    },
+    {
+      "id": "7ba13bc4-a802-4459-b8e8-b74613f25321",
+      "key": "cardId",
+      "value": ""
+    },
+    {
+      "id": "bbd553da-57f6-4837-8e64-127eb10eb598",
+      "key": "cardUID",
+      "value": "AB:CD:EF:99"
+    },
+    {
+      "id": "3af80a20-540e-4015-9c8e-ab53a76fcb69",
+      "key": "vehicleId",
+      "value": ""
+    }
+  ]
+}
