@@ -1,7 +1,10 @@
 {
   "title": "Parkieee Logs",
   "uid": "parkieee-logs",
-  "tags": ["parkieee", "logs"],
+  "tags": [
+    "parkieee",
+    "logs"
+  ],
   "timezone": "Asia/Jakarta",
   "refresh": "10s",
   "schemaVersion": 38,
@@ -10,7 +13,12 @@
       "id": 1,
       "title": "Log Volume by Level",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 6 },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 6
+      },
       "targets": [
         {
           "datasource": "Loki",
@@ -20,10 +28,66 @@
       ],
       "fieldConfig": {
         "overrides": [
-          { "matcher": { "id": "byName", "options": "error" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "warn" },  "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "info" },  "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "debug" }, "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }] }
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "error"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "warn"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "info"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "debug"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
         ]
       }
     },
@@ -31,8 +95,19 @@
       "id": 2,
       "title": "Error Logs",
       "type": "logs",
-      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 10 },
-      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": true, "showTime": true, "sortOrder": "Descending" },
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 10
+      },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showTime": true,
+        "sortOrder": "Descending"
+      },
       "targets": [
         {
           "datasource": "Loki",
@@ -45,8 +120,19 @@
       "id": 3,
       "title": "All Logs",
       "type": "logs",
-      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 12 },
-      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": true, "showTime": true, "sortOrder": "Descending" },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 24,
+        "h": 12
+      },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showTime": true,
+        "sortOrder": "Descending"
+      },
       "targets": [
         {
           "datasource": "Loki",
@@ -62,27 +148,66 @@
         "name": "level",
         "type": "custom",
         "label": "Level",
-        "current": { "text": "All", "value": "" },
+        "current": {
+          "text": "All",
+          "value": ""
+        },
         "options": [
-          { "text": "All",   "value": "" },
-          { "text": "error", "value": "error" },
-          { "text": "warn",  "value": "warn" },
-          { "text": "info",  "value": "info" },
-          { "text": "debug", "value": "debug" }
+          {
+            "text": "All",
+            "value": ""
+          },
+          {
+            "text": "error",
+            "value": "error"
+          },
+          {
+            "text": "warn",
+            "value": "warn"
+          },
+          {
+            "text": "info",
+            "value": "info"
+          },
+          {
+            "text": "debug",
+            "value": "debug"
+          }
         ]
       },
       {
         "name": "module",
         "type": "custom",
         "label": "Module",
-        "current": { "text": "All", "value": "" },
+        "current": {
+          "text": "All",
+          "value": ""
+        },
         "options": [
-          { "text": "All",         "value": "" },
-          { "text": "auth",        "value": "auth" },
-          { "text": "zone",        "value": "zone" },
-          { "text": "gate",        "value": "gate" },
-          { "text": "transaction", "value": "transaction" },
-          { "text": "payment",     "value": "payment" }
+          {
+            "text": "All",
+            "value": ""
+          },
+          {
+            "text": "auth",
+            "value": "auth"
+          },
+          {
+            "text": "zone",
+            "value": "zone"
+          },
+          {
+            "text": "gate",
+            "value": "gate"
+          },
+          {
+            "text": "transaction",
+            "value": "transaction"
+          },
+          {
+            "text": "payment",
+            "value": "payment"
+          }
         ]
       }
     ]

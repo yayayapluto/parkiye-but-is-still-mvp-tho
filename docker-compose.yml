@@ -4,16 +4,16 @@ services:
     container_name: parkieee_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER:     ${DB_USER:-postgres}
+      POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
-      POSTGRES_DB:       ${DB_NAME:-parkieee}
-      TZ:                Asia/Jakarta
+      POSTGRES_DB: ${DB_NAME:-parkieee}
+      TZ: Asia/Jakarta
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-parkieee}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-parkieee}" ]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -30,17 +30,17 @@ services:
     ports:
       - "${SERVER_PORT:-8080}:8080"
     environment:
-      APP_ENV:        ${APP_ENV:-production}
-      APP_NAME:       ${APP_NAME:-parkieee}
-      APP_DEBUG:      ${APP_DEBUG:-false}
-      SERVER_HOST:    ${SERVER_HOST:-0.0.0.0}
-      SERVER_PORT:    ${SERVER_PORT:-8080}
-      DB_HOST:        postgres
-      DB_PORT:        5432
-      DB_USER:        ${DB_USER:-postgres}
-      DB_PASSWORD:    ${DB_PASSWORD:-postgres}
-      DB_NAME:        ${DB_NAME:-parkieee}
-      DB_SSLMODE:     ${DB_SSLMODE:-disable}
+      APP_ENV: ${APP_ENV:-production}
+      APP_NAME: ${APP_NAME:-parkieee}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      SERVER_HOST: ${SERVER_HOST:-0.0.0.0}
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-parkieee}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       ENABLE_TRACING: ${ENABLE_TRACING:-true}
       TEMPO_ENDPOINT: tempo:4318

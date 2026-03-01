@@ -21,8 +21,8 @@ scrape_configs:
       - json:
           expressions:
             level: level
-            msg:   msg
-            time:  time
+            msg: msg
+            time: time
             module: module
             trace_id: trace_id
             error: error

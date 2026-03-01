@@ -8,7 +8,7 @@ import (
 
 var (
 	globalValidator *Validator
-	once sync.Once
+	once            sync.Once
 )
 
 // Global returns a shared Validator instance.
