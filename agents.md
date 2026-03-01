@@ -174,6 +174,25 @@ After AutoMigrate, `applyManualConstraints()` in `database/migrate.go` runs raw 
 
 When changing schema: update **both** the model struct **and** the relevant SQL in `applyManualConstraints`.
 
+### Date-only fields — gunakan `types.DateOnly`, bukan `time.Time`
+
+`time.Time` hanya bisa unmarshal RFC3339 via `encoding/json`. Untuk field yang menerima tanggal saja (`YYYY-MM-DD`) dari
+JSON request, gunakan `types.DateOnly`:
+
+```go
+// ✅ correct — menerima "2026-03-28" dari JSON
+DateStart types.DateOnly `json:"date_start"`
+
+// ❌ wrong — BodyParser akan return error untuk format YYYY-MM-DD
+DateStart time.Time `json:"date_start"`
+```
+
+Untuk assign ke domain model (yang pakai `time.Time`), akses `.Time`:
+
+```go
+rate.DateStart = req.DateStart.Time
+```
+
 ### Config (`pkg/config`)
 
 ```go
@@ -296,25 +315,27 @@ Seed data (idempotent):
 | `pkg/tracer`                         | ✅ done                                                      |
 | `pkg/middleware/auth.go`             | ✅ done                                                      |
 | `pkg/helpers`                        | ⬜ empty — add utilities as needed                           |
+| `pkg/types/date.go`                  | ✅ done — DateOnly type for YYYY-MM-DD JSON fields           |
 | `database/migrate.go`                | ✅ done                                                      |
 | `database/seed.go`                   | ✅ done — gofakeit, all 11 modules, 25–80 rows per entity    |
-| `internal/bootstrap/*`               | ✅ done — container wires auth + zone + vehicle + rfid       |
+| `internal/bootstrap/*`               | ✅ done — container wires auth + zone + vehicle + rfid + fee |
 | `cmd/api/main.go`                    | ✅ done                                                      |
 | `internal/modules/*/domain.go`       | ✅ done (all 11 modules)                                     |
-| `internal/modules/*/ports.go`        | ⬜ finished: auth, zone, vehicle, rfid                       |
-| `internal/modules/*/repository.go`   | ⬜ finished: auth, zone, vehicle, rfid                       |
-| `internal/modules/*/service.go`      | ⬜ finished: auth, zone, vehicle, rfid                       |
-| `internal/modules/*/dto.go`          | ⬜ finished: auth, zone, vehicle, rfid                       |
-| `internal/modules/*/handler.go`      | ⬜ finished: auth, zone, vehicle, rfid                       |
-| `internal/modules/*/http_adapter.go` | ⬜ finished: auth, zone, vehicle, rfid                       |
-| `internal/modules/*/routes.go`       | ⬜ finished: auth, zone, vehicle, rfid                       |
+| `internal/modules/*/ports.go`        | ⬜ finished: auth, zone, vehicle, rfid, fee                  |
+| `internal/modules/*/repository.go`   | ⬜ finished: auth, zone, vehicle, rfid, fee                  |
+| `internal/modules/*/service.go`      | ⬜ finished: auth, zone, vehicle, rfid, fee                  |
+| `internal/modules/*/dto.go`          | ⬜ finished: auth, zone, vehicle, rfid, fee                  |
+| `internal/modules/*/handler.go`      | ⬜ finished: auth, zone, vehicle, rfid, fee                  |
+| `internal/modules/*/http_adapter.go` | ⬜ finished: auth, zone, vehicle, rfid, fee                  |
+| `internal/modules/*/routes.go`       | ⬜ finished: auth, zone, vehicle, rfid, fee                  |
 | `docs/Parkieee - Auth.*`             | ✅ done — biasa + full test suite                            |
 | `docs/Parkieee - Zone.*`             | ✅ done — biasa + full test suite                            |
 | `docs/Parkieee - Vehicle.*`          | ✅ done — biasa + full test suite                            |
 | `docs/Parkieee - RFID.*`             | ✅ done — biasa + full test suite                            |
+| `docs/Parkieee - Fee.*`              | ✅ done — full test suite (postman collection)               |
 
 **Next:** implement modules in dependency order:
-`auth` ✅ → `zone` ✅ → `vehicle` ✅ → `rfid` ✅ → `fee` → `transaction` → `payment` → `override` → `ocr` → `audit`
+`auth` ✅ → `zone` ✅ → `vehicle` ✅ → `rfid` ✅ → `fee` ✅ → `transaction` → `payment` → `override` → `ocr` → `audit`
 
 ---
 

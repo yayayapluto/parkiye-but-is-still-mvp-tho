@@ -1,0 +1,1451 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-fee0-4fee-b000-fee000000001",
+    "name": "Parkieee - Fee (Tests)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "3. Fee Configs",
+      "item": [
+        {
+          "name": "List Fee Configs - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('data array', () => pm.expect(pm.response.json().data).to.be.an('array'));",
+                  "pm.test('pagination ada', () => pm.expect(pm.response.json().pagination).to.exist);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "fee-config-list",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fee/configs?page=1&page_size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "configs"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Fee Configs - Filter zone_id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "fee-config-list-zone",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fee/configs?zone_id={{zoneId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "configs"
+              ],
+              "query": [
+                {
+                  "key": "zone_id",
+                  "value": "{{zoneId}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Fee Configs - Tanpa Auth",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "fee-config-list-no-auth",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/fee/configs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "configs"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Fee Config - Happy Path",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Deactivate any existing active fee config for this zone+vehicle_type combo",
+                  "// to avoid hitting the partial unique constraint uidx_fee_configs_zone_vtype_active.",
+                  "const baseUrl = pm.collectionVariables.get('baseUrl');",
+                  "const token = pm.collectionVariables.get('token');",
+                  "const zoneId = pm.collectionVariables.get('zoneId');",
+                  "const vehicleTypeId = pm.collectionVariables.get('vehicleTypeId');",
+                  "",
+                  "pm.sendRequest({",
+                  "  url: `${baseUrl}/fee/configs?zone_id=${zoneId}&vehicle_type_id=${vehicleTypeId}&page=1&page_size=50`,",
+                  "  method: 'GET',",
+                  "  header: { Authorization: `Bearer ${token}` }",
+                  "}, (err, res) => {",
+                  "  if (err || res.code !== 200) return;",
+                  "  const configs = res.json().data || [];",
+                  "  configs.filter(c => c.is_active).forEach(c => {",
+                  "    pm.sendRequest({",
+                  "      url: `${baseUrl}/fee/configs/${c.id}`,",
+                  "      method: 'DELETE',",
+                  "      header: { Authorization: `Bearer ${token}` }",
+                  "    }, () => {});",
+                  "  });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json().data;",
+                  "pm.test('id ada', () => pm.expect(d.id).to.be.a('string'));",
+                  "pm.test('is_active true', () => pm.expect(d.is_active).to.be.true);",
+                  "pm.test('tiers ada', () => pm.expect(d.tiers).to.be.an('array').with.lengthOf(2));",
+                  "pm.collectionVariables.set('feeConfigId', d.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "fee-config-create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"zone_id\": \"{{zoneId}}\",\n  \"vehicle_type_id\": \"{{vehicleTypeId}}\",\n  \"base_fee\": 2000,\n  \"grace_period_minutes\": 10,\n  \"effective_from\": \"2026-01-01T00:00:00Z\",\n  \"effective_until\": null,\n  \"tiers\": [\n    {\n      \"tier_order\": 1,\n      \"duration_minutes\": 60,\n      \"fee_amount\": 3000,\n      \"is_last_tier\": false\n    },\n    {\n      \"tier_order\": 2,\n      \"duration_minutes\": 60,\n      \"fee_amount\": 2000,\n      \"is_last_tier\": true\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/fee/configs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "configs"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Fee Config - Tanpa zone_id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "fee-config-create-no-zone",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicle_type_id\": \"{{vehicleTypeId}}\",\n  \"base_fee\": 2000,\n  \"effective_from\": \"2026-01-01T00:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/fee/configs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "configs"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Fee Config - is_last_tier lebih dari satu",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "fee-config-create-multi-last",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"zone_id\": \"{{zoneId}}\",\n  \"vehicle_type_id\": \"{{vehicleTypeId}}\",\n  \"base_fee\": 2000,\n  \"effective_from\": \"2026-01-01T00:00:00Z\",\n  \"tiers\": [\n    { \"tier_order\": 1, \"duration_minutes\": 60, \"fee_amount\": 3000, \"is_last_tier\": true },\n    { \"tier_order\": 2, \"duration_minutes\": 60, \"fee_amount\": 2000, \"is_last_tier\": true }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/fee/configs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "configs"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Fee Config - duration_minutes nol",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "fee-config-create-zero-duration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"zone_id\": \"{{zoneId}}\",\n  \"vehicle_type_id\": \"{{vehicleTypeId}}\",\n  \"base_fee\": 2000,\n  \"effective_from\": \"2026-01-01T00:00:00Z\",\n  \"tiers\": [\n    { \"tier_order\": 1, \"duration_minutes\": 0, \"fee_amount\": 3000, \"is_last_tier\": true }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/fee/configs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "configs"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Fee Config - Tanpa Permission fee.edit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 403 jika tidak punya fee.edit', () => pm.expect([201, 403]).to.include(pm.response.code));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "fee-config-create-no-perm",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOperator}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"zone_id\": \"{{zoneId}}\",\n  \"vehicle_type_id\": \"{{vehicleTypeId}}\",\n  \"base_fee\": 2000,\n  \"effective_from\": \"2026-01-01T00:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/fee/configs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "configs"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Fee Config by ID - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('id sesuai', () => pm.expect(pm.response.json().data.id).to.eql(pm.collectionVariables.get('feeConfigId')));",
+                  "pm.test('tiers ada', () => pm.expect(pm.response.json().data.tiers).to.be.an('array'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "fee-config-get",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fee/configs/{{feeConfigId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "configs",
+                "{{feeConfigId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Fee Config by ID - Tidak Ada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "fee-config-get-404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fee/configs/00000000-0000-0000-0000-000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "configs",
+                "00000000-0000-0000-0000-000000000000"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Fee Config by ID - Bukan UUID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "fee-config-get-bad-uuid",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fee/configs/bukan-uuid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "configs",
+                "bukan-uuid"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Fee Config - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success true', () => pm.expect(pm.response.json().success).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "fee-config-deactivate",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fee/configs/{{feeConfigId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "configs",
+                "{{feeConfigId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Fee Config - Sudah Inactive (→ 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404 karena already inactive', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "fee-config-deactivate-already",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fee/configs/{{feeConfigId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "configs",
+                "{{feeConfigId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Fee Config - ID Tidak Ada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "fee-config-deactivate-404",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fee/configs/00000000-0000-0000-0000-000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "configs",
+                "00000000-0000-0000-0000-000000000000"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "fee-configs-group"
+    },
+    {
+      "name": "4. Holiday Rates",
+      "item": [
+        {
+          "name": "List Holiday Rates - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('data array', () => pm.expect(pm.response.json().data).to.be.an('array'));",
+                  "pm.test('pagination ada', () => pm.expect(pm.response.json().pagination).to.exist);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "holiday-rate-list",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fee/holiday-rates?page=1&page_size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "holiday-rates"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Holiday Rates - Tanpa Auth",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "holiday-rate-list-no-auth",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/fee/holiday-rates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "holiday-rates"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Holiday Rate - Multiplier",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json().data;",
+                  "pm.test('rate_type multiplier', () => pm.expect(d.rate_type).to.eql('multiplier'));",
+                  "pm.test('multiplier ada', () => pm.expect(d.multiplier).to.exist);",
+                  "pm.collectionVariables.set('holidayRateId', d.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "holiday-rate-create-multiplier",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lebaran 2026\",\n  \"date_start\": \"2026-03-28\",\n  \"date_end\": \"2026-04-06\",\n  \"rate_type\": \"multiplier\",\n  \"multiplier\": 1.5,\n  \"applies_to_zone_id\": null,\n  \"applies_to_vehicle_type_id\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/fee/holiday-rates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "holiday-rates"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Holiday Rate - Override",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('rate_type override', () => pm.expect(pm.response.json().data.rate_type).to.eql('override'));",
+                  "pm.test('override_fee ada', () => pm.expect(pm.response.json().data.override_fee).to.be.a('number'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "holiday-rate-create-override",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tahun Baru 2027\",\n  \"date_start\": \"2026-12-31\",\n  \"date_end\": \"2027-01-01\",\n  \"rate_type\": \"override\",\n  \"override_fee\": 25000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/fee/holiday-rates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "holiday-rates"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Holiday Rate - multiplier tapi tidak kirim multiplier field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "holiday-rate-create-missing-multiplier",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test\",\n  \"date_start\": \"2026-01-01\",\n  \"date_end\": \"2026-01-02\",\n  \"rate_type\": \"multiplier\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/fee/holiday-rates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "holiday-rates"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Holiday Rate - override tapi tidak kirim override_fee",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "holiday-rate-create-missing-override",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test\",\n  \"date_start\": \"2026-01-01\",\n  \"date_end\": \"2026-01-02\",\n  \"rate_type\": \"override\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/fee/holiday-rates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "holiday-rates"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Holiday Rate - rate_type invalid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "holiday-rate-create-bad-type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test\",\n  \"date_start\": \"2026-01-01\",\n  \"date_end\": \"2026-01-02\",\n  \"rate_type\": \"discount\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/fee/holiday-rates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "holiday-rates"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Holiday Rate - Tanpa Permission fee.edit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 403 jika tidak punya fee.edit', () => pm.expect([201, 403]).to.include(pm.response.code));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "holiday-rate-create-no-perm",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOperator}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test\",\n  \"date_start\": \"2026-01-01\",\n  \"date_end\": \"2026-01-02\",\n  \"rate_type\": \"multiplier\",\n  \"multiplier\": 1.5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/fee/holiday-rates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "holiday-rates"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Holiday Rate by ID - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('id sesuai', () => pm.expect(pm.response.json().data.id).to.eql(pm.collectionVariables.get('holidayRateId')));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "holiday-rate-get",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fee/holiday-rates/{{holidayRateId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "holiday-rates",
+                "{{holidayRateId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Holiday Rate by ID - Tidak Ada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "holiday-rate-get-404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fee/holiday-rates/00000000-0000-0000-0000-000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "holiday-rates",
+                "00000000-0000-0000-0000-000000000000"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Holiday Rate by ID - Bukan UUID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "holiday-rate-get-bad-uuid",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fee/holiday-rates/bukan-uuid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "holiday-rates",
+                "bukan-uuid"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Holiday Rate - Happy Path (partial)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('nama berubah', () => pm.expect(pm.response.json().data.name).to.eql('Lebaran 2026 Updated'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "holiday-rate-update",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lebaran 2026 Updated\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/fee/holiday-rates/{{holidayRateId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "holiday-rates",
+                "{{holidayRateId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Holiday Rate - Tidak Ada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "holiday-rate-update-404",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ghost Rate\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/fee/holiday-rates/00000000-0000-0000-0000-000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "holiday-rates",
+                "00000000-0000-0000-0000-000000000000"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Holiday Rate - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success true', () => pm.expect(pm.response.json().success).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "holiday-rate-delete",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fee/holiday-rates/{{holidayRateId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "holiday-rates",
+                "{{holidayRateId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Holiday Rate - Sudah Dihapus (→ 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "holiday-rate-delete-again",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/fee/holiday-rates/{{holidayRateId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "holiday-rates",
+                "{{holidayRateId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Holiday Rate - Tanpa Auth",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "holiday-rate-delete-no-auth",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/fee/holiday-rates/{{holidayRateId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee",
+                "holiday-rates",
+                "{{holidayRateId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "holiday-rates-group"
+    },
+    {
+      "name": "0. [Setup] Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('token', pm.response.json().data.token);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "id": "setup-login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@parkieee.local\",\n  \"password\": \"Admin@123!\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "1. [Setup] Ambil zoneId dari list",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json().data;",
+              "if (data && data.length > 0) {",
+              "  pm.collectionVariables.set('zoneId', data[0].id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "id": "setup-zone",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/zones?page=1&page_size=1",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "zones"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "page_size",
+              "value": "1"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "2. [Setup] Ambil vehicleTypeId dari list",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "id": "7b76ec79-fe00-43fb-9900-c472e0789d56",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json().data;",
+              "if (data && data.length > 0) {",
+              "  pm.collectionVariables.set('vehicleTypeId', data[0].id);",
+              "}"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "id": "b5cd1ebd-cfea-4706-ae83-e04127c75117",
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "id": "setup-vehicle-type",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/vehicle-types?page=1&page_size=1",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "vehicle-types"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1",
+              "uuid": "3fa1a2fb-0ba9-4c4f-a3dc-3679cb261d03"
+            },
+            {
+              "key": "page_size",
+              "value": "1",
+              "uuid": "11c26bde-dfe5-4e29-a619-f7ebcf7ae202"
+            }
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "id": "830cb54f-b56b-4b06-a139-a4b58ec739da",
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1"
+    },
+    {
+      "id": "51e2dba2-4f46-4d6f-a69b-f77eea74e4c8",
+      "key": "token",
+      "value": ""
+    },
+    {
+      "id": "db6c204a-09d2-4a13-ad3a-3678eb0d9717",
+      "key": "tokenOperator",
+      "value": ""
+    },
+    {
+      "id": "0d799b71-f7c1-4a0d-bcc4-85f368d56140",
+      "key": "zoneId",
+      "value": ""
+    },
+    {
+      "id": "510e794a-4977-4cc3-bb1d-1a5db52f3837",
+      "key": "vehicleTypeId",
+      "value": ""
+    },
+    {
+      "id": "e0df6530-e6aa-4bfc-9d39-39af1ef6f8df",
+      "key": "feeConfigId",
+      "value": ""
+    },
+    {
+      "id": "1c048f9f-808b-459e-bec0-56bcd8764f9d",
+      "key": "holidayRateId",
+      "value": ""
+    }
+  ]
+}

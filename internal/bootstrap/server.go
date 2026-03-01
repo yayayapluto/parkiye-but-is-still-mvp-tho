@@ -10,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 	"parkieee/internal/modules/auth"
+	"parkieee/internal/modules/fee"
 	"parkieee/internal/modules/rfid"
 	"parkieee/internal/modules/vehicle"
 	"parkieee/internal/modules/zone"
@@ -58,6 +59,7 @@ func NewServer(container *Container) *fiber.App {
 	zone.RegisterRoutes(api, container.ZoneService, container.AuthService, container.Validator)
 	vehicle.RegisterRoutes(api, container.VehicleService, container.AuthService, container.Validator)
 	rfid.RegisterRoutes(api, container.RFIDService, container.AuthService, container.Validator)
+	fee.RegisterRoutes(api, container.FeeService, container.AuthService, container.Validator)
 
 	return app
 }

@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"parkieee/internal/modules/auth"
+	"parkieee/internal/modules/fee"
 	"parkieee/internal/modules/rfid"
 	"parkieee/internal/modules/vehicle"
 	"parkieee/internal/modules/zone"
@@ -39,6 +40,11 @@ type Container struct {
 
 	RFIDCardRepo rfid.RFIDCardRepositoryPort
 	RFIDService  rfid.ServicePort
+
+	FeeConfigRepo   fee.FeeConfigRepositoryPort
+	FeeTierRepo     fee.FeeTierRepositoryPort
+	HolidayRateRepo fee.HolidayRateRepositoryPort
+	FeeService      fee.ServicePort
 }
 
 func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
@@ -64,6 +70,9 @@ func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
 		return nil, err
 	}
 	if err := container.initRFIDModule(); err != nil {
+		return nil, err
+	}
+	if err := container.initFeeModule(); err != nil {
 		return nil, err
 	}
 
@@ -117,6 +126,14 @@ func (c *Container) initVehicleModule() error {
 func (c *Container) initRFIDModule() error {
 	c.RFIDCardRepo = rfid.NewRFIDCardRepository(c.DB)
 	c.RFIDService = rfid.NewService(c.RFIDCardRepo, c.Log)
+	return nil
+}
+
+func (c *Container) initFeeModule() error {
+	c.FeeConfigRepo = fee.NewFeeConfigRepository(c.DB)
+	c.FeeTierRepo = fee.NewFeeTierRepository(c.DB)
+	c.HolidayRateRepo = fee.NewHolidayRateRepository(c.DB)
+	c.FeeService = fee.NewService(c.FeeConfigRepo, c.FeeTierRepo, c.HolidayRateRepo, c.Log)
 	return nil
 }
 

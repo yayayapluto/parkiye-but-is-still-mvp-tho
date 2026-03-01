@@ -33,6 +33,7 @@ docker/pgadmin/servers.json/
 .DS_Store
 Thumbs.db
 desktop.ini
+NUL
 
 # ── IDE ───────────────────────────────────────────────────────
 .vscode/
