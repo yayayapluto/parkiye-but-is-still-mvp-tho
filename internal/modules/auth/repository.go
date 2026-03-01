@@ -11,7 +11,6 @@ import (
 	"parkieee/pkg/errors"
 )
 
-// userRepository implements UserRepositoryPort.
 type userRepository struct {
 	db *gorm.DB
 }
@@ -66,7 +65,6 @@ func (r *userRepository) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	return errors.FromDB(err, "user not found")
 }
 
-// roleRepository implements RoleRepositoryPort.
 type roleRepository struct {
 	db *gorm.DB
 }
@@ -109,7 +107,6 @@ func (r *roleRepository) Create(ctx context.Context, role *Role) error {
 	return errors.FromDB(r.db.WithContext(ctx).Create(role).Error, "")
 }
 
-// permissionRepository implements PermissionRepositoryPort.
 type permissionRepository struct {
 	db *gorm.DB
 }
@@ -142,7 +139,6 @@ func (r *permissionRepository) FindAll(ctx context.Context) ([]Permission, error
 	return perms, errors.FromDB(err, "")
 }
 
-// rolePermissionRepository implements RolePermissionRepositoryPort.
 type rolePermissionRepository struct {
 	db *gorm.DB
 }
@@ -201,7 +197,6 @@ func (r *rolePermissionRepository) HasPermission(ctx context.Context, roleID uui
 	return count > 0, nil
 }
 
-// sessionRepository implements SessionRepositoryPort.
 type sessionRepository struct {
 	db *gorm.DB
 }
@@ -260,7 +255,6 @@ func (r *sessionRepository) DeleteExpired(ctx context.Context, before time.Time)
 	)
 }
 
-// loginLogRepository implements LoginLogRepositoryPort.
 type loginLogRepository struct {
 	db *gorm.DB
 }
@@ -273,7 +267,6 @@ func (r *loginLogRepository) Append(ctx context.Context, log *UserLoginLog) erro
 	return errors.FromDB(r.db.WithContext(ctx).Create(log).Error, "")
 }
 
-// loginStatsRepository implements LoginStatsRepositoryPort.
 type loginStatsRepository struct {
 	db *gorm.DB
 }

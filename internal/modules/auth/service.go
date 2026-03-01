@@ -304,7 +304,6 @@ func (s *service) CheckPermission(ctx context.Context, userID uuid.UUID, node st
 	return s.rolePermRepo.HasPermission(ctx, user.RoleID, node)
 }
 
-// generateJWT membuat signed JWT dengan claims user.
 func (s *service) generateJWT(user *User) (string, time.Time, error) {
 	expiresAt := time.Now().Add(s.cfg.JWT.AccessTokenTTL)
 
@@ -329,7 +328,6 @@ func (s *service) generateJWT(user *User) (string, time.Time, error) {
 	return token, expiresAt, err
 }
 
-// parseJWT verifikasi dan parse token ke TokenClaims.
 func (s *service) parseJWT(tokenStr string) (*middleware.TokenClaims, error) {
 	t, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {

@@ -10,24 +10,23 @@ type ErrorCode string
 
 const (
 	// Client Errors (4xx)
-	ErrInvalidRequest     ErrorCode = "INVALID_REQUEST"     // 400
-	ErrValidation         ErrorCode = "VALIDATION_ERROR"    // 400
-	ErrUnauthorized       ErrorCode = "UNAUTHORIZED"        // 401
-	ErrInvalidCredentials ErrorCode = "INVALID_CREDENTIALS" // 401
-	ErrAccountLocked      ErrorCode = "ACCOUNT_LOCKED"      // 401 (not 403)
-	ErrForbidden          ErrorCode = "FORBIDDEN"           // 403
-	ErrPermissionDenied   ErrorCode = "PERMISSION_DENIED"   // 403
-	ErrNotFound           ErrorCode = "NOT_FOUND"           // 404
-	ErrConflict           ErrorCode = "CONFLICT"            // 409
-	ErrDuplicate          ErrorCode = "DUPLICATE_ENTRY"     // 409
-	ErrResourceInUse      ErrorCode = "RESOURCE_IN_USE"     // 409
-	ErrRateLimited        ErrorCode = "RATE_LIMITED"        // 429
+	ErrInvalidRequest     ErrorCode = "INVALID_REQUEST"
+	ErrValidation         ErrorCode = "VALIDATION_ERROR"
+	ErrUnauthorized       ErrorCode = "UNAUTHORIZED"
+	ErrInvalidCredentials ErrorCode = "INVALID_CREDENTIALS"
+	ErrAccountLocked      ErrorCode = "ACCOUNT_LOCKED"
+	ErrForbidden          ErrorCode = "FORBIDDEN"
+	ErrPermissionDenied   ErrorCode = "PERMISSION_DENIED"
+	ErrNotFound           ErrorCode = "NOT_FOUND"
+	ErrConflict           ErrorCode = "CONFLICT"
+	ErrDuplicate          ErrorCode = "DUPLICATE_ENTRY"
+	ErrResourceInUse      ErrorCode = "RESOURCE_IN_USE"
+	ErrRateLimited        ErrorCode = "RATE_LIMITED"
 
-	// Server Errors (5xx)
-	ErrInternal         ErrorCode = "INTERNAL_ERROR"         // 500
-	ErrDatabaseError    ErrorCode = "DATABASE_ERROR"         // 500
-	ErrDecryptionFailed ErrorCode = "DECRYPTION_FAILED"      // 500
-	ErrExternalService  ErrorCode = "EXTERNAL_SERVICE_ERROR" // 502/503
+	ErrInternal         ErrorCode = "INTERNAL_ERROR"
+	ErrDatabaseError    ErrorCode = "DATABASE_ERROR"
+	ErrDecryptionFailed ErrorCode = "DECRYPTION_FAILED"
+	ErrExternalService  ErrorCode = "EXTERNAL_SERVICE_ERROR"
 )
 
 type AppError struct {
@@ -60,7 +59,6 @@ func (e *AppError) WithCause(cause error) *AppError {
 	return e
 }
 
-// Capture stack trace
 func (e *AppError) WithStack() *AppError {
 	stack := make([]byte, 4096)
 	n := runtime.Stack(stack, false)
@@ -76,7 +74,6 @@ func New(code ErrorCode, message string) *AppError {
 		Status:  status,
 	}
 
-	// Automatically capture stack for internal errors in development
 	if status >= 500 {
 		return err.WithStack()
 	}

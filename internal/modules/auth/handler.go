@@ -95,8 +95,6 @@ func (h *handler) createUser(c *fiber.Ctx) error {
 		return response.BadRequest(c, "validation failed", errs)
 	}
 
-	// CreateUserRequest di dto.go dan ports.go berbeda struct —
-	// map manual di sini supaya service tidak import dto.
 	svcReq := &CreateUserRequest{
 		Name:     req.Name,
 		Email:    req.Email,

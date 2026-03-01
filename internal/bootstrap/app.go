@@ -22,26 +22,22 @@ type App struct {
 
 // NewApp creates a new application instance
 func NewApp() (*App, error) {
-	// Load configuration
 	config.LoadEnv(".env")
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize logger
 	log, err := newLogger(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize container
 	container, err := NewContainer(cfg, log)
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize server
 	server := NewServer(container)
 
 	return &App{
@@ -54,11 +50,9 @@ func NewApp() (*App, error) {
 
 // Run starts the application
 func (a *App) Run() error {
-	// Graceful shutdown channel
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
-	// Start server in goroutine
 	go func() {
 		addr := fmt.Sprintf("%s:%d", a.Config.Server.Host, a.Config.Server.Port)
 		a.Logger.Info(context.Background(), "server starting", "addr", addr, "env", a.Config.App.Env)
@@ -67,11 +61,9 @@ func (a *App) Run() error {
 		}
 	}()
 
-	// Wait for interrupt signal
 	<-quit
 	a.Logger.Info(context.Background(), "shutting down server...")
 
-	// Graceful shutdown with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -79,7 +71,6 @@ func (a *App) Run() error {
 		a.Logger.Error(context.Background(), "server shutdown error", "error", err)
 	}
 
-	// Close database connection
 	if err := a.Container.Close(); err != nil {
 		a.Logger.Error(context.Background(), "database close error", "error", err)
 	}

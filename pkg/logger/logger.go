@@ -49,7 +49,6 @@ func buildHandler(path string, cfg *Config) (slog.Handler, error) {
 		AddSource: cfg.AddSource,
 	}
 
-	// stdout/stderr → text (readable), files → JSON (Promtail-parseable)
 	var handler slog.Handler
 	if isConsole(path) {
 		handler = slog.NewTextHandler(w, opts)

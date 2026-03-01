@@ -41,8 +41,6 @@ func New(cfg *config.DatabaseConfig) (*DB, error) {
 		Logger:                                   logger.Default.LogMode(logLevel),
 		PrepareStmt:                              true,
 		DisableForeignKeyConstraintWhenMigrating: false,
-		// Let AutoMigrate create FK constraints so the DB enforces integrity.
-		// Set to true only if you want constraint-free migration (e.g. multi-tenant sharding).
 	}
 
 	db, err := gorm.Open(postgres.Open(dsn), gormCfg)
@@ -55,13 +53,11 @@ func New(cfg *config.DatabaseConfig) (*DB, error) {
 		return nil, fmt.Errorf("failed to get underlying sql.DB: %w", err)
 	}
 
-	// Connection pool settings
 	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
 	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
 	sqlDB.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetimeSeconds) * time.Second)
 	sqlDB.SetConnMaxIdleTime(time.Duration(cfg.ConnMaxIdleTimeSeconds) * time.Second)
 
-	// Verify connection
 	if err := sqlDB.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
