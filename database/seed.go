@@ -31,8 +31,6 @@ func Seed(db *gorm.DB) error {
 	return nil
 }
 
-// ── Roles ─────────────────────────────────────────────────────────────────────
-
 func seedRoles(db *gorm.DB) error {
 	roles := []authDomain.Role{
 		{ID: roleID("operator"), Name: string(types.RoleOperator), Description: "Gate operator — handles entry/exit and overrides"},
@@ -43,8 +41,6 @@ func seedRoles(db *gorm.DB) error {
 
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&roles).Error
 }
-
-// ── Permissions ───────────────────────────────────────────────────────────────
 
 func seedPermissions(db *gorm.DB) error {
 	perms := []authDomain.Permission{
@@ -60,8 +56,6 @@ func seedPermissions(db *gorm.DB) error {
 
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&perms).Error
 }
-
-// ── Role ↔ Permission Matrix ──────────────────────────────────────────────────
 
 func seedRolePermissions(db *gorm.DB) error {
 	matrix := map[string][]string{
@@ -108,8 +102,6 @@ func seedRolePermissions(db *gorm.DB) error {
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&rps).Error
 }
 
-// ── Default Admin User ────────────────────────────────────────────────────────
-
 func seedAdminUser(db *gorm.DB) error {
 	var count int64
 	db.Model(&authDomain.User{}).Where("email = ?", "admin@parkieee.local").Count(&count)
@@ -133,9 +125,6 @@ func seedAdminUser(db *gorm.DB) error {
 
 	return db.Create(admin).Error
 }
-
-// ── Deterministic UUID helpers ────────────────────────────────────────────────
-// Using uuid.NewSHA1 so seed IDs are stable across environments.
 
 var seedNamespace = uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8") // uuid.NamespaceDNS
 

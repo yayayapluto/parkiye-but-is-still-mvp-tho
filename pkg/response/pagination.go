@@ -10,8 +10,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// ── Structs ───────────────────────────────────────────────────────────────────
-
 type PaginationRequest struct {
 	Page      int               `json:"page"                 query:"page"`
 	PageSize  int               `json:"page_size"            query:"page_size"`
@@ -50,8 +48,6 @@ type PaginatedResponse struct {
 	Pagination Pagination `json:"pagination"`
 }
 
-// ── Response helper ───────────────────────────────────────────────────────────
-
 func Paginated(c *fiber.Ctx, message string, data any, pagination Pagination) error {
 	return c.Status(200).JSON(PaginatedResponse{
 		Success:    true,
@@ -60,8 +56,6 @@ func Paginated(c *fiber.Ctx, message string, data any, pagination Pagination) er
 		Pagination: pagination,
 	})
 }
-
-// ── Pagination builder ────────────────────────────────────────────────────────
 
 func GeneratePagination(
 	baseURL string,
@@ -141,8 +135,6 @@ func ParsePaginationRequest(c *fiber.Ctx) PaginationRequest {
 func GetBaseURL(c *fiber.Ctx) string {
 	return fmt.Sprintf("%s://%s", c.Protocol(), c.Hostname())
 }
-
-// ── internal builder ──────────────────────────────────────────────────────────
 
 type paginationBuilder struct {
 	base  string

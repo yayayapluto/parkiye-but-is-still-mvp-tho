@@ -127,8 +127,6 @@ type LoginStatsRepositoryPort interface {
 // Other modules and middleware should only depend on this interface, never on
 // the concrete service struct or any repo directly.
 type ServicePort interface {
-	// --- Auth ---
-
 	// Login validates credentials, creates a session, and returns a signed JWT.
 	// Handles lockout checks and logs the attempt regardless of outcome.
 	Login(ctx context.Context, email, password, ip, userAgent string) (*LoginResponse, error)
@@ -139,8 +137,6 @@ type ServicePort interface {
 	// ValidateToken verifies the JWT signature and checks the session is still active.
 	// Returns claims that middleware puts into fiber.Locals.
 	ValidateToken(ctx context.Context, token string) (*middleware.TokenClaims, error)
-
-	// --- User management ---
 
 	// GetProfile returns a user with their role, used for the /me endpoint.
 	GetProfile(ctx context.Context, userID uuid.UUID) (*User, error)
@@ -158,8 +154,6 @@ type ServicePort interface {
 	// DeactivateUser soft-deletes the user and revokes all their sessions.
 	// Cannot deactivate yourself or the last active admin.
 	DeactivateUser(ctx context.Context, userID uuid.UUID, actorID uuid.UUID) error
-
-	// --- Role & Permission management ---
 
 	// GetAllRoles returns all available roles. Used in admin dropdowns.
 	GetAllRoles(ctx context.Context) ([]Role, error)

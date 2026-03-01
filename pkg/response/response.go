@@ -6,8 +6,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// ── Core structs ──────────────────────────────────────────────────────────────
-
 type Meta struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -19,8 +17,6 @@ type Response struct {
 	Meta    Meta `json:"meta"`
 	Data    any  `json:"data,omitempty"`
 }
-
-// ── 2xx ───────────────────────────────────────────────────────────────────────
 
 func Success(c *fiber.Ctx, message string, data any) error {
 	return c.Status(http.StatusOK).JSON(Response{
@@ -37,8 +33,6 @@ func Created(c *fiber.Ctx, message string, data any) error {
 		Data:    data,
 	})
 }
-
-// ── 4xx ───────────────────────────────────────────────────────────────────────
 
 func BadRequest(c *fiber.Ctx, message string, details any) error {
 	return c.Status(http.StatusBadRequest).JSON(Response{
@@ -74,8 +68,6 @@ func Conflict(c *fiber.Ctx, message string, details any) error {
 		Meta:    Meta{Code: "CONFLICT", Message: message, Details: details},
 	})
 }
-
-// ── 5xx ───────────────────────────────────────────────────────────────────────
 
 func InternalError(c *fiber.Ctx, message string) error {
 	return c.Status(http.StatusInternalServerError).JSON(Response{
