@@ -9,15 +9,16 @@ import (
 
 // Zone represents a named parking area with its own capacity and fee config.
 type Zone struct {
-	ID            uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	Name          string     `gorm:"type:varchar(100);not null"`
-	Description   string     `gorm:"type:text"`
-	Capacity      int        `gorm:"not null"`
-	AdditionalFee int        `gorm:"not null;default:0"` // flat surcharge on top of base fee
-	IsActive      bool       `gorm:"not null;default:true"`
-	CreatedBy     *uuid.UUID `gorm:"type:uuid"`
-	CreatedAt     time.Time  `gorm:"autoCreateTime"`
-	UpdatedAt     time.Time  `gorm:"autoUpdateTime"`
+	ID               uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	Name             string     `gorm:"type:varchar(100);not null"`
+	Description      string     `gorm:"type:text"`
+	Capacity         int        `gorm:"not null"`
+	AdditionalFee    int        `gorm:"not null;default:0"` // flat surcharge on top of base fee
+	ForVehicleTypeID *uuid.UUID `gorm:"type:uuid"`          // default vehicle type for OCR-created plates in this zone
+	IsActive         bool       `gorm:"not null;default:true"`
+	CreatedBy        *uuid.UUID `gorm:"type:uuid"`
+	CreatedAt        time.Time  `gorm:"autoCreateTime"`
+	UpdatedAt        time.Time  `gorm:"autoUpdateTime"`
 }
 
 func (Zone) TableName() string { return "zones" }

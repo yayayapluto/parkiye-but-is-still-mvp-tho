@@ -1,0 +1,17 @@
+# Use this workspace to collaborate
+workspace:
+  id: 5fab7d57-e0f0-4d4c-8aaf-1e3f1bcf3e4e
+
+localResources:
+  collections:
+    - ..\collections\Parkieee - Auth.postman_collection.json
+    - ..\collections\Parkieee - Fee.postman_collection.json
+    - ..\collections\Parkieee - RFID.postman_collection.json
+    - ..\collections\Parkieee - Transaction _Full Test
+      Suite_.postman_collection.json
+    - ..\collections\Parkieee - Vehicle.postman_collection.json
+    - ..\collections\Parkieee - Zone.postman_collection.json
+    - ..\_archive\Parkieee - Auth.postman_collection.json
+    - ..\_archive\Parkieee - Zone.postman_collection.json
+  environments:
+    - ..\environments\New_Environment.postman_environment.json

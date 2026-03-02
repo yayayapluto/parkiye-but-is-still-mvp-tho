@@ -6,8 +6,8 @@ import (
 	"parkieee/pkg/validator"
 )
 
-func RegisterRoutes(router fiber.Router, svc ServicePort, auth middleware.TokenValidator, v *validator.Validator) {
-	adapter := newHTTPAdapter(svc, v)
+func RegisterRoutes(router fiber.Router, svc ServicePort, auth middleware.TokenValidator, v *validator.Validator, storageDir, ocrPrefix string) {
+	adapter := newHTTPAdapter(svc, v, storageDir, ocrPrefix)
 	authMw := middleware.Auth(auth)
 
 	txs := router.Group("/transactions", authMw)

@@ -2,6 +2,8 @@
 
 include .env
 export
+unexport STORAGE_DIR
+unexport OCR_STORAGE_PREFIX
 
 MAKEFLAGS += --no-print-directory
 

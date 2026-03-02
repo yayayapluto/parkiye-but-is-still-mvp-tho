@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	feeDomain "parkieee/internal/modules/fee"
+	ocrDomain "parkieee/internal/modules/ocr"
 	rfidDomain "parkieee/internal/modules/rfid"
 	vehicleDomain "parkieee/internal/modules/vehicle"
 	zoneDomain "parkieee/internal/modules/zone"
@@ -29,12 +30,14 @@ type service struct {
 
 	// Cross-module service ports injected for reads only.
 	// Writes that must be atomic go through raw tx via the zone domain struct.
-	zoneSvc      zoneDomain.ServicePort
-	zoneGateRepo zoneDomain.GateRepositoryPort
-	zoneRepo     zoneDomain.ZoneRepositoryPort
-	rfidSvc      rfidDomain.ServicePort
-	feeSvc       feeDomain.ServicePort
-	vehicleSvc   vehicleDomain.ServicePort
+	zoneSvc       zoneDomain.ServicePort
+	zoneGateRepo  zoneDomain.GateRepositoryPort
+	zoneRepo      zoneDomain.ZoneRepositoryPort
+	rfidSvc       rfidDomain.ServicePort
+	feeSvc        feeDomain.ServicePort
+	vehicleSvc    vehicleDomain.ServicePort
+	ocrSvc        ocrDomain.ServicePort
+	ocrResultRepo ocrDomain.OCRResultRepositoryPort
 }
 
 func NewService(
@@ -47,25 +50,29 @@ func NewService(
 	rfidSvc rfidDomain.ServicePort,
 	feeSvc feeDomain.ServicePort,
 	vehicleSvc vehicleDomain.ServicePort,
+	ocrSvc ocrDomain.ServicePort,
+	ocrResultRepo ocrDomain.OCRResultRepositoryPort,
 	log logger.Logger,
 	baseURL string,
 	placeName string,
 	qrSecret string,
 ) ServicePort {
 	return &service{
-		db:           db,
-		txRepo:       txRepo,
-		logRepo:      logRepo,
-		log:          log,
-		baseURL:      baseURL,
-		placeName:    placeName,
-		qrSecret:     qrSecret,
-		zoneSvc:      zoneSvc,
-		zoneGateRepo: zoneGateRepo,
-		zoneRepo:     zoneRepo,
-		rfidSvc:      rfidSvc,
-		feeSvc:       feeSvc,
-		vehicleSvc:   vehicleSvc,
+		db:            db,
+		txRepo:        txRepo,
+		logRepo:       logRepo,
+		log:           log,
+		baseURL:       baseURL,
+		placeName:     placeName,
+		qrSecret:      qrSecret,
+		zoneSvc:       zoneSvc,
+		zoneGateRepo:  zoneGateRepo,
+		zoneRepo:      zoneRepo,
+		rfidSvc:       rfidSvc,
+		feeSvc:        feeSvc,
+		vehicleSvc:    vehicleSvc,
+		ocrSvc:        ocrSvc,
+		ocrResultRepo: ocrResultRepo,
 	}
 }
 
@@ -143,6 +150,12 @@ func (s *service) RecordEntry(ctx context.Context, req RecordEntryRequest, opera
 		"operator_id", operatorID,
 	)
 
+	// Dispatch OCR asynchronously — does not block the HTTP response.
+	// gate.ZoneID is passed so OCR can resolve the default vehicle type from zone.for_vehicle_type_id.
+	if req.EntryPhotoPath != "" {
+		go s.ocrSvc.DispatchOCRJob(context.Background(), created.ID, req.EntryPhotoPath, gate.ZoneID, types.OCRPhotoTypeEntry)
+	}
+
 	return s.txRepo.FindByID(ctx, created.ID)
 }
 
@@ -207,6 +220,11 @@ func (s *service) RecordExit(ctx context.Context, id uuid.UUID, req RecordExitRe
 		"vehicle_type_id", vehicleTypeID,
 		"operator_id", operatorID,
 	)
+
+	// Dispatch OCR asynchronously for exit photo — helps verify/correct vehicle identity.
+	if req.ExitPhotoPath != "" {
+		go s.ocrSvc.DispatchOCRJob(context.Background(), existing.ID, req.ExitPhotoPath, existing.ZoneID, types.OCRPhotoTypeExit)
+	}
 
 	return s.txRepo.FindByID(ctx, id)
 }
@@ -286,6 +304,14 @@ func (s *service) GetTransaction(ctx context.Context, id uuid.UUID) (*Transactio
 
 func (s *service) GetByCode(ctx context.Context, code string) (*Transaction, error) {
 	return s.txRepo.FindByCode(ctx, code)
+}
+
+func (s *service) LoadOCRSummary(ctx context.Context, txID uuid.UUID) []ocrDomain.OCRResultWithJob {
+	results, err := s.ocrResultRepo.FindSummaryByTransactionID(ctx, txID)
+	if err != nil || len(results) == 0 {
+		return nil
+	}
+	return results
 }
 
 func (s *service) ListTransactions(ctx context.Context, filter ListFilter, page, pageSize int) ([]Transaction, int64, error) {
@@ -487,6 +513,10 @@ func buildEntryTransaction(ctx context.Context, log logger.Logger, req RecordEnt
 	if req.EntryPhotoURL != "" {
 		photoURL = &req.EntryPhotoURL
 	}
+	var photoPath *string
+	if req.EntryPhotoPath != "" {
+		photoPath = &req.EntryPhotoPath
+	}
 	return &Transaction{
 		ID:               uuid.New(),
 		TransactionCode:  code,
@@ -497,6 +527,7 @@ func buildEntryTransaction(ctx context.Context, log logger.Logger, req RecordEnt
 		EntryQRCodeImage: entryQRImage,
 		EntryAt:          now,
 		EntryPhotoURL:    photoURL,
+		EntryPhotoPath:   photoPath,
 		ZoneID:           gate.ZoneID,
 		Status:           types.TransactionStatusOpen,
 	}, nil
@@ -564,6 +595,12 @@ func applyExitFields(existing *Transaction, req RecordExitRequest, exitAt time.T
 	existing.ExitAt = &exitAt
 	existing.CalculatedFee = &calculatedFee
 	existing.Status = types.TransactionStatusAwaitingPayment
+	if req.ExitPhotoURL != "" {
+		existing.ExitPhotoURL = &req.ExitPhotoURL
+	}
+	if req.ExitPhotoPath != "" {
+		existing.ExitPhotoPath = &req.ExitPhotoPath
+	}
 }
 
 // appendCapacityLog writes a zone_capacity_logs row within the given tx.

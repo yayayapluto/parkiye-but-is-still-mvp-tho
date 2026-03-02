@@ -17,6 +17,13 @@ const (
 	OCRJobSkipped    OCRJobStatus = "skipped"
 )
 
+type OCRPhotoType string
+
+const (
+	OCRPhotoTypeEntry OCRPhotoType = "entry"
+	OCRPhotoTypeExit  OCRPhotoType = "exit"
+)
+
 type OverrideType string
 
 const (

@@ -8,18 +8,20 @@ import (
 )
 
 type CreateZoneRequest struct {
-	Name          string `json:"name"           validate:"required,min=2,max=100"`
-	Description   string `json:"description"    validate:"omitempty,max=500"`
-	Capacity      int    `json:"capacity"       validate:"required,min=1"`
-	AdditionalFee int    `json:"additional_fee" validate:"min=0"`
+	Name             string     `json:"name"                validate:"required,min=2,max=100"`
+	Description      string     `json:"description"         validate:"omitempty,max=500"`
+	Capacity         int        `json:"capacity"            validate:"required,min=1"`
+	AdditionalFee    int        `json:"additional_fee"      validate:"min=0"`
+	ForVehicleTypeID *uuid.UUID `json:"for_vehicle_type_id" validate:"omitempty,uuid4"` // default vehicle type for OCR in this zone
 }
 
 type UpdateZoneRequest struct {
-	Name          *string `json:"name"           validate:"omitempty,min=2,max=100"`
-	Description   *string `json:"description"    validate:"omitempty,max=500"`
-	Capacity      *int    `json:"capacity"       validate:"omitempty,min=1"`
-	AdditionalFee *int    `json:"additional_fee" validate:"omitempty,min=0"`
-	IsActive      *bool   `json:"is_active"`
+	Name             *string    `json:"name"                validate:"omitempty,min=2,max=100"`
+	Description      *string    `json:"description"         validate:"omitempty,max=500"`
+	Capacity         *int       `json:"capacity"            validate:"omitempty,min=1"`
+	AdditionalFee    *int       `json:"additional_fee"      validate:"omitempty,min=0"`
+	ForVehicleTypeID *uuid.UUID `json:"for_vehicle_type_id" validate:"omitempty,uuid4"`
+	IsActive         *bool      `json:"is_active"`
 }
 
 type CreateGateRequest struct {
@@ -37,14 +39,15 @@ type UpdateGateRequest struct {
 }
 
 type ZoneResponse struct {
-	ID            uuid.UUID `json:"id"`
-	Name          string    `json:"name"`
-	Description   string    `json:"description"`
-	Capacity      int       `json:"capacity"`
-	AdditionalFee int       `json:"additional_fee"`
-	IsActive      bool      `json:"is_active"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID               uuid.UUID  `json:"id"`
+	Name             string     `json:"name"`
+	Description      string     `json:"description"`
+	Capacity         int        `json:"capacity"`
+	AdditionalFee    int        `json:"additional_fee"`
+	ForVehicleTypeID *uuid.UUID `json:"for_vehicle_type_id"`
+	IsActive         bool       `json:"is_active"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 type GateResponse struct {
@@ -68,14 +71,15 @@ type ZoneCapacityResponse struct {
 
 func toZoneResponse(z *Zone) ZoneResponse {
 	return ZoneResponse{
-		ID:            z.ID,
-		Name:          z.Name,
-		Description:   z.Description,
-		Capacity:      z.Capacity,
-		AdditionalFee: z.AdditionalFee,
-		IsActive:      z.IsActive,
-		CreatedAt:     z.CreatedAt,
-		UpdatedAt:     z.UpdatedAt,
+		ID:               z.ID,
+		Name:             z.Name,
+		Description:      z.Description,
+		Capacity:         z.Capacity,
+		AdditionalFee:    z.AdditionalFee,
+		ForVehicleTypeID: z.ForVehicleTypeID,
+		IsActive:         z.IsActive,
+		CreatedAt:        z.CreatedAt,
+		UpdatedAt:        z.UpdatedAt,
 	}
 }
 

@@ -608,6 +608,101 @@ Semua tipe enum didefinisikan sebagai `type X string` di `pkg/types/`:
 
 ---
 
+---
+
+## Module: ocr
+
+### Dispatch Flow (fire-and-forget)
+
+```
+RecordEntry / RecordExit (transaction service)
+  └─ EntryPhotoPath != "" / ExitPhotoPath != ""
+       └─ go ocrSvc.DispatchOCRJob(ctx, transactionID, imagePath, zoneID, photoType)
+
+DispatchOCRJob:
+  1. Kalau OCR disabled → return (log + skip)
+  2. Insert ocr_jobs (status=queued)
+  3. processJob()
+```
+
+### processJob
+
+```
+1. Update status → processing
+2. adapter.ping() — GET /health ke Python
+   └─ Gagal → markJobSkipped (service unreachable)
+3. Loop (0..maxRetries):
+   result, err = adapter.callDetectPlate(imagePath)
+   └─ Sukses → break
+   └─ Gagal → log warn + retry
+4. lastErr != nil → markJobFailed
+5. handleSuccess()
+```
+
+### handleSuccess
+
+```
+1. Resolve vehicleTypeID dari zone.for_vehicle_type_id
+   └─ Nil → skip vehicle upsert (log info, bukan error)
+2. Set job.OutputImagePath + job.OutputImageURL (dari filename saja)
+3. Auto-verify: confidence >= autoAcceptThreshold
+4. vehicleSvc.UpsertVehicle(plate, vehicleTypeID, source=ocr)
+5. Bandingkan PlateDetected vs vehicle.PlateNumber → IsMatch
+6. resultRepo.Create(ocrResult)
+7. updateTransactionVehicle() — link vehicle ke transaction (non-fatal)
+8. Kalau photoType=exit → createReviewLog()
+9. Update status → completed
+```
+
+### Python OCR HTTP Contract
+
+```
+POST /detect-plate
+{ "image_path": "/mnt/storage/photos/entry_xxx.jpeg" }
+
+→ 200: { "detected_plate": "B1701SGI", "confidence": 0.9831, "output_image_path": "/mnt/storage/photos/entry_xxx_output.jpeg" }
+→ 404: { "detail": "Cannot find image" }
+→ 422: { "detail": "No plate detected in the provided image" }
+→ 500: { "detail": "Internal server error: ..." }
+```
+
+`image_path` adalah path **di dalam Docker container** (dari shared volume `/mnt/storage`).
+`output_image_path` adalah path yang sama dengan `_output` suffix — Go ambil `filepath.Base()` dan jadikan URL publik.
+
+### OCR Review Log (exit jobs only)
+
+```
+creatReviewLog():
+  1. Cari entryResult by transactionID (resultRepo.FindEntryResultByTransactionID)
+     └─ Tidak ada → log warn + return (non-fatal)
+  2. autoMatch = normalizePlate(exitPlate) == normalizePlate(entryPlate)
+  3. Insert ocr_review_logs {
+       auto_match_result: true/false,
+       ManualPlate/ReviewedBy/ReviewedAt: diisi operator nanti
+     }
+```
+
+### normalizePlate
+
+```go
+// Hapus spasi, uppercase
+normalizePlate("b 1701 sgi") == normalizePlate("B1701SGI") // true
+```
+
+### Config
+
+```
+OCR_ENABLED=true
+OCR_API_URL=http://localhost:8001         # URL Python OCR service
+OCR_TIMEOUT=15s
+OCR_MAX_RETRIES=2
+OCR_AUTO_ACCEPT_THRESHOLD=0.80           # confidence >= ini → auto-verified
+STORAGE_DIR=./storage/photos             # local path untuk Go simpan foto
+OCR_STORAGE_PREFIX=/mnt/storage/photos  # path container untuk Python OCR
+```
+
+---
+
 ## Logic yang Belum Diimplementasi (planned)
 
 Lihat `agents-prepare.md` untuk detail lengkap. Ringkasan:
@@ -624,12 +719,3 @@ Lihat `agents-prepare.md` untuk detail lengkap. Ringkasan:
 - Cek daily/weekly limit dari OverrideConfig sebelum proses
 - `fee_waive` → calculated_fee = 0 → MarkExited
 - `force_open_gate` → mock (log saja, tidak ada hardware call)
-
-### OCR (planned)
-
-- Worker goroutine poll setiap 5 detik
-- HTTP POST ke Python service dengan image_path (shared Docker volume)
-- `OCR_MOCK=true` → skip HTTP, return fake result
-- Auto-verify kalau confidence >= OCRConfig.AutoAcceptThreshold (default 0.85)
-- Di bawah threshold → tunggu manual review operator
-- Anti-circular: transaction inject OCRQueuer interface, bukan OCRService langsung

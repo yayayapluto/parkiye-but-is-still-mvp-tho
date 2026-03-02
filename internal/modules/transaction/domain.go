@@ -20,9 +20,12 @@ type Transaction struct {
 	EntryQRCodeImage *string           `gorm:"type:text"`                           // base64 PNG of the QR code; null if entry_method = "rfid"
 	EntryAt          time.Time         `gorm:"not null"`
 	EntryPhotoURL    *string           `gorm:"type:text"` // null if camera failed
+	EntryPhotoPath   *string           `gorm:"type:text"` // absolute path on shared Docker volume for OCR
 	ExitGateID       *uuid.UUID        `gorm:"type:uuid;index"`
 	ExitMethod       *types.ExitMethod `gorm:"type:varchar(10)"` // "rfid"|"qr"|"override"
 	ExitAt           *time.Time
+	ExitPhotoURL     *string    `gorm:"type:text"`       // null if camera failed
+	ExitPhotoPath    *string    `gorm:"type:text"`       // absolute path on shared Docker volume for OCR
 	VehicleID        *uuid.UUID `gorm:"type:uuid;index"` // null until OCR resolves or operator sets manually
 	FeeConfigID      *uuid.UUID `gorm:"type:uuid"`       // snapshot of config used at time of calculation
 	CalculatedFee    *int

@@ -52,6 +52,10 @@ pkg/
     config.go               # Config structs + Load() + env helpers — PLACE_NAME, QR_SECRET added
   qr/
     qr.go                   # Ticket PNG generator — 512x512, Go Mono font, HMAC filename obfuscation
+  photo/
+    photo.go                # Save(): multipart upload → local path + OCR container path (POSIX-safe)
+  storage/
+    storage.go              # POST /storage/photos standalone upload endpoint
   errors/
     error.go                # AppError type + error codes
   helpers/                  # utilities — add as needed (currently empty)
@@ -323,19 +327,21 @@ Seed data (idempotent):
 | `pkg/middleware/auth.go`             | ✅ done                                                                              |
 | `pkg/helpers`                        | ⬜ empty — add utilities as needed                                                   |
 | `pkg/types/date.go`                  | ✅ done — DateOnly type for YYYY-MM-DD JSON fields                                   |
+| `pkg/photo/`                         | ✅ done — Save(): multipart → local + OCR path, POSIX-safe                           |
+| `pkg/storage/`                       | ✅ done — POST /storage/photos upload endpoint                                       |
 | `database/migrate.go`                | ✅ done                                                                              |
 | `database/seed.go`                   | ✅ done — gofakeit, all 11 modules, 25–80 rows per entity                            |
-| `internal/bootstrap/*`               | ✅ done — container wires auth + zone + vehicle + rfid + fee + transaction           |
+| `internal/bootstrap/*`               | ✅ done — container wires auth + zone + vehicle + rfid + fee + transaction + ocr     |
 | `pkg/qr/`                            | ✅ done — 512x512 thermal ticket PNG, Go Mono font, HMAC-SHA256 filename obfuscation |
 | `cmd/api/main.go`                    | ✅ done                                                                              |
 | `internal/modules/*/domain.go`       | ✅ done (all 11 modules)                                                             |
-| `internal/modules/*/ports.go`        | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction                             |
-| `internal/modules/*/repository.go`   | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction                             |
-| `internal/modules/*/service.go`      | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction                             |
-| `internal/modules/*/dto.go`          | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction                             |
-| `internal/modules/*/handler.go`      | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction                             |
-| `internal/modules/*/http_adapter.go` | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction                             |
-| `internal/modules/*/routes.go`       | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction                             |
+| `internal/modules/*/ports.go`        | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
+| `internal/modules/*/repository.go`   | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
+| `internal/modules/*/service.go`      | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
+| `internal/modules/*/dto.go`          | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
+| `internal/modules/*/handler.go`      | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
+| `internal/modules/*/http_adapter.go` | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
+| `internal/modules/*/routes.go`       | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
 | `docs/Parkieee - Auth.*`             | ✅ done — biasa + full test suite                                                    |
 | `docs/Parkieee - Zone.*`             | ✅ done — biasa + full test suite                                                    |
 | `docs/Parkieee - Vehicle.*`          | ✅ done — biasa + full test suite                                                    |
@@ -344,7 +350,50 @@ Seed data (idempotent):
 | `docs/Parkieee - Transaction.*`      | ✅ done — biasa + full test suite                                                    |
 
 **Next:** implement modules in dependency order:
-`auth` ✅ → `zone` ✅ → `vehicle` ✅ → `rfid` ✅ → `fee` ✅ → `transaction` ✅ → `payment` → `override` → `ocr` → `audit`
+`auth` ✅ → `zone` ✅ → `vehicle` ✅ → `rfid` ✅ → `fee` ✅ → `transaction` ✅ → `ocr` ✅ → `payment` → `override` → `audit`
+
+---
+
+## Photo & Storage
+
+### `pkg/photo` — Save()
+
+```go
+publicURL, ocrPath, err := photo.Save(fileHeader, "entry", cfg.Storage.Dir, cfg.Storage.OCRPathPrefix)
+// publicURL → "/storage/photos/entry_abc12345_1772000000.jpg"  (served via Go API)
+// ocrPath   → "/mnt/storage/photos/entry_abc12345_..."          (container path untuk Python OCR)
+```
+
+- `storageDir` = `STORAGE_DIR` dari config (local path di host)
+- `ocrPrefix` = `OCR_STORAGE_PREFIX` dari config (path di dalam Docker container)
+- Kalau `ocrPrefix` kosong, fallback ke `filepath.ToSlash(localPath)`
+- Selalu pakai `cfg.Storage.OCRPathPrefix` langsung — jangan `os.Getenv`, Git Bash akan terjemahkan POSIX path
+
+### `pkg/storage` — Upload Endpoint
+
+```
+POST /storage/photos  (multipart/form-data, field: photo)
+→ 201 { path, url }
+```
+
+Endpoint independen untuk client upload foto sebelum scan RFID/QR.
+Path yang dikembalikan (`path`) dikirim ke `entry_photo_path` / `exit_photo_path`.
+
+### Docker Volume — Shared Storage
+
+Go API dan Python OCR **harus share volume yang sama** (bind mount, bukan named volume):
+
+```yaml
+services:
+  app:
+    volumes:
+      - ./storage:/mnt/storage   # bind mount
+  python-ocr:
+    volumes:
+      - ./storage:/mnt/storage   # sama persis
+```
+
+Named Docker volume (`parking_storage: driver: local`) **tidak bisa di-share** secara transparan antar container.
 
 ---
 
@@ -352,6 +401,8 @@ Seed data (idempotent):
 
 - **Never run `make db-reset`** unless explicitly asked — wipes all data
 - **Never commit `.env`** — in `.gitignore`
+- **Never use named Docker volume** untuk shared storage Go ↔ Python — selalu bind mount `./storage:/mnt/storage`
+- **Always use `cfg.Storage.OCRPathPrefix`** bukan `os.Getenv("OCR_STORAGE_PREFIX")` — Git Bash corrupt POSIX paths
 - **Never batch AutoMigrate** — always one model at a time
 - **Always add `column:` tag** on every new model field, especially acronyms
 - **Always update `applyManualConstraints`** when adding composite uniques or CHECK constraints

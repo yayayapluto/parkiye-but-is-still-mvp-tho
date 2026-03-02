@@ -8,13 +8,12 @@ Baca ini sebelum menyentuh kode apapun.
 ## Urutan Implementasi
 
 ```
-transaction ✅ → payment → override → ocr
+transaction ✅ → ocr ✅ → payment → override
 ```
 
-`payment`, `override`, dan `ocr` semua depend ke `transaction` (via `TransactionID` FK).
-`ocr` di-queue oleh `transaction.RecordEntry`.
+`payment` dan `override` depend ke `transaction` (via `TransactionID` FK).
 
-> **transaction sudah selesai** — lihat `agents-logic.md` untuk detail implementasinya (sudah dihapus dari sini).
+> **transaction dan ocr sudah selesai** — lihat `agents-logic.md` untuk detail implementasinya.
 
 ---
 
@@ -305,31 +304,26 @@ POST /api/v1/ocr/config               → create config (permission: config.edit
 ## Ringkasan Dependencies di Container
 
 ```
-TransactionService  ← FeeService, OCRService (as OCRQueuer)
-PaymentService      ← TransactionService
-OverrideService     ← TransactionService
-OCRService          ← TransactionService (untuk update vehicle_id)
+TransactionService  ← FeeService, OCRService   (✅ sudah terwire)
+OCRService          ← VehicleService, ZoneRepo  (✅ sudah terwire)
+PaymentService      ← TransactionService        (planned)
+OverrideService     ← TransactionService        (planned)
 ```
 
-Inject order di `container.go`:
-
-1. `initFeeModule`
-2. `initOCRModule` (tanpa TransactionService dulu — hanya repo + worker stub)
-3. `initTransactionModule` (inject FeeService + OCRService as OCRQueuer)
-4. `initPaymentModule` (inject TransactionService)
-5. `initOverrideModule` (inject TransactionService)
-6. Setelah semua init, inject TransactionService ke OCRService via setter:
-   `container.OCRService.SetTransactionService(container.TransactionService)`
-
-## Env Variables Baru
-
-Tambahkan ke `.env.example`:
+## Env Variables yang Sudah Ada
 
 ```
+# OCR (✅ done)
+OCR_ENABLED=true
+OCR_API_URL=http://localhost:8001
+OCR_TIMEOUT=15s
+OCR_MAX_RETRIES=2
+OCR_AUTO_ACCEPT_THRESHOLD=0.80
+STORAGE_DIR=./storage/photos
+OCR_STORAGE_PREFIX=/mnt/storage/photos
+
+# Payment (planned)
 MIDTRANS_SERVER_KEY=
 MIDTRANS_CLIENT_KEY=
 MIDTRANS_ENV=sandbox
-OCR_SERVICE_URL=http://ocr:8000
-OCR_POLL_INTERVAL_SECONDS=5
-OCR_MOCK=true   # kalau true, skip HTTP call ke Python, return mock result
 ```

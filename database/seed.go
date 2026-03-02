@@ -220,15 +220,31 @@ func seedZonesAndGates(db *gorm.DB) error {
 	var existing int64
 	db.Model(&zoneDomain.Zone{}).Count(&existing)
 	if existing > 0 {
+		// Backfill for_vehicle_type_id on zones that were seeded without it.
+		vtMotorcycleFix := deterministicUUID("vtype:motorcycle")
+		vtCarFix := deterministicUUID("vtype:car")
+		db.Model(&zoneDomain.Zone{}).Where("id = ? AND for_vehicle_type_id IS NULL", deterministicUUID("zone:motor")).
+			Update("for_vehicle_type_id", vtMotorcycleFix)
+		db.Model(&zoneDomain.Zone{}).Where("id IN ? AND for_vehicle_type_id IS NULL",
+			[]uuid.UUID{deterministicUUID("zone:mobil"), deterministicUUID("zone:vip")}).
+			Update("for_vehicle_type_id", vtCarFix)
+		// Assign motorcycle to remaining null zones as a safe default.
+		db.Model(&zoneDomain.Zone{}).Where("for_vehicle_type_id IS NULL").
+			Update("for_vehicle_type_id", vtMotorcycleFix)
 		return nil
 	}
 
 	adminID := deterministicUUID("seed:admin")
 
+	vtMotorcycle := deterministicUUID("vtype:motorcycle")
+	vtCar := deterministicUUID("vtype:car")
+	vtTruck := deterministicUUID("vtype:truck")
+	vtPool := []uuid.UUID{vtMotorcycle, vtMotorcycle, vtMotorcycle, vtCar, vtCar, vtCar, vtTruck}
+
 	fixed := []zoneDomain.Zone{
-		{ID: deterministicUUID("zone:motor"), Name: "Parkir Motor", Description: "Area parkir sepeda motor lantai 1", Capacity: 200, AdditionalFee: 0, IsActive: true, CreatedBy: &adminID},
-		{ID: deterministicUUID("zone:mobil"), Name: "Parkir Mobil", Description: "Area parkir mobil lantai 2", Capacity: 80, AdditionalFee: 2000, IsActive: true, CreatedBy: &adminID},
-		{ID: deterministicUUID("zone:vip"), Name: "Parkir VIP", Description: "Area parkir VIP covered basement", Capacity: 20, AdditionalFee: 5000, IsActive: true, CreatedBy: &adminID},
+		{ID: deterministicUUID("zone:motor"), Name: "Parkir Motor", Description: "Area parkir sepeda motor lantai 1", Capacity: 200, AdditionalFee: 0, ForVehicleTypeID: &vtMotorcycle, IsActive: true, CreatedBy: &adminID},
+		{ID: deterministicUUID("zone:mobil"), Name: "Parkir Mobil", Description: "Area parkir mobil lantai 2", Capacity: 80, AdditionalFee: 2000, ForVehicleTypeID: &vtCar, IsActive: true, CreatedBy: &adminID},
+		{ID: deterministicUUID("zone:vip"), Name: "Parkir VIP", Description: "Area parkir VIP covered basement", Capacity: 20, AdditionalFee: 5000, ForVehicleTypeID: &vtCar, IsActive: true, CreatedBy: &adminID},
 	}
 
 	areaWords := []string{"Gedung", "Blok", "Lantai", "Area", "Sektor", "Zona"}
@@ -241,14 +257,16 @@ func seedZonesAndGates(db *gorm.DB) error {
 	for i := 0; i < extraN; i++ {
 		name := uniqueZoneName(seenNames, areaWords, labels)
 		seenNames[name] = true
+		vtID := vtPool[rand.Intn(len(vtPool))]
 		extra = append(extra, zoneDomain.Zone{
-			ID:            uuid.New(),
-			Name:          name,
-			Description:   gofakeit.Sentence(6),
-			Capacity:      gofakeit.IntRange(10, 300),
-			AdditionalFee: feeOptions[rand.Intn(len(feeOptions))],
-			IsActive:      gofakeit.Bool(),
-			CreatedBy:     &adminID,
+			ID:               uuid.New(),
+			Name:             name,
+			Description:      gofakeit.Sentence(6),
+			Capacity:         gofakeit.IntRange(10, 300),
+			AdditionalFee:    feeOptions[rand.Intn(len(feeOptions))],
+			ForVehicleTypeID: &vtID,
+			IsActive:         gofakeit.Bool(),
+			CreatedBy:        &adminID,
 		})
 	}
 

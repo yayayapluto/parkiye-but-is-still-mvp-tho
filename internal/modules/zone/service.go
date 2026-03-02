@@ -45,13 +45,14 @@ func (s *service) ListZones(ctx context.Context, onlyActive bool, page, pageSize
 
 func (s *service) CreateZone(ctx context.Context, req *CreateZoneRequest, actorID uuid.UUID) (*Zone, error) {
 	zone := &Zone{
-		ID:            uuid.New(),
-		Name:          req.Name,
-		Description:   req.Description,
-		Capacity:      req.Capacity,
-		AdditionalFee: req.AdditionalFee,
-		IsActive:      true,
-		CreatedBy:     &actorID,
+		ID:               uuid.New(),
+		Name:             req.Name,
+		Description:      req.Description,
+		Capacity:         req.Capacity,
+		AdditionalFee:    req.AdditionalFee,
+		ForVehicleTypeID: req.ForVehicleTypeID,
+		IsActive:         true,
+		CreatedBy:        &actorID,
 	}
 
 	if err := s.zoneRepo.Create(ctx, zone); err != nil {
@@ -82,6 +83,9 @@ func (s *service) UpdateZone(ctx context.Context, id uuid.UUID, req *UpdateZoneR
 	}
 	if req.IsActive != nil {
 		zone.IsActive = *req.IsActive
+	}
+	if req.ForVehicleTypeID != nil {
+		zone.ForVehicleTypeID = req.ForVehicleTypeID
 	}
 
 	if err := s.zoneRepo.Update(ctx, zone); err != nil {

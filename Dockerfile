@@ -18,7 +18,7 @@ RUN apk add --no-cache ca-certificates tzdata
 
 COPY --from=builder /app/bin/api .
 
-RUN mkdir -p storage/logs
+RUN mkdir -p storage/logs storage/qr
 
 EXPOSE 8080
 

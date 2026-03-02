@@ -21,38 +21,73 @@ services:
     networks:
       - parkieee_net
 
-  #  app:
-  #    build:
-  #      context: .
-  #      dockerfile: Dockerfile
-  #    container_name: parkieee_api
-  #    restart: unless-stopped
-  #    ports:
-  #      - "${SERVER_PORT:-8080}:8080"
-  #    environment:
-  #      APP_ENV: ${APP_ENV:-production}
-  #      APP_NAME: ${APP_NAME:-parkieee}
-  #      APP_DEBUG: ${APP_DEBUG:-false}
-  #      SERVER_HOST: ${SERVER_HOST:-0.0.0.0}
-  #      SERVER_PORT: ${SERVER_PORT:-8080}
-  #      DB_HOST: postgres
-  #      DB_PORT: 5432
-  #      DB_USER: ${DB_USER:-postgres}
-  #      DB_PASSWORD: ${DB_PASSWORD:-postgres}
-  #      DB_NAME: ${DB_NAME:-parkieee}
-  #      DB_SSLMODE: ${DB_SSLMODE:-disable}
-  #      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-  #      ENABLE_TRACING: ${ENABLE_TRACING:-true}
-  #      TEMPO_ENDPOINT: tempo:4318
-  #      ENABLE_PROFILING: ${ENABLE_PROFILING:-true}
-  #      PYROSCOPE_ENDPOINT: http://pyroscope:4040
-  #    volumes:
-  #      - ./storage/logs:/app/storage/logs
-  #    depends_on:
-  #      postgres:
-  #        condition: service_healthy
-  #    networks:
-  #      - parkieee_net
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: parkieee_api
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      APP_NAME: ${APP_NAME:-parkieee}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_URL: ${APP_URL:-}
+      PLACE_NAME: ${PLACE_NAME:-Parkir}
+      QR_SECRET: ${QR_SECRET}
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-parkieee}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_JSON_FORMAT: "true"
+      LOG_OUTPUT_PATHS: stdout,storage/logs/app.log
+      ENABLE_TRACING: ${ENABLE_TRACING:-true}
+      TEMPO_ENDPOINT: tempo:4318
+      ENABLE_PROFILING: ${ENABLE_PROFILING:-false}
+      PYROSCOPE_ENDPOINT: http://pyroscope:4040
+      OCR_ENABLED: ${OCR_ENABLED:-true}
+      OCR_API_URL: http://python-ocr:8000
+      OCR_TIMEOUT: ${OCR_TIMEOUT:-15s}
+      OCR_MAX_RETRIES: ${OCR_MAX_RETRIES:-2}
+      OCR_AUTO_ACCEPT_THRESHOLD: ${OCR_AUTO_ACCEPT_THRESHOLD:-0.80}
+      STORAGE_DIR: /mnt/storage/photos
+      OCR_STORAGE_PREFIX: /mnt/storage/photos
+    volumes:
+      - ./storage/logs:/app/storage/logs
+      - ./storage:/mnt/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      python-ocr:
+        condition: service_healthy
+    networks:
+      - parkieee_net
+
+  python-ocr:
+    build:
+      context: ../Python-OCR
+      dockerfile: Dockerfile
+    container_name: parkieee_python_ocr
+    restart: unless-stopped
+    ports:
+      - "${OCR_PORT:-8001}:8000"
+    volumes:
+      - ./storage:/mnt/storage  # bind-mount host storage so Go-Api (local) and OCR (Docker) share the same files
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - parkieee_net
 
   pyroscope:
     image: grafana/pyroscope:latest

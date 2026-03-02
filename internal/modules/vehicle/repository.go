@@ -6,7 +6,6 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	"parkieee/pkg/errors"
 )
@@ -110,7 +109,6 @@ func (r *vehicleRepo) Upsert(ctx context.Context, vehicle *Vehicle) (*Vehicle, e
 			Source:        vehicle.Source,
 			Notes:         vehicle.Notes,
 		}).
-		Clauses(clause.OnConflict{UpdateAll: false}).
 		FirstOrCreate(vehicle).Error
 	if err != nil {
 		return nil, errors.FromDB(err, "failed to upsert vehicle")

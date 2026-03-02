@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	ocrDomain "parkieee/internal/modules/ocr"
 	"parkieee/pkg/types"
 )
 
@@ -56,4 +57,5 @@ type ServicePort interface {
 	GetByCode(ctx context.Context, code string) (*Transaction, error)
 	ListTransactions(ctx context.Context, filter ListFilter, page, pageSize int) ([]Transaction, int64, error)
 	GetLogs(ctx context.Context, txID uuid.UUID) ([]TransactionLog, error)
+	LoadOCRSummary(ctx context.Context, txID uuid.UUID) []ocrDomain.OCRResultWithJob
 }

@@ -8,18 +8,21 @@ import (
 	"github.com/google/uuid"
 
 	"parkieee/pkg/middleware"
+	"parkieee/pkg/photo"
 	"parkieee/pkg/response"
 	"parkieee/pkg/types"
 	"parkieee/pkg/validator"
 )
 
 type handler struct {
-	svc ServicePort
-	v   *validator.Validator
+	svc        ServicePort
+	v          *validator.Validator
+	storageDir string
+	ocrPrefix  string
 }
 
-func newHandler(svc ServicePort, v *validator.Validator) *handler {
-	return &handler{svc: svc, v: v}
+func newHandler(svc ServicePort, v *validator.Validator, storageDir, ocrPrefix string) *handler {
+	return &handler{svc: svc, v: v, storageDir: storageDir, ocrPrefix: ocrPrefix}
 }
 
 func (h *handler) listTransactions(c *fiber.Ctx) error {
@@ -73,7 +76,7 @@ func (h *handler) listTransactions(c *fiber.Ctx) error {
 
 	res := make([]TransactionResponse, 0, len(txs))
 	for i := range txs {
-		res = append(res, toResponse(&txs[i]))
+		res = append(res, toResponse(&txs[i], nil))
 	}
 
 	queryParams := map[string]string{}
@@ -102,7 +105,8 @@ func (h *handler) getTransaction(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return response.Success(c, "ok", toResponse(tx))
+	ocr := h.svc.LoadOCRSummary(c.Context(), tx.ID)
+	return response.Success(c, "ok", toResponse(tx, ocr))
 }
 
 func (h *handler) getByCode(c *fiber.Ctx) error {
@@ -114,7 +118,8 @@ func (h *handler) getByCode(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return response.Success(c, "ok", toResponse(tx))
+	ocr := h.svc.LoadOCRSummary(c.Context(), tx.ID)
+	return response.Success(c, "ok", toResponse(tx, ocr))
 }
 
 func (h *handler) getLogs(c *fiber.Ctx) error {
@@ -142,13 +147,25 @@ func (h *handler) recordEntry(c *fiber.Ctx) error {
 		return response.BadRequest(c, "validation failed", errs)
 	}
 
+	// Save photo if provided via multipart — non-fatal if absent or not multipart.
+	if form, err := c.MultipartForm(); err == nil {
+		if files := form.File["photo"]; len(files) > 0 {
+			publicURL, volumePath, err := photo.Save(files[0], "entry", h.storageDir, h.ocrPrefix)
+			if err != nil {
+				return response.InternalError(c, "failed to save entry photo")
+			}
+			req.EntryPhotoURL = publicURL
+			req.EntryPhotoPath = volumePath
+		}
+	}
+
 	operatorID := middleware.GetUserID(c)
 
 	tx, err := h.svc.RecordEntry(c.Context(), req, operatorID)
 	if err != nil {
 		return err
 	}
-	return response.Created(c, fmt.Sprintf("entry recorded: %s", tx.TransactionCode), toResponse(tx))
+	return response.Created(c, fmt.Sprintf("entry recorded: %s", tx.TransactionCode), toResponse(tx, nil))
 }
 
 func (h *handler) recordExit(c *fiber.Ctx) error {
@@ -165,13 +182,25 @@ func (h *handler) recordExit(c *fiber.Ctx) error {
 		return response.BadRequest(c, "validation failed", errs)
 	}
 
+	// Save photo if provided via multipart — non-fatal if absent or not multipart.
+	if form, err := c.MultipartForm(); err == nil {
+		if files := form.File["photo"]; len(files) > 0 {
+			publicURL, volumePath, err := photo.Save(files[0], "exit", h.storageDir, h.ocrPrefix)
+			if err != nil {
+				return response.InternalError(c, "failed to save exit photo")
+			}
+			req.ExitPhotoURL = publicURL
+			req.ExitPhotoPath = volumePath
+		}
+	}
+
 	operatorID := middleware.GetUserID(c)
 
 	tx, err := h.svc.RecordExit(c.Context(), id, req, operatorID)
 	if err != nil {
 		return err
 	}
-	return response.Success(c, fmt.Sprintf("exit recorded, fee: Rp%d", *tx.CalculatedFee), toResponse(tx))
+	return response.Success(c, fmt.Sprintf("exit recorded, fee: Rp%d", *tx.CalculatedFee), toResponse(tx, nil))
 }
 
 func (h *handler) cancel(c *fiber.Ctx) error {
@@ -194,5 +223,5 @@ func (h *handler) cancel(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return response.Success(c, "transaction cancelled", toResponse(tx))
+	return response.Success(c, "transaction cancelled", toResponse(tx, nil))
 }

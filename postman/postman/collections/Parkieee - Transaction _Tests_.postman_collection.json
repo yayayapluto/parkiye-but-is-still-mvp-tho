@@ -1,0 +1,1926 @@
+{
+  "info": {
+    "_postman_id": "8d49aef1-7e9d-42d2-841e-aeca0d4e689e",
+    "name": "Parkieee - Transaction (Tests)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Entry",
+      "item": [
+        {
+          "name": "Entry RFID - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "8d883876-361b-4b66-a930-b42b0adcdcff",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json().data;",
+                  "pm.test('status open', () => pm.expect(d.status).to.eql('open'));",
+                  "pm.test('entry_method rfid', () => pm.expect(d.entry_method).to.eql('rfid'));",
+                  "pm.test('transaction_code format PKR-', () => pm.expect(d.transaction_code).to.match(/^PKR-\\d{8}-\\d{5}$/));",
+                  "pm.test('rfid_card_id ada', () => pm.expect(d.rfid_card_id).to.be.a('string'));",
+                  "pm.collectionVariables.set('txId', d.id);",
+                  "pm.collectionVariables.set('txCode', d.transaction_code);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "edbbf43b-4700-42af-a3f2-4723cfb5541a",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "fcb0aeef-9a24-4fe6-b23f-6ea4abc411a8",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entry_gate_id\": \"{{entry_gate_id}}\",\n  \"entry_method\": \"rfid\",\n  \"rfid_card_uid\": \"{{rfid_card_uid}}\",\n  \"entry_photo_url\": \"https://storage.parkieee.local/photos/test.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/entry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "entry"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Entry RFID - Double Entry (kartu sama sudah open) → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "5d2a25d4-9553-499c-ad5e-2fb1533af1bb",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error code CONFLICT', () => pm.expect(pm.response.json().meta.code).to.eql('CONFLICT'));"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "430eb86a-79c9-4464-b55c-7c40b976a13e",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "8c72f9d9-c504-472a-af64-ae93490c4e87",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entry_gate_id\": \"{{entry_gate_id}}\",\n  \"entry_method\": \"rfid\",\n  \"rfid_card_uid\": \"{{rfid_card_uid}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/entry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "entry"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Entry QR - Happy Path (kartu berbeda)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "3543c765-e2a2-4945-8806-86e1549683c7",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json().data;",
+                  "pm.test('entry_method qr', () => pm.expect(d.entry_method).to.eql('qr'));",
+                  "pm.test('entry_qr_code ada', () => pm.expect(d.entry_qr_code).to.be.a('string'));",
+                  "pm.collectionVariables.set('txIdQR', d.id);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "e7fa9ce8-cf4c-407c-974a-29ae6ea7a452",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "18ce2e32-db4a-480f-89ce-7f83c460718b",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entry_gate_id\": \"{{entry_gate_id}}\",\n  \"entry_method\": \"qr\",\n  \"entry_qr_code\": \"QR-PARKIEEE-TEST-001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/entry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "entry"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Entry - entry_method tidak valid → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "fdb7cb05-0e78-483b-9827-ad6531ff1202",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "d6dcca22-16a9-458a-b0a7-dc230cb7dfe9",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "418a04b4-92b0-4fc7-a461-ec8720997de2",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entry_gate_id\": \"{{entry_gate_id}}\",\n  \"entry_method\": \"nfc\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/entry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "entry"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Entry - rfid_card_uid kosong padahal method rfid → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "bacd6c50-ab2d-4063-8ecf-6b6768072139",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "7c010b27-b2c8-4244-8837-755ee7c9d76c",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "78e3669a-bdf3-4688-b0d3-da3e10568730",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entry_gate_id\": \"{{entry_gate_id}}\",\n  \"entry_method\": \"rfid\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/entry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "entry"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Entry - RFID card tidak aktif → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "65647c07-0a3d-4c38-93ef-b29f5d18a2b9",
+                "exec": [
+                  "pm.test('status 400 atau 404', () => pm.expect([400, 404]).to.include(pm.response.code));"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "8d7e1399-543b-44fb-b47c-8d4a9e7353c7",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "8bcdc336-7f58-4396-8d55-3e3389f36638",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entry_gate_id\": \"{{entry_gate_id}}\",\n  \"entry_method\": \"rfid\",\n  \"rfid_card_uid\": \"UID-TIDAK-ADA-XYZ\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/entry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "entry"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Entry - gate_id tidak ada → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "85d98adb-c598-4669-bbe2-ea0240d1a7c0",
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "b4065f87-478f-46b0-bd8e-6005d98650ac",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "ddfafb30-3080-43a7-980e-92049181a08b",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entry_gate_id\": \"00000000-0000-0000-0000-000000000000\",\n  \"entry_method\": \"rfid\",\n  \"rfid_card_uid\": \"AA:BB:CC:77\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/entry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "entry"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Entry - Tanpa Auth → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "9950d547-dbb0-4006-84ae-3cb08708fa31",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "6003cd67-9298-4e65-b4a9-76bd0b77357b",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "644a7599-3f64-4c7c-9218-60c930b276c9",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entry_gate_id\": \"{{entry_gate_id}}\",\n  \"entry_method\": \"rfid\",\n  \"rfid_card_uid\": \"AA:BB:CC:77\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/entry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "entry"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "4880e09c-a4cf-4dc6-ab48-80b354be7876",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "id": "55035415-befb-4a53-abd7-082174d7522b",
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              "const base  = pm.collectionVariables.get('baseUrl');\r",
+              "const token = pm.collectionVariables.get('token');\r",
+              "const auth  = { Authorization: 'Bearer ' + token };\r",
+              "\r",
+              "pm.sendRequest({ url: base + '/zones?active=true&page=1&page_size=20', method: 'GET', header: auth },\r",
+              "  (err, zonesRes) => {\r",
+              "    const zones = zonesRes.json().data;\r",
+              "    if (!zones || !zones.length) { console.error('NO ZONES'); return; }\r",
+              "\r",
+              "    const zone = zones[0];\r",
+              "    pm.collectionVariables.set('zone_id', zone.id);\r",
+              "\r",
+              "    pm.sendRequest({ url: `${base}/zones/${zone.id}/gates?active=true`, method: 'GET', header: auth },\r",
+              "      (err2, gatesRes) => {\r",
+              "        const gates = gatesRes.json().data || [];\r",
+              "        const entry = gates.find(g => g.gate_type === 'entry');\r",
+              "        const exit  = gates.find(g => g.gate_type === 'exit');\r",
+              "        if (entry) pm.collectionVariables.set('entry_gate_id', entry.id);\r",
+              "        if (exit)  pm.collectionVariables.set('exit_gate_id', exit.id);\r",
+              "        console.log('entry_gate_id:', entry ? entry.id : 'NOT FOUND');\r",
+              "\r",
+              "        // ✅ correct endpoint: /rfid/cards\r",
+              "        pm.sendRequest({ url: base + '/rfid/cards?active=true&page=1&page_size=5', method: 'GET', header: auth },\r",
+              "          (err3, rfidRes) => {\r",
+              "            const cards = rfidRes.json().data || [];\r",
+              "            if (cards.length) {\r",
+              "              pm.collectionVariables.set('rfid_card_uid', cards[0].card_uid);\r",
+              "              console.log('rfid_card_uid:', cards[0].card_uid);\r",
+              "            } else {\r",
+              "              console.error('no active rfid cards');\r",
+              "            }\r",
+              "          }\r",
+              "        );\r",
+              "      }\r",
+              "    );\r",
+              "  }\r",
+              ");"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "id": "2e4fff74-a0f9-4aed-b341-ceec3bb93aa5",
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Read",
+      "item": [
+        {
+          "name": "Get by ID - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('id sesuai', () => pm.expect(pm.response.json().data.id).to.eql(pm.collectionVariables.get('txId')));"
+                ],
+                "type": "text/javascript",
+                "id": "ec2a5f43-f6f5-40c8-a140-fff5e4000b67"
+              }
+            }
+          ],
+          "id": "14467402-51a7-4294-8022-6cd984244fe6",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{txId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{txId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get by ID - Tidak Ada → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript",
+                "id": "2e84e6d2-588b-4efc-abc2-234bf392b3e9"
+              }
+            }
+          ],
+          "id": "6d1e9c52-f258-4aec-abfd-44d3366087f0",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/00000000-0000-0000-0000-000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "00000000-0000-0000-0000-000000000000"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get by ID - Bukan UUID → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "60631186-b5f7-4a17-9d68-60cc6dcd0e22"
+              }
+            }
+          ],
+          "id": "c0af60a8-c3c3-490b-aa8e-815c7dc10d84",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/bukan-uuid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "bukan-uuid"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get by Code - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('code sesuai', () => pm.expect(pm.response.json().data.transaction_code).to.eql(pm.collectionVariables.get('txCode')));"
+                ],
+                "type": "text/javascript",
+                "id": "cf1cf55c-5802-4984-9c3a-effd21c641c1"
+              }
+            }
+          ],
+          "id": "19e6971e-5e14-4413-979e-32dc445d061d",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/code/{{txCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "code",
+                "{{txCode}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get by Code - Tidak Ada → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript",
+                "id": "30fc470b-3a71-47b0-9536-2da36f0b11e7"
+              }
+            }
+          ],
+          "id": "921b97f9-b5a5-4464-92b2-458e97fe5c2f",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/code/PKR-00000000-99999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "code",
+                "PKR-00000000-99999"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Logs - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('data array', () => pm.expect(pm.response.json().data).to.be.an('array'));",
+                  "pm.test('ada log entry_created', () => {",
+                  "  const events = pm.response.json().data.map(l => l.event);",
+                  "  pm.expect(events).to.include('entry_created');",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "id": "ec8709f7-4cdc-4ba7-83a5-ace1b8ed36e1"
+              }
+            }
+          ],
+          "id": "792e975c-f3ac-4937-a6bb-5ca5ebd314c3",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{txId}}/logs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{txId}}",
+                "logs"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List - Tanpa Filter (paginated)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('pagination ada', () => pm.expect(pm.response.json().pagination).to.exist);",
+                  "pm.test('data array', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+                ],
+                "type": "text/javascript",
+                "id": "d3668ac7-cb5e-4eba-b462-0c5b7fc1f3e5"
+              }
+            }
+          ],
+          "id": "a6488df1-3219-42c3-94cc-9bce19aab9d7",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "?page=1&page_size=10",
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List - Filter status=open",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "01ef5015-9773-469d-947d-6467e89ee76c",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('semua status open', () => {",
+                  "  pm.response.json().data.forEach(t => pm.expect(t.status).to.eql('open'));",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "1f18f21c-5142-4afc-b330-7bf63cf7736d",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "97a6fbd1-0916-4e52-99f4-b3f5aefcde24",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions?status=open",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "open",
+                  "uuid": "b48c868e-17a5-48da-8c32-61d2a3d088ec"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List - Filter date_from invalid → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "465be80d-2bb2-4df9-b151-68db37ae8648",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "0af0434e-3dd8-4400-b261-482312e65836",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "c9274602-c6f9-4fb2-b95c-cb1d5a152796",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions?date_from=bukan-tanggal",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "date_from",
+                  "value": "bukan-tanggal",
+                  "uuid": "c877239b-5a63-41fd-80b6-33287af395f5"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "3f4b0816-8fb3-4492-8aa8-10187837df7c"
+    },
+    {
+      "name": "Exit",
+      "item": [
+        {
+          "name": "Exit RFID - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "72e4ccf8-c371-427e-b3eb-af91ea5b38e4",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json().data;",
+                  "pm.test('status awaiting_payment', () => pm.expect(d.status).to.eql('awaiting_payment'));",
+                  "pm.test('calculated_fee ada', () => pm.expect(d.calculated_fee).to.be.a('number'));",
+                  "pm.test('exit_at ada', () => pm.expect(d.exit_at).to.exist);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "9e684ea3-f2d5-4597-b5a1-42d75c183133",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "bb7f7bc0-8a35-4fa8-9d7f-06abda13f1ca",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exit_gate_id\": \"{{exit_gate_id}}\",\n  \"exit_method\": \"rfid\",\n  \"rfid_card_uid\": \"{{rfid_card_uid}}\",\n  \"vehicle_type_id\": \"{{vehicleTypeId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{txId}}/exit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{txId}}",
+                "exit"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Exit - Transaksi sudah awaiting_payment (sudah exit) → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "5ed74ac6-1f7e-4922-af61-fc7eb568f83c",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "a4fdf43a-06ab-4bc4-870b-912a95bc1aef",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "44157010-5fef-4729-9b13-276ae2bc60ff",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exit_gate_id\": \"{{exit_gate_id}}\",\n  \"exit_method\": \"rfid\",\n  \"rfid_card_uid\": \"{{rfid_card_uid}}\",\n  \"vehicle_type_id\": \"{{vehicleTypeId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{txId}}/exit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{txId}}",
+                "exit"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Exit QR - Happy Path (dari tx QR tadi)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('status awaiting_payment', () => pm.expect(pm.response.json().data.status).to.eql('awaiting_payment'));"
+                ],
+                "type": "text/javascript",
+                "id": "b11a7eba-5a8a-4fb2-8fa8-c83b26e8bc23"
+              }
+            }
+          ],
+          "id": "c1baa54f-7b20-441e-b99d-b489c4c6f453",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exit_gate_id\": \"{{exit_gate_id}}\",\n  \"exit_method\": \"qr\",\n  \"vehicle_type_id\": \"{{vehicleTypeId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{txIdQR}}/exit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{txIdQR}}",
+                "exit"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Exit - Gate bukan exit gate → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "90c135d4-25b7-4429-b55d-fc640fc8e536"
+              }
+            }
+          ],
+          "id": "2001ad58-a0d0-4519-bdcb-c2292fb7734b",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exit_gate_id\": \"{{entry_gate_id}}\",\n  \"exit_method\": \"qr\",\n  \"vehicle_type_id\": \"{{vehicleTypeId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{txId}}/exit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{txId}}",
+                "exit"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Exit - RFID card mismatch (beda dari entry) → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "4e28bb43-71c3-4413-8daf-b6ae46961a48"
+              }
+            }
+          ],
+          "id": "4bce6e3e-829e-4163-aa08-1f7329282c65",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exit_gate_id\": \"{{exit_gate_id}}\",\n  \"exit_method\": \"rfid\",\n  \"rfid_card_uid\": \"BEDA:KARTU:XY:ZZ\",\n  \"vehicle_type_id\": \"{{vehicleTypeId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{txId}}/exit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{txId}}",
+                "exit"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Exit - vehicle_type_id wajib ketika kendaraan belum di-link → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "3b56e1a0-83a8-4e21-8919-3ec280125709",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "e95955dc-94b8-430a-875a-6004fcc11e2c",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "86c66afa-38a5-40bd-9163-d1af4d853536",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exit_gate_id\": \"{{exit_gate_id}}\",\n  \"exit_method\": \"qr\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{txId}}/exit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{txId}}",
+                "exit"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Exit - exit_method tidak valid → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "f1823a3e-f160-4ce0-a60a-59dece28b8ba",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "318062a4-38ea-4912-8b63-1ecffa9eba8a",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "e41e3674-15b1-4d1b-a99a-ac286e960856",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exit_gate_id\": \"{{exit_gate_id}}\",\n  \"exit_method\": \"nfc\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{txId}}/exit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{txId}}",
+                "exit"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Exit - Tx tidak ada → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "f50f4a07-78bd-4d07-ae15-75ddd664f9dd",
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "40aad548-20b2-4243-a1e6-55a270e36812",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "3f35fd8d-74c6-4bc9-bb4a-711626d01b6f",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exit_gate_id\": \"{{exit_gate_id}}\",\n  \"exit_method\": \"qr\",\n  \"vehicle_type_id\": \"{{vehicleTypeId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/00000000-0000-0000-0000-000000000000/exit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "00000000-0000-0000-0000-000000000000",
+                "exit"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "eaafffdf-b125-4d5f-9961-c8857e7a31a2"
+    },
+    {
+      "name": "Cancel",
+      "item": [
+        {
+          "name": "[Setup] Buat tx baru untuk cancel",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('txId', pm.response.json().data.id);"
+                ],
+                "type": "text/javascript",
+                "id": "ccd34459-6fd8-483d-940c-6d834dd0f37b"
+              }
+            }
+          ],
+          "id": "80dfa27e-37ec-42cc-9d8f-36e81f32692b",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entry_gate_id\": \"{{entry_gate_id}}\",\n  \"entry_method\": \"qr\",\n  \"entry_qr_code\": \"QR-CANCEL-TEST-XYZ\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/entry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "entry"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('status cancelled', () => pm.expect(pm.response.json().data.status).to.eql('cancelled'));"
+                ],
+                "type": "text/javascript",
+                "id": "0b93bb63-b6ec-4fbd-9bce-780df32593aa"
+              }
+            }
+          ],
+          "id": "7be93049-f6cd-4412-b683-987af31ca0b8",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Kendaraan tidak jadi masuk ke area parkir\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{txId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{txId}}",
+                "cancel"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel - Sudah Cancelled → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "4d772c33-0eb1-4f94-94d4-60571b86b217"
+              }
+            }
+          ],
+          "id": "5dfc5d35-8285-4fe3-8a67-42ae391b615b",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"coba cancel lagi\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{txId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{txId}}",
+                "cancel"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel - Reason terlalu pendek (< 5 char) → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript",
+                "id": "83cba7d5-6986-4f72-b3c3-e0088d0ff01e"
+              }
+            }
+          ],
+          "id": "84d5dd0e-eca7-46b8-980b-ffd760f7fece",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"ok\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{txId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{txId}}",
+                "cancel"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel - Tx Tidak Ada → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript",
+                "id": "c0c76962-e164-4f08-a020-58e9090921d5"
+              }
+            }
+          ],
+          "id": "7ec9ca80-38d7-470b-8e06-b2734a7ff3f1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Kendaraan tidak jadi masuk\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/00000000-0000-0000-0000-000000000000/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "00000000-0000-0000-0000-000000000000",
+                "cancel"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel - Tanpa Auth → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript",
+                "id": "dbc066a4-94b8-4368-be93-a50f53f2f459"
+              }
+            }
+          ],
+          "id": "019ae67f-d3e3-4029-a20c-4b78c48ab78a",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"tidak ada token\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{txId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{txId}}",
+                "cancel"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "7b447e6c-9c9d-4151-bebb-47877f2fbc09"
+    },
+    {
+      "name": "[Setup] Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('token', pm.response.json().data.token);"
+            ],
+            "type": "text/javascript",
+            "id": "d1f16ce0-6caa-4648-8940-eb3abcecbeda"
+          }
+        }
+      ],
+      "id": "31d76527-3900-4dac-950f-4ab8ba5e4ff1",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@parkieee.local\",\n  \"password\": \"Admin@123!\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "[Setup] Ambil entry gate (type=entry)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "id": "481baa4b-365c-4c22-bdf8-ae08c725a2c1",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json().data;",
+              "if (data && data.length > 0) {",
+              "  pm.collectionVariables.set('entry_gate_id', data[0].id);",
+              "  pm.collectionVariables.set('zoneId', data[0].zone_id);",
+              "}"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "id": "3bcb8ff2-b07f-429f-9e98-6399b73b07dd",
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "id": "bdf06dd7-dfa0-4e68-be1f-2cef3e5df4b4",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/zones/{{zoneId}}/gates?active=true&page=1&page_size=5",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "zones",
+            "{{zoneId}}",
+            "gates"
+          ],
+          "query": [
+            {
+              "key": "active",
+              "value": "true",
+              "uuid": "dba80f6c-83ec-44f6-aa30-30a009d9c3e3"
+            },
+            {
+              "key": "page",
+              "value": "1",
+              "uuid": "c5b4a826-3b7d-4022-96d6-a82e2d0369d7"
+            },
+            {
+              "key": "page_size",
+              "value": "5",
+              "uuid": "acbc8a22-a212-4f61-99c1-d814ba24828a"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "[Setup] Register RFID card",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 201', () => pm.response.to.have.status(201));"
+            ],
+            "type": "text/javascript",
+            "id": "d34d440a-ff6b-4f7a-9992-7e03d5674cba"
+          }
+        }
+      ],
+      "id": "7f56ff47-19b2-4350-8c15-3a68414cee23",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"card_uid\": \"AA:BB:CC:77\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/rfid/cards",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "rfid",
+            "cards"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "[Setup] Ambil vehicle type id",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json().data;",
+              "if (data && data.length > 0) {",
+              "  pm.collectionVariables.set('vehicleTypeId', data[0].id);",
+              "}"
+            ],
+            "type": "text/javascript",
+            "id": "005e9ada-0e50-421c-9bf3-e8545415b7d6"
+          }
+        }
+      ],
+      "id": "5e0d0f00-d530-456e-9de0-df52c1ff8186",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/vehicle-types",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "vehicle-types"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "id": "b7080960-98bc-481a-a562-55b32a9cd3d4",
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1"
+    },
+    {
+      "id": "529a8762-c488-431c-a8e5-0936df522dff",
+      "key": "token",
+      "value": ""
+    },
+    {
+      "id": "2f12f329-058f-4e00-b53a-1331154627d8",
+      "key": "txId",
+      "value": ""
+    },
+    {
+      "id": "3f6c511b-6549-46e9-8e52-ae03aad7aa78",
+      "key": "txIdQR",
+      "value": ""
+    },
+    {
+      "id": "378d4e47-5325-416d-a81e-b5baa600fee7",
+      "key": "txCode",
+      "value": ""
+    },
+    {
+      "id": "b2e8bcd2-7680-4008-b7a7-1bfe81e0faf2",
+      "key": "entry_gate_id",
+      "value": ""
+    },
+    {
+      "id": "3f4f9fd8-7b5d-47bc-8330-0a90eeb9853e",
+      "key": "exit_gate_id",
+      "value": ""
+    },
+    {
+      "id": "9ab56ff5-4524-47d9-b880-438ab6c51fb8",
+      "key": "wrongGateId",
+      "value": ""
+    },
+    {
+      "id": "56ff28b4-5e53-456f-99d1-53189c5c6536",
+      "key": "rfidCardUID",
+      "value": "AA:BB:CC:77"
+    },
+    {
+      "id": "9206c992-a54e-4a22-afbc-82bffc15e702",
+      "key": "vehicleTypeId",
+      "value": ""
+    },
+    {
+      "id": "adddac2a-ea0a-4ea7-82f3-de6f2cf6c657",
+      "key": "zoneId",
+      "value": ""
+    },
+    {
+      "id": "caba258b-ec06-4910-8769-9dbc2646043e",
+      "key": "rfid_card_uid",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "id": "2f0f697b-d433-4ec4-89dc-11122307c382",
+      "key": "zone_id",
+      "value": ""
+    },
+    {
+      "id": "24b18114-59eb-490d-b19c-7af51c7ca630",
+      "key": "entryGateId",
+      "value": ""
+    },
+    {
+      "id": "28a895c2-2aed-4999-867f-51ece57a6e2c",
+      "key": "exitGateId",
+      "value": ""
+    }
+  ]
+}

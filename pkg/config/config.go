@@ -15,6 +15,8 @@ import (
 
 type Config struct {
 	App       AppConfig
+	Storage   StorageConfig
+	OCR       OCRConfig
 	Database  DatabaseConfig
 	JWT       JWTConfig
 	Server    ServerConfig
@@ -30,6 +32,19 @@ type AppConfig struct {
 	URL       string // base URL, e.g. http://localhost:8080
 	PlaceName string // PLACE_NAME, shown on parking ticket
 	QRSecret  string // QR_SECRET, used to obfuscate ticket filenames
+}
+
+type StorageConfig struct {
+	Dir           string // STORAGE_DIR: local path where photos are written
+	OCRPathPrefix string // OCR_STORAGE_PREFIX: path prefix as seen inside the OCR container
+}
+
+type OCRConfig struct {
+	Enabled             bool          // OCR_ENABLED
+	APIURL              string        // OCR_API_URL, e.g. http://python-ocr:8000
+	Timeout             time.Duration // OCR_TIMEOUT, e.g. 10s
+	MaxRetries          int           // OCR_MAX_RETRIES
+	AutoAcceptThreshold float64       // OCR_AUTO_ACCEPT_THRESHOLD: min confidence to auto-verify (default 0.80)
 }
 
 type DatabaseConfig struct {
@@ -97,6 +112,17 @@ func LoadEnv(files ...string) {
 
 func Load() (*Config, error) {
 	cfg := &Config{
+		Storage: StorageConfig{
+			Dir:           getEnv("STORAGE_DIR", "./storage/photos"),
+			OCRPathPrefix: getEnv("OCR_STORAGE_PREFIX", ""),
+		},
+		OCR: OCRConfig{
+			Enabled:             getEnvBool("OCR_ENABLED", true),
+			APIURL:              getEnv("OCR_API_URL", "http://localhost:8000"),
+			Timeout:             getEnvDuration("OCR_TIMEOUT", 15*time.Second),
+			MaxRetries:          getEnvInt("OCR_MAX_RETRIES", 2),
+			AutoAcceptThreshold: getEnvFloat64("OCR_AUTO_ACCEPT_THRESHOLD", 0.80),
+		},
 		App: AppConfig{
 			Name:      getEnv("APP_NAME", "parkieee"),
 			Env:       getEnv("APP_ENV", "development"),
@@ -252,6 +278,18 @@ func getEnvDuration(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return d
+}
+
+func getEnvFloat64(key string, fallback float64) float64 {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return fallback
+	}
+	return f
 }
 
 func getEnvStringSlice(key string, fallback []string) []string {

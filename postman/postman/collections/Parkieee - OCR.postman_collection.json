@@ -1,0 +1,1241 @@
+{
+  "info": {
+    "_postman_id": "94c624ef-4703-42ab-864a-38680e98cc12",
+    "name": "Parkieee - OCR",
+    "description": "Collection untuk test flow OCR: entry dengan foto → exit dengan foto → verifikasi auto_match_result di review log.\n\nPastikan:\n- Server Go-Api berjalan di baseUrl\n- Python OCR service berjalan (atau OCR disabled di .env untuk test tanpa OCR)\n- Sudah ada zone aktif dengan entry gate + exit gate\n- Sudah ada vehicle type",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "🔐 Setup",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Kosongkan token lama setiap kali login ulang",
+                  "pm.collectionVariables.set('token', '');"
+                ],
+                "id": "74d3b163-3e70-4566-9580-a483c9da7373"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login berhasil - status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const json = pm.response.json();",
+                  "pm.test('Response punya token', () => pm.expect(json.data).to.have.property('token'));",
+                  "",
+                  "if (json.data && json.data.token) {",
+                  "  pm.collectionVariables.set('token', json.data.token);",
+                  "  console.log('✅ Token berhasil disimpan');",
+                  "} else {",
+                  "  console.error('❌ Token tidak ditemukan di response');",
+                  "}"
+                ],
+                "id": "621bde3e-24d9-4c3a-8937-993affdc7e59"
+              }
+            }
+          ],
+          "id": "7783bae6-47ae-47fc-a8dc-9eb25df4de0f",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@parkieee.local\",\n  \"password\": \"Admin@123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Ambil Prerequisites (Zone, Gate, Vehicle Type, RFID)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Pastikan token sudah ada sebelum lanjut",
+                  "const token = pm.collectionVariables.get('token');",
+                  "if (!token) {",
+                  "  throw new Error('❌ Token kosong! Jalankan request Login dulu.');",
+                  "}"
+                ],
+                "id": "dd6f92e0-bde9-4ef3-a49b-0f177619fe11"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Request ini hanya sebagai trigger — logic ada di pre-request folder-level",
+                  "// Semua variable di-set lewat pm.sendRequest di bawah",
+                  "",
+                  "const base  = pm.collectionVariables.get('baseUrl');",
+                  "const auth  = { Authorization: 'Bearer ' + pm.collectionVariables.get('token') };",
+                  "",
+                  "// 1. Ambil zone aktif",
+                  "pm.sendRequest({ url: base + '/zones?active=true&page=1&page_size=5', method: 'GET', header: auth },",
+                  "  (err, zonesRes) => {",
+                  "    if (err) { console.error('Gagal ambil zones:', err); return; }",
+                  "    const zones = zonesRes.json().data;",
+                  "    if (!zones || !zones.length) { console.error('❌ Tidak ada zone aktif'); return; }",
+                  "",
+                  "    const zone = zones[0];",
+                  "    pm.collectionVariables.set('zone_id', zone.id);",
+                  "    console.log('zone_id:', zone.id, '|', zone.name);",
+                  "",
+                  "    // 2. Ambil gates dari zone",
+                  "    pm.sendRequest({ url: `${base}/zones/${zone.id}/gates?active=true&page_size=20`, method: 'GET', header: auth },",
+                  "      (err2, gatesRes) => {",
+                  "        if (err2) { console.error('Gagal ambil gates:', err2); return; }",
+                  "        const gates = gatesRes.json().data || [];",
+                  "        const entry = gates.find(g => g.gate_type === 'entry');",
+                  "        const exit  = gates.find(g => g.gate_type === 'exit');",
+                  "",
+                  "        if (entry) {",
+                  "          pm.collectionVariables.set('entry_gate_id', entry.id);",
+                  "          console.log('entry_gate_id:', entry.id, '|', entry.name);",
+                  "        } else {",
+                  "          console.error('❌ Tidak ada entry gate aktif di zone ini');",
+                  "        }",
+                  "        if (exit) {",
+                  "          pm.collectionVariables.set('exit_gate_id', exit.id);",
+                  "          console.log('exit_gate_id:', exit.id, '|', exit.name);",
+                  "        } else {",
+                  "          console.error('❌ Tidak ada exit gate aktif di zone ini');",
+                  "        }",
+                  "      }",
+                  "    );",
+                  "  }",
+                  ");",
+                  "",
+                  "// 3. Ambil vehicle type",
+                  "pm.sendRequest({ url: base + '/vehicle-types?page=1&page_size=5', method: 'GET', header: auth },",
+                  "  (err, vtRes) => {",
+                  "    if (err) { console.error('Gagal ambil vehicle types:', err); return; }",
+                  "    const vt = vtRes.json().data;",
+                  "    if (vt && vt.length) {",
+                  "      pm.collectionVariables.set('vehicle_type_id', vt[0].id);",
+                  "      console.log('vehicle_type_id:', vt[0].id, '|', vt[0].name);",
+                  "    } else {",
+                  "      console.error('❌ Tidak ada vehicle type');",
+                  "    }",
+                  "  }",
+                  ");",
+                  "",
+                  "// 4. Cek / daftarkan RFID card untuk test",
+                  "const rfidUID = pm.collectionVariables.get('rfid_card_uid');",
+                  "pm.sendRequest({",
+                  "  url: base + '/rfid/cards',",
+                  "  method: 'POST',",
+                  "  header: { ...auth, 'Content-Type': 'application/json' },",
+                  "  body: { mode: 'raw', raw: JSON.stringify({ card_uid: rfidUID }) }",
+                  "}, (err, rfidRes) => {",
+                  "  if (err) { console.error('Gagal register RFID:', err); return; }",
+                  "  const status = rfidRes.code;",
+                  "  if (status === 201) {",
+                  "    console.log('✅ RFID card baru didaftarkan:', rfidUID);",
+                  "  } else if (status === 409) {",
+                  "    console.log('ℹ️ RFID card sudah ada (409), lanjut pakai yang existing');",
+                  "  } else {",
+                  "    console.warn('RFID register response:', status, rfidRes.text());",
+                  "  }",
+                  "});"
+                ],
+                "id": "29190d1a-8d1d-44f7-aa53-5ace7e567c21"
+              }
+            }
+          ],
+          "id": "9cb2908a-ef8d-48f4-80e1-556c1c2a9baf",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/zones?active=true&page=1&page_size=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "zones"
+              ],
+              "query": [
+                {
+                  "key": "active",
+                  "value": "true"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "1"
+                }
+              ]
+            },
+            "description": "Request ini memicu pre-request script yang mengambil zone, gates, vehicle type, dan mendaftarkan RFID card sekaligus. Cek Console untuk log hasilnya."
+          },
+          "response": []
+        }
+      ],
+      "id": "03aaf9e9-0cc5-4f49-b4ad-89f689879172"
+    },
+    {
+      "name": "📸 Entry dengan Foto (OCR Trigger)",
+      "item": [
+        {
+          "name": "Entry RFID + Foto (OCR akan jalan async)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Guard: pastikan prerequisite sudah di-set",
+                  "const required = ['token', 'entry_gate_id', 'rfid_card_uid'];",
+                  "required.forEach(key => {",
+                  "  const val = pm.collectionVariables.get(key);",
+                  "  if (!val) throw new Error(`❌ Variable '${key}' belum di-set. Jalankan Setup dulu.`);",
+                  "});"
+                ],
+                "id": "65ecdb5e-977c-49eb-b58d-25e271d540b5"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201 - Entry berhasil', () => pm.response.to.have.status(201));",
+                  "",
+                  "const d = pm.response.json().data;",
+                  "",
+                  "pm.test('Status transaksi = open', () => pm.expect(d.status).to.eql('open'));",
+                  "pm.test('Entry method = rfid', () => pm.expect(d.entry_method).to.eql('rfid'));",
+                  "pm.test('Transaction code format PKR-YYYYMMDD-NNNNN', () =>",
+                  "  pm.expect(d.transaction_code).to.match(/^PKR-\\d{8}-\\d{5}$/)",
+                  ");",
+                  "pm.test('rfid_card_id ada', () => pm.expect(d.rfid_card_id).to.be.a('string'));",
+                  "pm.test('zone_id ada', () => pm.expect(d.zone_id).to.be.a('string'));",
+                  "",
+                  "// Simpan tx_id untuk request selanjutnya",
+                  "pm.collectionVariables.set('tx_id', d.id);",
+                  "console.log('✅ tx_id tersimpan:', d.id);",
+                  "console.log('ℹ️ OCR job akan berjalan async di background — vehicle_id akan terisi setelah OCR selesai');"
+                ],
+                "id": "6ce50793-1ec5-4eb9-ac52-1440029d9160"
+              }
+            }
+          ],
+          "id": "71d5587b-4a36-4875-a7ce-3109f77f4452",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "entry_gate_id",
+                  "value": "{{entry_gate_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "entry_method",
+                  "value": "rfid",
+                  "type": "text"
+                },
+                {
+                  "key": "rfid_card_uid",
+                  "value": "{{rfid_card_uid}}",
+                  "type": "text"
+                },
+                {
+                  "key": "photo",
+                  "type": "file",
+                  "description": "Upload foto plat nomor kendaraan masuk (opsional — jika tidak diisi OCR tidak akan trigger)",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/entry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "entry"
+              ]
+            },
+            "description": "Entry via RFID. Jika field 'photo' diisi dengan file gambar, OCR akan dijalankan secara async di background setelah response dikembalikan."
+          },
+          "response": []
+        },
+        {
+          "name": "Entry QR + Foto (untuk test match nanti)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const required = ['token', 'entry_gate_id'];",
+                  "required.forEach(key => {",
+                  "  if (!pm.collectionVariables.get(key))",
+                  "    throw new Error(`❌ '${key}' belum di-set`);",
+                  "});"
+                ],
+                "id": "a0062d5b-20b6-48a2-a173-4572ded41bd4"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "",
+                  "const d = pm.response.json().data;",
+                  "pm.test('Entry method = qr', () => pm.expect(d.entry_method).to.eql('qr'));",
+                  "pm.test('entry_qr_code ada', () => pm.expect(d.entry_qr_code).to.be.a('string'));",
+                  "pm.test('entry_qr_code_image ada', () => pm.expect(d.entry_qr_code_image).to.be.a('string'));",
+                  "",
+                  "pm.collectionVariables.set('tx_id_qr', d.id);",
+                  "console.log('✅ tx_id_qr tersimpan:', d.id);"
+                ],
+                "id": "b6245f33-4565-4fac-98c8-61df6b7f95b5"
+              }
+            }
+          ],
+          "id": "580c0785-6eb8-412e-ae5e-a796f154d253",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "entry_gate_id",
+                  "value": "{{entry_gate_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "entry_method",
+                  "value": "qr",
+                  "type": "text"
+                },
+                {
+                  "key": "photo",
+                  "type": "file",
+                  "description": "Upload foto plat nomor kendaraan masuk",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/entry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "entry"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "de12f9e8-3713-44b7-b082-02ec9e5f6b4b"
+    },
+    {
+      "name": "🔍 Cek Status Transaksi (setelah Entry)",
+      "item": [
+        {
+          "name": "Get Transaction by ID",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('tx_id'))",
+                  "  throw new Error('❌ tx_id belum ada. Jalankan Entry dulu.');"
+                ],
+                "id": "8b7272c9-af32-4b74-b9ba-2c1a0160464e"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const d = pm.response.json().data;",
+                  "pm.test('ID sesuai', () => pm.expect(d.id).to.eql(pm.collectionVariables.get('tx_id')));",
+                  "pm.test('Status masih open', () => pm.expect(d.status).to.eql('open'));",
+                  "",
+                  "// Cek apakah OCR sudah selesai link vehicle",
+                  "if (d.vehicle_id) {",
+                  "  console.log('✅ OCR sudah selesai — vehicle_id:', d.vehicle_id);",
+                  "} else {",
+                  "  console.log('⏳ OCR belum selesai — vehicle_id masih null (normal jika baru saja entry)');",
+                  "}"
+                ],
+                "id": "9ac01fc5-9a18-40bd-97ad-0e413e3e6025"
+              }
+            }
+          ],
+          "id": "785a6131-cf35-4262-afad-e38125d1d8ae",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{tx_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{tx_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Polling: Tunggu vehicle_id terisi (OCR async)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Helper polling: cek apakah vehicle_id sudah terisi",
+                  "// Jalankan manual beberapa kali setelah entry dengan foto,",
+                  "// atau gunakan Collection Runner dengan delay antar request",
+                  "",
+                  "const txId  = pm.collectionVariables.get('tx_id');",
+                  "const base  = pm.collectionVariables.get('baseUrl');",
+                  "const token = pm.collectionVariables.get('token');",
+                  "",
+                  "if (!txId) throw new Error('❌ tx_id belum ada');",
+                  "",
+                  "// Cek sekali via sendRequest sebelum request utama jalan",
+                  "pm.sendRequest({",
+                  "  url: `${base}/transactions/${txId}`,",
+                  "  method: 'GET',",
+                  "  header: { Authorization: 'Bearer ' + token }",
+                  "}, (err, res) => {",
+                  "  if (err) return;",
+                  "  const vehicleId = res.json().data?.vehicle_id;",
+                  "  if (vehicleId) {",
+                  "    console.log('✅ vehicle_id sudah terisi:', vehicleId, '— OCR selesai!');",
+                  "    pm.collectionVariables.set('vehicle_id_from_ocr', vehicleId);",
+                  "  } else {",
+                  "    console.log('⏳ vehicle_id belum terisi — OCR masih berjalan atau foto tidak diupload');",
+                  "  }",
+                  "});"
+                ],
+                "id": "16bc2e29-09f6-43c0-a3de-f34c8e056251"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const d = pm.response.json().data;",
+                  "",
+                  "// Soft assertion: vehicle_id mungkin belum terisi jika OCR masih running",
+                  "if (d.vehicle_id) {",
+                  "  pm.test('✅ vehicle_id terisi (OCR berhasil link kendaraan)', () => {",
+                  "    pm.expect(d.vehicle_id).to.be.a('string');",
+                  "  });",
+                  "  pm.collectionVariables.set('vehicle_id_from_ocr', d.vehicle_id);",
+                  "  console.log('vehicle_id:', d.vehicle_id);",
+                  "} else {",
+                  "  console.warn('⚠️ vehicle_id masih null — OCR belum selesai atau foto tidak diupload. Coba lagi setelah beberapa detik.');",
+                  "}"
+                ],
+                "id": "b7f567af-6e8f-4edd-8fe9-422618036cb7"
+              }
+            }
+          ],
+          "id": "9ccf81c1-7d73-43ff-9dc4-eba33235d323",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{tx_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{tx_id}}"
+              ]
+            },
+            "description": "Jalankan request ini beberapa detik setelah Entry dengan foto. OCR berjalan async — vehicle_id akan terisi setelah OCR selesai memproses gambar."
+          },
+          "response": []
+        }
+      ],
+      "id": "769e5e31-8939-4416-aaa5-d3110a9c4c1f"
+    },
+    {
+      "name": "🚗 Exit dengan Foto (OCR + Plate Match)",
+      "item": [
+        {
+          "name": "Exit RFID + Foto (plate match akan dicek)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const required = ['token', 'tx_id', 'exit_gate_id', 'rfid_card_uid', 'vehicle_type_id'];",
+                  "required.forEach(key => {",
+                  "  if (!pm.collectionVariables.get(key))",
+                  "    throw new Error(`❌ '${key}' belum di-set. Jalankan Setup dan Entry dulu.`);",
+                  "});"
+                ],
+                "id": "8fe76b0e-1f5a-4a84-b5b7-be35a61bb371"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 - Exit berhasil', () => pm.response.to.have.status(200));",
+                  "",
+                  "const d = pm.response.json().data;",
+                  "",
+                  "pm.test('Status = awaiting_payment', () => pm.expect(d.status).to.eql('awaiting_payment'));",
+                  "pm.test('calculated_fee ada dan number', () => pm.expect(d.calculated_fee).to.be.a('number'));",
+                  "pm.test('calculated_fee >= 0', () => pm.expect(d.calculated_fee).to.be.at.least(0));",
+                  "pm.test('exit_at ada', () => pm.expect(d.exit_at).to.exist);",
+                  "pm.test('exit_gate_id ada', () => pm.expect(d.exit_gate_id).to.be.a('string'));",
+                  "",
+                  "console.log('💰 calculated_fee:', d.calculated_fee);",
+                  "console.log('ℹ️ OCR exit akan berjalan async — auto_match_result akan diisi di ocr_review_logs');"
+                ],
+                "id": "c02a6a56-dee5-4856-8f19-9aa13aa38216"
+              }
+            }
+          ],
+          "id": "729d1b30-bc04-47b9-afec-cda8220607fa",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "exit_gate_id",
+                  "value": "{{exit_gate_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "exit_method",
+                  "value": "rfid",
+                  "type": "text"
+                },
+                {
+                  "key": "rfid_card_uid",
+                  "value": "{{rfid_card_uid}}",
+                  "type": "text"
+                },
+                {
+                  "key": "vehicle_type_id",
+                  "value": "{{vehicle_type_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "photo",
+                  "type": "file",
+                  "description": "Upload foto plat nomor kendaraan keluar. Plat ini akan di-compare dengan plat dari OCR entry untuk mengisi auto_match_result.",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{tx_id}}/exit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{tx_id}}",
+                "exit"
+              ]
+            },
+            "description": "Exit via RFID dengan foto. Setelah OCR selesai:\n- Jika plat foto exit == plat foto entry → auto_match_result = true\n- Jika berbeda → auto_match_result = false\n- auto_match_result akan tersimpan di tabel ocr_review_logs"
+          },
+          "response": []
+        },
+        {
+          "name": "Exit QR + Foto",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const required = ['token', 'tx_id_qr', 'exit_gate_id', 'vehicle_type_id'];",
+                  "required.forEach(key => {",
+                  "  if (!pm.collectionVariables.get(key))",
+                  "    throw new Error(`❌ '${key}' belum di-set`);",
+                  "});"
+                ],
+                "id": "e9992486-303b-4a9f-963e-78f4675abce1"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const d = pm.response.json().data;",
+                  "pm.test('Status awaiting_payment', () => pm.expect(d.status).to.eql('awaiting_payment'));",
+                  "pm.test('exit_method = qr', () => pm.expect(d.exit_method).to.eql('qr'));",
+                  "pm.test('calculated_fee ada', () => pm.expect(d.calculated_fee).to.be.a('number'));"
+                ],
+                "id": "37303b4c-f403-4677-8aef-e036880e5eb5"
+              }
+            }
+          ],
+          "id": "d9ac8613-b488-44c4-ade5-088565767c13",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "exit_gate_id",
+                  "value": "{{exit_gate_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "exit_method",
+                  "value": "qr",
+                  "type": "text"
+                },
+                {
+                  "key": "vehicle_type_id",
+                  "value": "{{vehicle_type_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "photo",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{tx_id_qr}}/exit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{tx_id_qr}}",
+                "exit"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "1ae185ee-ffdf-4425-8023-d42680b29ab0"
+    },
+    {
+      "name": "✅ Verifikasi OCR Result",
+      "item": [
+        {
+          "name": "Cek Transaction: vehicle_id terisi setelah exit OCR",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('tx_id'))",
+                  "  throw new Error('❌ tx_id belum ada');"
+                ],
+                "id": "bf8aaa7b-c898-4ee8-9083-f7d080a26e59"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const d = pm.response.json().data;",
+                  "",
+                  "pm.test('Status awaiting_payment (sudah exit)', () =>",
+                  "  pm.expect(d.status).to.eql('awaiting_payment')",
+                  ");",
+                  "",
+                  "if (d.vehicle_id) {",
+                  "  pm.test('✅ vehicle_id terisi - OCR berhasil link kendaraan', () =>",
+                  "    pm.expect(d.vehicle_id).to.be.a('string')",
+                  "  );",
+                  "  console.log('vehicle_id:', d.vehicle_id);",
+                  "  console.log('Cek tabel ocr_review_logs di DB untuk melihat auto_match_result');",
+                  "} else {",
+                  "  console.warn('⚠️ vehicle_id masih null — mungkin:');",
+                  "  console.warn('   1. Foto tidak diupload saat entry/exit');",
+                  "  console.warn('   2. OCR belum selesai (async, tunggu beberapa detik)');",
+                  "  console.warn('   3. OCR disabled di .env (OCR_ENABLED=false)');",
+                  "  console.warn('   4. Python OCR service tidak jalan');",
+                  "}"
+                ],
+                "id": "1c0087ab-4f74-4d6e-afff-3581c58ec409"
+              }
+            }
+          ],
+          "id": "4d43f0da-4417-47ec-8552-31342a8497de",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{tx_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{tx_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cek Transaction Logs (entry_created + payment_initiated)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('tx_id'))",
+                  "  throw new Error('❌ tx_id belum ada');"
+                ],
+                "id": "4e234c3e-3b4c-41d2-a749-6efbdbbad9c2"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const logs = pm.response.json().data;",
+                  "pm.test('Logs adalah array', () => pm.expect(logs).to.be.an('array'));",
+                  "pm.test('Minimal ada 1 log', () => pm.expect(logs.length).to.be.at.least(1));",
+                  "",
+                  "const events = logs.map(l => l.event);",
+                  "console.log('Events di log:', events);",
+                  "",
+                  "pm.test('Ada event entry_created', () => pm.expect(events).to.include('entry_created'));",
+                  "",
+                  "// Cek payment_initiated jika sudah exit",
+                  "if (events.includes('payment_initiated')) {",
+                  "  pm.test('Ada event payment_initiated (sudah exit)', () =>",
+                  "    pm.expect(events).to.include('payment_initiated')",
+                  "  );",
+                  "} else {",
+                  "  console.log('ℹ️ payment_initiated belum ada — transaksi mungkin belum exit');",
+                  "}"
+                ],
+                "id": "681a95b8-70a2-492b-ac49-4c8ef01ef1be"
+              }
+            }
+          ],
+          "id": "7f8f9c2a-d801-4da9-a860-5b3323c30efc",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{tx_id}}/logs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{tx_id}}",
+                "logs"
+              ]
+            },
+            "description": "Cek audit trail transaksi. Untuk cek auto_match_result secara langsung, query DB: SELECT * FROM ocr_review_logs WHERE ocr_result_id IN (SELECT id FROM ocr_results WHERE ocr_job_id IN (SELECT id FROM ocr_jobs WHERE transaction_id = '<tx_id>'));"
+          },
+          "response": []
+        }
+      ],
+      "id": "2729064e-1c8f-4099-bb54-76942f788327"
+    },
+    {
+      "name": "❌ Error Cases",
+      "item": [
+        {
+          "name": "Entry tanpa auth → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ],
+                "id": "f5f2e41d-5309-44c2-bfc1-f55587c8d7d3"
+              }
+            }
+          ],
+          "id": "624e103f-e749-4bba-9a8a-3cd96a247feb",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"entry_gate_id\": \"{{entry_gate_id}}\", \"entry_method\": \"qr\" }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/entry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "entry"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Entry - gate tidak ada → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ],
+                "id": "9f581760-46b1-4b7d-8212-d079eb9a8c96"
+              }
+            }
+          ],
+          "id": "6638fc27-456a-40b4-8772-03da00322468",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entry_gate_id\": \"00000000-0000-0000-0000-000000000000\",\n  \"entry_method\": \"qr\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/entry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "entry"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Entry - entry_method tidak valid → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ],
+                "id": "e07f2578-01c6-4aa3-a6e8-901be243fa2d"
+              }
+            }
+          ],
+          "id": "7e7a8f92-22b0-464c-96f3-25639148ea5a",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entry_gate_id\": \"{{entry_gate_id}}\",\n  \"entry_method\": \"bluetooth\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/entry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "entry"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Entry RFID - RFID UID tidak ada → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error message mention rfid', () =>",
+                  "  pm.expect(pm.response.json().meta.message.toLowerCase()).to.include('rfid')",
+                  ");"
+                ],
+                "id": "e66217ff-a379-427a-a83f-f7dbf4a99146"
+              }
+            }
+          ],
+          "id": "b822c587-1bcd-4f2f-ac5c-7e80947d154b",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entry_gate_id\": \"{{entry_gate_id}}\",\n  \"entry_method\": \"rfid\",\n  \"rfid_card_uid\": \"TIDAK:ADA:SAMA:SEKALI\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/entry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "entry"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Exit - pakai entry gate (bukan exit gate) → 400",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Butuh tx_id yang masih open — setup dulu kalau tx_id sudah awaiting_payment",
+                  "if (!pm.collectionVariables.get('tx_id'))",
+                  "  throw new Error('❌ tx_id belum ada');"
+                ],
+                "id": "928dda7b-7158-48d7-aed4-15a3a5d2f8be"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ],
+                "id": "3e836323-e5db-4f1c-b131-e84b32fc26d9"
+              }
+            }
+          ],
+          "id": "fcbd7885-619d-4e13-aaf5-e9782d60e2e9",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exit_gate_id\": \"{{entry_gate_id}}\",\n  \"exit_method\": \"qr\",\n  \"vehicle_type_id\": \"{{vehicle_type_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{tx_id}}/exit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{tx_id}}",
+                "exit"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Exit - RFID card mismatch → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ],
+                "id": "a0c842f2-e1ea-4b75-86da-6053a53aaa95"
+              }
+            }
+          ],
+          "id": "14cdac45-cc77-498f-be1a-337a0589f9bf",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exit_gate_id\": \"{{exit_gate_id}}\",\n  \"exit_method\": \"rfid\",\n  \"rfid_card_uid\": \"BEDA:KARTU:ZZ:YY\",\n  \"vehicle_type_id\": \"{{vehicle_type_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{tx_id}}/exit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{tx_id}}",
+                "exit"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Exit - tx tidak ada → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ],
+                "id": "942da59c-b504-41ea-b707-dc27b7a2858f"
+              }
+            }
+          ],
+          "id": "f85b9d50-a118-4020-a601-36e48cf3e004",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exit_gate_id\": \"{{exit_gate_id}}\",\n  \"exit_method\": \"qr\",\n  \"vehicle_type_id\": \"{{vehicle_type_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/00000000-0000-0000-0000-000000000000/exit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "00000000-0000-0000-0000-000000000000",
+                "exit"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "67762bae-f2c3-42dd-bcfc-282e68d2a119"
+    }
+  ],
+  "variable": [
+    {
+      "id": "3d74efe4-4037-4ed8-8e8c-bde41e09bc2f",
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1"
+    },
+    {
+      "id": "d056f92d-5333-4854-b584-c67472a7947d",
+      "key": "token",
+      "value": ""
+    },
+    {
+      "id": "0c56f8c5-b608-4664-9018-93b211655638",
+      "key": "zone_id",
+      "value": ""
+    },
+    {
+      "id": "236a7d62-b7cc-44b8-acbd-1f258df1a080",
+      "key": "entry_gate_id",
+      "value": ""
+    },
+    {
+      "id": "586942df-7266-4b22-b115-3eb39bd94183",
+      "key": "exit_gate_id",
+      "value": ""
+    },
+    {
+      "id": "09ba2fe8-aebe-412e-9ebc-aaf91c1e570f",
+      "key": "vehicle_type_id",
+      "value": ""
+    },
+    {
+      "id": "16791a86-c784-40b4-a21a-01b87549a628",
+      "key": "rfid_card_uid",
+      "value": "OCR:TEST:AA:BB"
+    },
+    {
+      "id": "6900e8d1-78f1-479c-b231-cc3c1a6d213d",
+      "key": "tx_id",
+      "value": ""
+    },
+    {
+      "id": "2cda3c6e-f7d1-4df1-ba95-d9f19b8fddef",
+      "key": "tx_id_qr",
+      "value": ""
+    },
+    {
+      "id": "789a0666-df80-4e5e-849c-e39691141111",
+      "key": "ocr_job_id",
+      "value": ""
+    }
+  ]
+}

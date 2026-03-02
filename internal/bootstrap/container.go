@@ -1,8 +1,11 @@
 package bootstrap
 
 import (
+	"gorm.io/gorm"
+
 	"parkieee/internal/modules/auth"
 	"parkieee/internal/modules/fee"
+	"parkieee/internal/modules/ocr"
 	"parkieee/internal/modules/rfid"
 	"parkieee/internal/modules/transaction"
 	"parkieee/internal/modules/vehicle"
@@ -10,8 +13,6 @@ import (
 	"parkieee/pkg/config"
 	"parkieee/pkg/logger"
 	"parkieee/pkg/validator"
-
-	"gorm.io/gorm"
 )
 
 type Container struct {
@@ -50,6 +51,11 @@ type Container struct {
 	TransactionRepo    transaction.TransactionRepositoryPort
 	TransactionLogRepo transaction.TransactionLogRepositoryPort
 	TransactionService transaction.ServicePort
+
+	OCRJobRepo       ocr.OCRJobRepositoryPort
+	OCRResultRepo    ocr.OCRResultRepositoryPort
+	OCRReviewLogRepo ocr.OCRReviewLogRepositoryPort
+	OCRService       ocr.ServicePort
 }
 
 func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
@@ -78,6 +84,9 @@ func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
 		return nil, err
 	}
 	if err := container.initFeeModule(); err != nil {
+		return nil, err
+	}
+	if err := container.initOCRModule(); err != nil {
 		return nil, err
 	}
 	if err := container.initTransactionModule(); err != nil {
@@ -145,6 +154,27 @@ func (c *Container) initFeeModule() error {
 	return nil
 }
 
+func (c *Container) initOCRModule() error {
+	c.OCRJobRepo = ocr.NewOCRJobRepository(c.DB)
+	c.OCRResultRepo = ocr.NewOCRResultRepository(c.DB)
+	c.OCRReviewLogRepo = ocr.NewOCRReviewLogRepository(c.DB)
+	c.OCRService = ocr.NewService(
+		c.DB,
+		c.OCRJobRepo,
+		c.OCRResultRepo,
+		c.OCRReviewLogRepo,
+		c.VehicleService,
+		c.ZoneRepo,
+		c.Log,
+		c.Config.OCR.APIURL,
+		c.Config.OCR.Timeout,
+		c.Config.OCR.MaxRetries,
+		c.Config.OCR.Enabled,
+		c.Config.OCR.AutoAcceptThreshold,
+	)
+	return nil
+}
+
 func (c *Container) initTransactionModule() error {
 	c.TransactionRepo = transaction.NewTransactionRepository(c.DB)
 	c.TransactionLogRepo = transaction.NewTransactionLogRepository(c.DB)
@@ -158,6 +188,8 @@ func (c *Container) initTransactionModule() error {
 		c.RFIDService,
 		c.FeeService,
 		c.VehicleService,
+		c.OCRService,
+		c.OCRResultRepo,
 		c.Log,
 		c.Config.BaseURL(),
 		c.Config.App.PlaceName,

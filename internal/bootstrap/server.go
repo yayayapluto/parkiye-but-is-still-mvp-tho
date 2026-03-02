@@ -19,6 +19,7 @@ import (
 	"parkieee/internal/modules/zone"
 	pkgerrors "parkieee/pkg/errors"
 	"parkieee/pkg/response"
+	"parkieee/pkg/storage"
 )
 
 func NewServer(container *Container) *fiber.App {
@@ -69,7 +70,9 @@ func NewServer(container *Container) *fiber.App {
 	vehicle.RegisterRoutes(api, container.VehicleService, container.AuthService, container.Validator)
 	rfid.RegisterRoutes(api, container.RFIDService, container.AuthService, container.Validator)
 	fee.RegisterRoutes(api, container.FeeService, container.AuthService, container.Validator)
-	transaction.RegisterRoutes(api, container.TransactionService, container.AuthService, container.Validator)
+	transaction.RegisterRoutes(api, container.TransactionService, container.AuthService, container.Validator,
+		container.Config.Storage.Dir, container.Config.Storage.OCRPathPrefix)
+	storage.RegisterRoutes(api, container.AuthService)
 
 	return app
 }
