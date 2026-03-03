@@ -2,6 +2,8 @@ package zone
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -56,6 +58,7 @@ func (s *service) CreateZone(ctx context.Context, req *CreateZoneRequest, actorI
 	}
 
 	if err := s.zoneRepo.Create(ctx, zone); err != nil {
+		s.log.Error(ctx, "failed to create zone", "name", zone.Name, "error", err)
 		return nil, err
 	}
 
@@ -66,6 +69,7 @@ func (s *service) CreateZone(ctx context.Context, req *CreateZoneRequest, actorI
 func (s *service) UpdateZone(ctx context.Context, id uuid.UUID, req *UpdateZoneRequest) (*Zone, error) {
 	zone, err := s.zoneRepo.FindByID(ctx, id)
 	if err != nil {
+		s.log.Warn(ctx, "update zone failed: not found", "zone_id", id)
 		return nil, err
 	}
 
@@ -89,6 +93,7 @@ func (s *service) UpdateZone(ctx context.Context, id uuid.UUID, req *UpdateZoneR
 	}
 
 	if err := s.zoneRepo.Update(ctx, zone); err != nil {
+		s.log.Error(ctx, "failed to update zone", "zone_id", id, "error", err)
 		return nil, err
 	}
 
@@ -98,6 +103,7 @@ func (s *service) UpdateZone(ctx context.Context, id uuid.UUID, req *UpdateZoneR
 
 func (s *service) DeactivateZone(ctx context.Context, id uuid.UUID) error {
 	if err := s.zoneRepo.Deactivate(ctx, id); err != nil {
+		s.log.Error(ctx, "failed to deactivate zone", "zone_id", id, "error", err)
 		return err
 	}
 	s.log.Info(ctx, "zone deactivated", "zone_id", id)
@@ -117,7 +123,14 @@ func (s *service) ListGates(ctx context.Context, zoneID uuid.UUID, onlyActive bo
 
 func (s *service) CreateGate(ctx context.Context, req *CreateGateRequest, actorID uuid.UUID) (*Gate, error) {
 	if _, err := s.zoneRepo.FindByID(ctx, req.ZoneID); err != nil {
+		s.log.Warn(ctx, "create gate failed: zone not found", "zone_id", req.ZoneID)
 		return nil, errors.New(errors.ErrNotFound, "zone not found")
+	}
+
+	token, err := generateGateToken()
+	if err != nil {
+		s.log.Error(ctx, "failed to generate gate token", "error", err)
+		return nil, errors.New(errors.ErrInternal, "failed to generate gate token")
 	}
 
 	gate := &Gate{
@@ -126,11 +139,13 @@ func (s *service) CreateGate(ctx context.Context, req *CreateGateRequest, actorI
 		Name:         req.Name,
 		GateType:     req.GateType,
 		LocationDesc: req.LocationDesc,
+		GateToken:    token,
 		IsActive:     true,
 		CreatedBy:    &actorID,
 	}
 
 	if err := s.gateRepo.Create(ctx, gate); err != nil {
+		s.log.Error(ctx, "failed to create gate", "zone_id", gate.ZoneID, "name", gate.Name, "error", err)
 		return nil, err
 	}
 
@@ -141,6 +156,7 @@ func (s *service) CreateGate(ctx context.Context, req *CreateGateRequest, actorI
 func (s *service) UpdateGate(ctx context.Context, id uuid.UUID, req *UpdateGateRequest) (*Gate, error) {
 	gate, err := s.gateRepo.FindByID(ctx, id)
 	if err != nil {
+		s.log.Warn(ctx, "update gate failed: not found", "gate_id", id)
 		return nil, err
 	}
 
@@ -158,6 +174,7 @@ func (s *service) UpdateGate(ctx context.Context, id uuid.UUID, req *UpdateGateR
 	}
 
 	if err := s.gateRepo.Update(ctx, gate); err != nil {
+		s.log.Error(ctx, "failed to update gate", "gate_id", id, "error", err)
 		return nil, err
 	}
 
@@ -167,10 +184,40 @@ func (s *service) UpdateGate(ctx context.Context, id uuid.UUID, req *UpdateGateR
 
 func (s *service) DeactivateGate(ctx context.Context, id uuid.UUID) error {
 	if err := s.gateRepo.Deactivate(ctx, id); err != nil {
+		s.log.Error(ctx, "failed to deactivate gate", "gate_id", id, "error", err)
 		return err
 	}
 	s.log.Info(ctx, "gate deactivated", "gate_id", id)
 	return nil
+}
+
+func (s *service) RegenerateGateToken(ctx context.Context, id uuid.UUID) (*Gate, error) {
+	gate, err := s.gateRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	token, err := generateGateToken()
+	if err != nil {
+		return nil, errors.New(errors.ErrInternal, "failed to generate gate token")
+	}
+
+	gate.GateToken = token
+	if err := s.gateRepo.Update(ctx, gate); err != nil {
+		return nil, err
+	}
+
+	s.log.Info(ctx, "gate token regenerated", "gate_id", id)
+	return s.gateRepo.FindByID(ctx, id)
+}
+
+// generateGateToken menghasilkan token unik format: gat_ + 32 hex chars (16 random bytes).
+func generateGateToken() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return "gat_" + hex.EncodeToString(b), nil
 }
 
 func (s *service) GetCapacity(ctx context.Context, zoneID uuid.UUID) (*ZoneCapacityResponse, error) {
@@ -198,11 +245,13 @@ func (s *service) GetCapacity(ctx context.Context, zoneID uuid.UUID) (*ZoneCapac
 func (s *service) RecordCapacityEvent(ctx context.Context, zoneID, transactionID uuid.UUID, event types.ZoneEventType) error {
 	zone, err := s.zoneRepo.FindByID(ctx, zoneID)
 	if err != nil {
+		s.log.Error(ctx, "record capacity event failed: zone not found", "zone_id", zoneID, "error", err)
 		return err
 	}
 
 	latest, err := s.capacityRepo.LatestByZoneID(ctx, zoneID)
 	if err != nil && !errors.IsCode(err, errors.ErrNotFound) {
+		s.log.Error(ctx, "record capacity event failed: cannot fetch latest log", "zone_id", zoneID, "error", err)
 		return err
 	}
 

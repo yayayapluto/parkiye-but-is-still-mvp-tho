@@ -47,6 +47,7 @@ func (s *service) GetActiveFeeConfig(ctx context.Context, zoneID, vehicleTypeID 
 
 func (s *service) CreateFeeConfig(ctx context.Context, req CreateFeeConfigRequest, createdBy uuid.UUID) (*FeeConfig, error) {
 	if err := s.validateTiers(req.Tiers); err != nil {
+		s.log.Warn(ctx, "create fee config failed: invalid tiers", "zone_id", req.ZoneID, "error", err)
 		return nil, err
 	}
 
@@ -63,6 +64,7 @@ func (s *service) CreateFeeConfig(ctx context.Context, req CreateFeeConfigReques
 	}
 
 	if err := s.feeConfigRepo.Create(ctx, cfg); err != nil {
+		s.log.Error(ctx, "failed to create fee config", "zone_id", cfg.ZoneID, "vehicle_type_id", cfg.VehicleTypeID, "error", err)
 		return nil, err
 	}
 
@@ -79,6 +81,7 @@ func (s *service) CreateFeeConfig(ctx context.Context, req CreateFeeConfigReques
 			}
 		}
 		if err := s.feeTierRepo.CreateBatch(ctx, tiers); err != nil {
+			s.log.Error(ctx, "failed to create fee tiers", "fee_config_id", cfg.ID, "error", err)
 			return nil, err
 		}
 	}
@@ -89,6 +92,7 @@ func (s *service) CreateFeeConfig(ctx context.Context, req CreateFeeConfigReques
 
 func (s *service) DeactivateFeeConfig(ctx context.Context, id uuid.UUID) error {
 	if err := s.feeConfigRepo.Deactivate(ctx, id); err != nil {
+		s.log.Error(ctx, "failed to deactivate fee config", "id", id, "error", err)
 		return err
 	}
 	s.log.Info(ctx, "fee config deactivated", "id", id)
@@ -105,6 +109,7 @@ func (s *service) GetHolidayRate(ctx context.Context, id uuid.UUID) (*HolidayRat
 
 func (s *service) CreateHolidayRate(ctx context.Context, req CreateHolidayRateRequest, createdBy uuid.UUID) (*HolidayRate, error) {
 	if err := validateHolidayRateFields(req.RateType, decimalPtrFromFloat(req.Multiplier), req.OverrideFee); err != nil {
+		s.log.Warn(ctx, "create holiday rate failed: invalid fields", "name", req.Name, "error", err)
 		return nil, err
 	}
 
@@ -122,6 +127,7 @@ func (s *service) CreateHolidayRate(ctx context.Context, req CreateHolidayRateRe
 	}
 
 	if err := s.holidayRateRepo.Create(ctx, rate); err != nil {
+		s.log.Error(ctx, "failed to create holiday rate", "name", rate.Name, "error", err)
 		return nil, err
 	}
 
@@ -161,10 +167,12 @@ func (s *service) UpdateHolidayRate(ctx context.Context, id uuid.UUID, req Updat
 	}
 
 	if err := validateHolidayRateFields(rate.RateType, rate.Multiplier, rate.OverrideFee); err != nil {
+		s.log.Warn(ctx, "update holiday rate failed: invalid fields", "id", id, "error", err)
 		return nil, err
 	}
 
 	if err := s.holidayRateRepo.Update(ctx, rate); err != nil {
+		s.log.Error(ctx, "failed to update holiday rate", "id", id, "error", err)
 		return nil, err
 	}
 
@@ -174,6 +182,7 @@ func (s *service) UpdateHolidayRate(ctx context.Context, id uuid.UUID, req Updat
 
 func (s *service) DeleteHolidayRate(ctx context.Context, id uuid.UUID) error {
 	if err := s.holidayRateRepo.Delete(ctx, id); err != nil {
+		s.log.Error(ctx, "failed to delete holiday rate", "id", id, "error", err)
 		return err
 	}
 	s.log.Info(ctx, "holiday rate deleted", "id", id)
@@ -185,6 +194,7 @@ func (s *service) DeleteHolidayRate(ctx context.Context, id uuid.UUID) error {
 func (s *service) CalculateFee(ctx context.Context, zoneID, vehicleTypeID uuid.UUID, entryTime, exitTime time.Time) (int, error) {
 	cfg, err := s.feeConfigRepo.FindActiveByZoneAndVehicle(ctx, zoneID, vehicleTypeID)
 	if err != nil {
+		s.log.Warn(ctx, "calculate fee failed: no active fee config", "zone_id", zoneID, "vehicle_type_id", vehicleTypeID, "error", err)
 		return 0, err
 	}
 

@@ -233,3 +233,17 @@ func (h *handler) deactivateGate(c *fiber.Ctx) error {
 
 	return response.Success(c, "gate deactivated", nil)
 }
+
+func (h *handler) regenerateGateToken(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("gateId"))
+	if err != nil {
+		return response.BadRequest(c, "invalid gate id", nil)
+	}
+
+	gate, err := h.svc.RegenerateGateToken(c.Context(), id)
+	if err != nil {
+		return err
+	}
+
+	return response.Success(c, "gate token regenerated", toGateResponse(gate))
+}

@@ -16,6 +16,13 @@ type TokenClaims struct {
 	Permissions []string
 }
 
+type GateClaims struct {
+	GateID   uuid.UUID
+	GateType string
+	ZoneID   uuid.UUID
+	GateName string
+}
+
 type TokenValidator interface {
 	ValidateToken(ctx context.Context, token string) (*TokenClaims, error)
 }
@@ -135,5 +142,64 @@ func GetPermissions(c *fiber.Ctx) []string {
 
 func GetClaims(c *fiber.Ctx) *TokenClaims {
 	claims, _ := c.Locals("claims").(*TokenClaims)
+	return claims
+}
+
+// GateTokenValidator adalah interface yang diimplementasi oleh gate.ServicePort.
+type GateTokenValidator interface {
+	ValidateGateToken(ctx context.Context, token string) (*GateClaims, error)
+}
+
+// GateAuth middleware untuk endpoint yang hanya boleh diakses dari screen gate.
+func GateAuth(svc GateTokenValidator) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		authHeader := c.Get("Authorization")
+		if authHeader == "" {
+			return response.Unauthorized(c, "missing authorization header")
+		}
+
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			return response.Unauthorized(c, "invalid authorization header format")
+		}
+
+		claims, err := svc.ValidateGateToken(c.Context(), parts[1])
+		if err != nil {
+			return response.Unauthorized(c, "invalid or expired gate token")
+		}
+
+		c.Locals("gate_id", claims.GateID)
+		c.Locals("gate_type", claims.GateType)
+		c.Locals("zone_id", claims.ZoneID)
+		c.Locals("gate_name", claims.GateName)
+		c.Locals("gate_claims", claims)
+
+		return c.Next()
+	}
+}
+
+func GetGateID(c *fiber.Ctx) uuid.UUID {
+	id, ok := c.Locals("gate_id").(uuid.UUID)
+	if !ok {
+		return uuid.Nil
+	}
+	return id
+}
+
+func GetGateType(c *fiber.Ctx) string {
+	t, _ := c.Locals("gate_type").(string)
+	return t
+}
+
+func GetZoneID(c *fiber.Ctx) uuid.UUID {
+	id, ok := c.Locals("zone_id").(uuid.UUID)
+	if !ok {
+		return uuid.Nil
+	}
+	return id
+}
+
+func GetGateClaims(c *fiber.Ctx) *GateClaims {
+	claims, _ := c.Locals("gate_claims").(*GateClaims)
 	return claims
 }

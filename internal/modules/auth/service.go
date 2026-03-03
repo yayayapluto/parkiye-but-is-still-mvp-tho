@@ -124,10 +124,12 @@ func (s *service) Login(ctx context.Context, email, password, ip, userAgent stri
 func (s *service) Logout(ctx context.Context, token string) error {
 	session, err := s.sessionRepo.FindByTokenHash(ctx, hashToken(token))
 	if err != nil {
+		s.log.Warn(ctx, "logout failed: session not found")
 		return err
 	}
 
 	if err := s.sessionRepo.Revoke(ctx, session.ID); err != nil {
+		s.log.Error(ctx, "failed to revoke session", "session_id", session.ID, "user_id", session.UserID, "error", err)
 		return err
 	}
 
@@ -164,11 +166,13 @@ func (s *service) GetProfile(ctx context.Context, userID uuid.UUID) (*User, erro
 
 func (s *service) CreateUser(ctx context.Context, req *CreateUserRequest) (*User, error) {
 	if _, err := s.roleRepo.FindByID(ctx, req.RoleID); err != nil {
+		s.log.Warn(ctx, "create user failed: role not found", "role_id", req.RoleID)
 		return nil, errors.New(errors.ErrNotFound, "role not found")
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
+		s.log.Error(ctx, "failed to hash password for new user", "email", req.Email, "error", err)
 		return nil, errors.New(errors.ErrInternal, "failed to hash password")
 	}
 
@@ -182,6 +186,7 @@ func (s *service) CreateUser(ctx context.Context, req *CreateUserRequest) (*User
 	}
 
 	if err := s.userRepo.Create(ctx, user); err != nil {
+		s.log.Error(ctx, "failed to create user", "email", req.Email, "error", err)
 		return nil, err
 	}
 
@@ -192,6 +197,7 @@ func (s *service) CreateUser(ctx context.Context, req *CreateUserRequest) (*User
 func (s *service) UpdateUser(ctx context.Context, userID uuid.UUID, req *UpdateUserRequest) (*User, error) {
 	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
+		s.log.Warn(ctx, "update user failed: user not found", "user_id", userID)
 		return nil, err
 	}
 
@@ -209,29 +215,34 @@ func (s *service) UpdateUser(ctx context.Context, userID uuid.UUID, req *UpdateU
 	}
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
+		s.log.Error(ctx, "failed to update user", "user_id", userID, "error", err)
 		return nil, err
 	}
-
+	s.log.Info(ctx, "user updated", "user_id", userID)
 	return s.userRepo.FindByID(ctx, userID)
 }
 
 func (s *service) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error {
 	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
+		s.log.Warn(ctx, "change password failed: user not found", "user_id", userID)
 		return err
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(oldPassword)); err != nil {
+		s.log.Warn(ctx, "change password failed: wrong current password", "user_id", userID)
 		return errors.New(errors.ErrInvalidCredentials, "current password is incorrect")
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
+		s.log.Error(ctx, "failed to hash new password", "user_id", userID, "error", err)
 		return errors.New(errors.ErrInternal, "failed to hash password")
 	}
 
 	user.PasswordHash = string(hash)
 	if err := s.userRepo.Update(ctx, user); err != nil {
+		s.log.Error(ctx, "failed to save new password", "user_id", userID, "error", err)
 		return err
 	}
 
@@ -246,14 +257,17 @@ func (s *service) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassw
 
 func (s *service) DeactivateUser(ctx context.Context, userID uuid.UUID, actorID uuid.UUID) error {
 	if userID == actorID {
+		s.log.Warn(ctx, "deactivate user rejected: cannot self-deactivate", "user_id", userID, "actor_id", actorID)
 		return errors.New(errors.ErrForbidden, "cannot deactivate your own account")
 	}
 
 	if _, err := s.userRepo.FindByID(ctx, userID); err != nil {
+		s.log.Warn(ctx, "deactivate user failed: user not found", "user_id", userID)
 		return err
 	}
 
 	if err := s.userRepo.SoftDelete(ctx, userID); err != nil {
+		s.log.Error(ctx, "failed to deactivate user", "user_id", userID, "actor_id", actorID, "error", err)
 		return err
 	}
 
@@ -273,13 +287,16 @@ func (s *service) GetAllPermissions(ctx context.Context) ([]Permission, error) {
 
 func (s *service) AssignPermission(ctx context.Context, roleID, permissionID uuid.UUID, actorID uuid.UUID) error {
 	if _, err := s.roleRepo.FindByID(ctx, roleID); err != nil {
+		s.log.Warn(ctx, "assign permission failed: role not found", "role_id", roleID)
 		return errors.New(errors.ErrNotFound, "role not found")
 	}
 	if _, err := s.permRepo.FindByID(ctx, permissionID); err != nil {
+		s.log.Warn(ctx, "assign permission failed: permission not found", "permission_id", permissionID)
 		return errors.New(errors.ErrNotFound, "permission not found")
 	}
 
 	if err := s.rolePermRepo.Assign(ctx, roleID, permissionID, actorID); err != nil {
+		s.log.Error(ctx, "failed to assign permission", "role_id", roleID, "permission_id", permissionID, "error", err)
 		return err
 	}
 
@@ -289,6 +306,7 @@ func (s *service) AssignPermission(ctx context.Context, roleID, permissionID uui
 
 func (s *service) RevokePermission(ctx context.Context, roleID, permissionID uuid.UUID, actorID uuid.UUID) error {
 	if err := s.rolePermRepo.Revoke(ctx, roleID, permissionID); err != nil {
+		s.log.Error(ctx, "failed to revoke permission", "role_id", roleID, "permission_id", permissionID, "error", err)
 		return err
 	}
 

@@ -2,12 +2,13 @@ package transaction
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"parkieee/pkg/config"
 	"parkieee/pkg/middleware"
 	"parkieee/pkg/validator"
 )
 
-func RegisterRoutes(router fiber.Router, svc ServicePort, auth middleware.TokenValidator, v *validator.Validator, storageDir, ocrPrefix string) {
-	adapter := newHTTPAdapter(svc, v, storageDir, ocrPrefix)
+func RegisterRoutes(router fiber.Router, svc ServicePort, auth middleware.TokenValidator, v *validator.Validator, s3cfg config.S3Config) {
+	adapter := newHTTPAdapter(svc, v, s3cfg)
 	authMw := middleware.Auth(auth)
 
 	txs := router.Group("/transactions", authMw)

@@ -37,6 +37,7 @@ func (s *service) RegisterOrGet(ctx context.Context, cardUID string) (*RFIDCard,
 		return existing, nil
 	}
 	if !errors.IsCode(err, errors.ErrNotFound) {
+		s.log.Error(ctx, "failed to look up rfid card", "card_uid", cardUID, "error", err)
 		return nil, err
 	}
 
@@ -47,6 +48,7 @@ func (s *service) RegisterOrGet(ctx context.Context, cardUID string) (*RFIDCard,
 		CreatedAt: time.Now(),
 	}
 	if err := s.repo.Create(ctx, card); err != nil {
+		s.log.Error(ctx, "failed to register rfid card", "card_uid", cardUID, "error", err)
 		return nil, err
 	}
 
@@ -57,15 +59,18 @@ func (s *service) RegisterOrGet(ctx context.Context, cardUID string) (*RFIDCard,
 func (s *service) LinkVehicle(ctx context.Context, id uuid.UUID, vehicleID uuid.UUID) (*RFIDCard, error) {
 	card, err := s.repo.FindByID(ctx, id)
 	if err != nil {
+		s.log.Warn(ctx, "link vehicle failed: rfid card not found", "card_id", id)
 		return nil, err
 	}
 
 	if !card.IsActive {
+		s.log.Warn(ctx, "link vehicle failed: card inactive", "card_id", id)
 		return nil, errors.New(errors.ErrForbidden, "cannot link vehicle to an inactive card")
 	}
 
 	card.VehicleID = &vehicleID
 	if err := s.repo.Update(ctx, card); err != nil {
+		s.log.Error(ctx, "failed to link vehicle to rfid card", "card_id", id, "vehicle_id", vehicleID, "error", err)
 		return nil, err
 	}
 
@@ -75,6 +80,7 @@ func (s *service) LinkVehicle(ctx context.Context, id uuid.UUID, vehicleID uuid.
 
 func (s *service) Deactivate(ctx context.Context, id uuid.UUID, operatorID uuid.UUID) error {
 	if err := s.repo.Deactivate(ctx, id, operatorID); err != nil {
+		s.log.Error(ctx, "failed to deactivate rfid card", "card_id", id, "operator_id", operatorID, "error", err)
 		return err
 	}
 	s.log.Info(ctx, "rfid card deactivated", "card_id", id, "operator_id", operatorID)

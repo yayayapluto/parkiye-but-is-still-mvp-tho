@@ -55,4 +55,5 @@ const (
 	FlagTypeOvernight          FlagType = "overnight"
 	FlagTypeMultiDay           FlagType = "multi_day"
 	FlagTypeSuspiciousDuration FlagType = "suspicious_duration"
+	FlagTypePlateMismatch      FlagType = "plate_mismatch"
 )

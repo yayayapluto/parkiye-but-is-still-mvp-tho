@@ -16,6 +16,7 @@ import (
 type Config struct {
 	App       AppConfig
 	Storage   StorageConfig
+	S3        S3Config
 	OCR       OCRConfig
 	Midtrans  MidtransConfig
 	Database  DatabaseConfig
@@ -42,8 +43,17 @@ type AppConfig struct {
 }
 
 type StorageConfig struct {
-	Dir           string // STORAGE_DIR: local path where photos are written
+	Dir           string // STORAGE_DIR: local fallback path
 	OCRPathPrefix string // OCR_STORAGE_PREFIX: path prefix as seen inside the OCR container
+}
+
+type S3Config struct {
+	Endpoint      string // S3_ENDPOINT, e.g. https://s3.nevaobjects.id
+	Bucket        string // S3_BUCKET
+	AccessKey     string // S3_ACCESS_KEY
+	SecretKey     string // S3_SECRET_KEY
+	Region        string // S3_REGION
+	PublicBaseURL string // S3_PUBLIC_BASE_URL, used to build public file URLs
 }
 
 type OCRConfig struct {
@@ -72,6 +82,7 @@ type JWTConfig struct {
 	SecretKey       string
 	AccessTokenTTL  time.Duration
 	RefreshTokenTTL time.Duration
+	GateTokenTTL    time.Duration // default 365 hari — token untuk screen gate
 }
 
 type ServerConfig struct {
@@ -123,6 +134,14 @@ func Load() (*Config, error) {
 			Dir:           getEnv("STORAGE_DIR", "./storage/photos"),
 			OCRPathPrefix: getEnv("OCR_STORAGE_PREFIX", ""),
 		},
+		S3: S3Config{
+			Endpoint:      getEnv("S3_ENDPOINT", ""),
+			Bucket:        getEnv("S3_BUCKET", ""),
+			AccessKey:     getEnv("S3_ACCESS_KEY", ""),
+			SecretKey:     getEnv("S3_SECRET_KEY", ""),
+			Region:        getEnv("S3_REGION", "us-east-1"),
+			PublicBaseURL: getEnv("S3_PUBLIC_BASE_URL", ""),
+		},
 		Midtrans: MidtransConfig{
 			ServerKey: getEnv("MIDTRANS_SERVER_KEY", ""),
 			ClientKey: getEnv("MIDTRANS_CLIENT_KEY", ""),
@@ -160,6 +179,7 @@ func Load() (*Config, error) {
 			SecretKey:       getEnvRequired("JWT_SECRET_KEY"),
 			AccessTokenTTL:  getEnvDuration("JWT_ACCESS_TOKEN_TTL", 15*time.Minute),
 			RefreshTokenTTL: getEnvDuration("JWT_REFRESH_TOKEN_TTL", 7*24*time.Hour),
+			GateTokenTTL:    getEnvDuration("JWT_GATE_TOKEN_TTL", 365*24*time.Hour),
 		},
 		Server: ServerConfig{
 			Host:         getEnv("SERVER_HOST", "0.0.0.0"),

@@ -343,13 +343,33 @@ Request masuk
   → Handler
 ```
 
+### Gate Auth Middleware
+
+```
+Request dari screen gate:
+  → GateAuth middleware:
+      1. Ambil "Authorization: Bearer {gate_jwt}" header
+      2. ValidateGateToken():
+         - Parse JWT
+         - Cek claims["kind"] == "gate"
+         - Extract gate_id, gate_type, zone_id, gate_name
+      3. Set Locals: gate_id, gate_type, zone_id, gate_name, gate_claims
+```
+
 ### Helpers
 
 ```go
+// User auth
 middleware.GetUserID(c)       → uuid.UUID (uuid.Nil kalau tidak ada)
 middleware.GetUserRole(c)     → string
 middleware.GetPermissions(c)  → []string
 middleware.GetClaims(c)       → *TokenClaims
+
+// Gate auth
+middleware.GetGateID(c)       → uuid.UUID
+middleware.GetGateType(c)     → string
+middleware.GetZoneID(c)       → uuid.UUID
+middleware.GetGateClaims(c)   → *GateClaims
 ```
 
 ### OptionalAuth
@@ -417,9 +437,7 @@ Format paginated response selalu punya `prev` dan `next` links (null kalau tidak
     "code": "OK",
     "message": "ok"
   },
-  "data": [
-    ...
-  ],
+  "data": [...],
   "pagination": {
     "page": 1,
     "page_size": 10,
@@ -598,15 +616,12 @@ Semua tipe enum didefinisikan sebagai `type X string` di `pkg/types/`:
 - `PaymentMethod`: `"cash"` | `"qris"`
 - `PaymentStatus`: `"pending"` | `"completed"` | `"failed"` | `"expired"` | `"refunded"`
 - `OCRJobStatus`: `"queued"` | `"processing"` | `"completed"` | `"failed"` | `"skipped"`
-- `OverrideType`: `"lost_card_exit"` | `"no_qr_exit"` | `"fee_waive"` | `"fee_adjust"` | `"force_open_gate"` |
-  `"manual_entry"`
+- `OverrideType`: `"lost_card_exit"` | `"no_qr_exit"` | `"fee_waive"` | `"fee_adjust"` | `"force_open_gate"` | `"manual_entry"`
 - `GateType`: `"entry"` | `"exit"`
 - `ZoneEventType`: `"entry"` | `"exit"`
 - `TriggeredBy`: `"system"` | `"operator"` | `"cashier"` | `"webhook"`
-- `FlagType`: `"overnight"` | `"multi_day"` | `"suspicious_duration"`
+- `FlagType`: `"overnight"` | `"multi_day"` | `"suspicious_duration"` | `"plate_mismatch"`
 - `RefundStatus`: `"pending"` | `"approved"` | `"processed"` | `"rejected"`
-
----
 
 ---
 
@@ -658,16 +673,15 @@ DispatchOCRJob:
 
 ```
 POST /detect-plate
-{ "image_path": "/mnt/storage/photos/entry_xxx.jpeg" }
+{ "image_path": "<publicURL>" }
 
-→ 200: { "detected_plate": "B1701SGI", "confidence": 0.9831, "output_image_path": "/mnt/storage/photos/entry_xxx_output.jpeg" }
+→ 200: { "detected_plate": "B1701SGI", "confidence": 0.9831, "output_image_path": "<url>" }
 → 404: { "detail": "Cannot find image" }
 → 422: { "detail": "No plate detected in the provided image" }
 → 500: { "detail": "Internal server error: ..." }
 ```
 
-`image_path` adalah path **di dalam Docker container** (dari shared volume `/mnt/storage`).
-`output_image_path` adalah path yang sama dengan `_output` suffix — Go ambil `filepath.Base()` dan jadikan URL publik.
+`image_path` adalah URL publik dari S3 — Python OCR fetch via HTTP, bukan path volume.
 
 ### OCR Review Log (exit jobs only)
 
@@ -697,8 +711,275 @@ OCR_API_URL=http://localhost:8001         # URL Python OCR service
 OCR_TIMEOUT=15s
 OCR_MAX_RETRIES=2
 OCR_AUTO_ACCEPT_THRESHOLD=0.80           # confidence >= ini → auto-verified
-STORAGE_DIR=./storage/photos             # local path untuk Go simpan foto
-OCR_STORAGE_PREFIX=/mnt/storage/photos  # path container untuk Python OCR
+```
+
+---
+
+## Module: transaction — MarkPaid & MarkExited
+
+Dua method tambahan yang dipanggil oleh payment service setelah pembayaran selesai.
+
+```
+MarkPaid(txID, triggeredBy, handledByUserID):
+  1. FindByID → validasi status == awaiting_payment
+  2. DB Transaction:
+     - status → paid
+     - logRepo.Append (EventPaymentReceived)
+  3. return nil
+
+MarkExited(txID, triggeredBy):
+  1. FindByID → validasi status == paid
+  2. DB Transaction:
+     - status → exited
+     - logRepo.Append (EventExitRecorded)
+  3. return nil
+```
+
+> **Tidak ada capacity log** di MarkPaid/MarkExited — occupancy sudah dikurangi saat RecordExit (open → awaiting_payment). MarkExited hanya status terminal.
+
+---
+
+## Module: payment
+
+### PayCash
+
+```
+1. txSvc.GetTransaction → validasi status == awaiting_payment
+2. Validasi req.CashTendered >= tx.CalculatedFee
+3. cashChange = cashTendered - calculatedFee
+4. repo.CreatePayment (status=completed, paid_at=now)
+5. txSvc.MarkPaid (TriggeredByCashier)
+6. txSvc.MarkExited (TriggeredByCashier)
+7. return payment
+```
+
+### InitiateQRIS
+
+```
+1. txSvc.GetTransaction → validasi status == awaiting_payment
+2. Idempotent check: kalau sudah ada payment method=qris, status=pending → return existing
+3. orderID = "PKR-" + uuid.New()
+4. midtrans.chargeQRIS(orderID, fee) → resp
+5. QRISImageURL dari resp.Actions[Name=="generate-qr-code"].URL, fallback Actions[0].URL
+6. repo.CreatePayment (status=pending, QRISString, QRISImageURL, expires_at=+15min)
+7. return payment
+```
+
+### HandleMidtransWebhook
+
+```
+1. Simpan MidtransCallback (rawBody, signature_valid=false) — SELALU, sebelum apapun
+2. verifyMidtransSignature:
+   SHA512(orderID + statusCode + grossAmount + serverKey) == payload.SignatureKey
+3. Update callback.signature_valid
+4. Kalau !valid → return nil (HTTP 200, Midtrans akan retry kalau non-2xx)
+5. FindPaymentByMidtransOrderID → tidak ada: return nil
+6. Idempotent: status == completed → return nil
+7. Switch payload.TransactionStatus:
+   - "settlement" → status=completed, paid_at=now
+   - "expire"/"cancel"/"deny"/"failure" → status=failed
+   - default ("pending" dll) → return nil (ignore)
+8. UpdatePayment
+9. Kalau completed:
+   - txSvc.MarkPaid (TriggeredByWebhook)
+   - txSvc.MarkExited (TriggeredByWebhook)
+10. Mark callback processed=true
+```
+
+### RequestRefund
+
+```
+1. FindPaymentByID → validasi status == completed
+2. Validasi refundAmount <= payment.Amount
+3. Cek existing refund: kalau ada status pending/processed → ErrConflict
+4. CreateRefund (status=pending)
+```
+
+### ApproveRefund
+
+```
+1. FindRefundByID → validasi status == pending
+2. FindPaymentByID
+3. Kalau method=qris && MidtransTransactionID != nil:
+   - refundKey = uuid.New()
+   - midtrans.refund(MidtransTransactionID, refundKey, amount, reason)
+   - ref.MidtransRefundID = &refundKey
+4. status → processed, processed_at = now
+5. UpdateRefund
+```
+
+> Refund QRIS pakai `midtrans_transaction_id` (bukan `order_id`) — sesuai Midtrans docs sejak Jan 2024.
+
+### RejectRefund
+
+```
+1. FindRefundByID → validasi status == pending
+2. status → rejected
+3. UpdateRefund
+```
+
+### Midtrans HTTP Client
+
+Tidak pakai SDK — custom `midtransClient` di `payment/midtrans.go`:
+
+```
+baseURL:
+  sandbox    → https://api.sandbox.midtrans.com
+  production → https://api.midtrans.com
+
+authHeader: Base64(serverKey + ":")
+
+chargeQRIS → POST /v2/charge
+  body: { payment_type: "qris", transaction_details: { order_id, gross_amount } }
+  error kalau StatusCode != "201"
+
+refund → POST /v2/{midtransTransactionID}/refund
+  body: { refund_key, amount, reason }
+  error kalau response bukan 2xx
+```
+
+### Domain — Payment struct fields
+
+```go
+QRISString   *string  // raw QRIS string untuk client render QR sendiri
+QRISImageURL *string  // hotlink image dari Midtrans actions[]
+```
+
+---
+
+## Module: gate
+
+### Token-first Flow
+
+```
+POST /api/v1/gate/authenticate
+Body: { gate_token }
+
+1. FindByToken (gate_token + is_active=true)
+2. Generate JWT gate long-lived (TTL: JWT_GATE_TOKEN_TTL, default 365 hari)
+   Claims: { kind=gate, gate_id, gate_type, zone_id, gate_name, exp, iat }
+3. UpdateTokenLastUsed async (non-fatal)
+4. Return JWT + gate info
+```
+
+### QR Pairing Flow
+
+#### Request Pairing (screen)
+
+```
+POST /api/v1/gate/pairing/request
+Tidak butuh auth — screen belum punya token.
+
+1. InvalidatePendingByIP(ip) — set expires_at = now() untuk semua pending code dari IP sama
+   (screen request pairing baru = code lama tidak valid)
+2. generatePairingCode() → 6 alphanumeric random (A-Z0-9)
+3. expiresAt = now() + 5 menit
+4. buildQRContent(baseURL, code, expiresAt):
+   JSON: { "url": "{baseURL}/pair/{code}", "expires_at": "..." }
+5. encodeQRBase64(qrContent) — base64 dari JSON string (frontend generate QR dari ini)
+6. Insert gate_pairing_codes { code, status=pending, expires_at, ip_address }
+7. Return { code, qr_content, qr_base64, expires_at }
+```
+
+#### Listen Pairing via SSE (screen)
+
+```
+GET /api/v1/gate/pairing/:code/listen
+Tidak butuh auth.
+
+1. Validasi code: ada di DB, status != confirmed, expires_at > now()
+2. Buat channel (buffer 1)
+3. SetSSEClient(code, ch) — kalau ada listener lama, di-close dulu (kicked)
+4. SSE stream:
+   - Heartbeat tiap 15 detik: event: heartbeat
+   - Saat confirmed: event: confirmed, data: { token: "<gate JWT>" }
+   - Saat di-kick: event: kicked, data: { reason: "new_listener_connected" }
+5. Koneksi tutup setelah confirmed atau kicked
+```
+
+SSE in-memory state disimpan di `pairingRepository.sseClients` (map[code]chan) dengan sync.RWMutex.
+Hanya 1 listener per code — koneksi lama di-close otomatis saat ada yang baru.
+**Tidak survive server restart** — screen harus request pairing baru kalau server restart.
+
+#### Get Pairing Info (admin)
+
+```
+GET /api/v1/gate/pairing/:code
+Butuh auth admin.
+
+1. FindByCode(code)
+2. isExpired = now() > expires_at
+3. Return info lengkap:
+   { code, status, is_expired, expires_at, created_at, ip_address,
+     gate_id, confirmed_by, confirmed_at }
+
+Kalau code tidak ada → 404
+Kalau expired → tetap return 200 dengan is_expired=true
+```
+
+#### Confirm Pairing (admin)
+
+```
+POST /api/v1/gate/pairing/:code/confirm
+Body: { gate_id }
+Butuh auth admin.
+
+1. FindByCode(code)
+2. Validasi:
+   - status != confirmed (kalau sudah → 409 conflict)
+   - expires_at > now() (kalau expired → 400 validation error)
+3. FindByID(gate_id) — cek gate ada dan is_active=true
+4. generateGateJWT(gate) → JWT long-lived
+5. pairingRepo.Confirm(id, gate_id, adminID, gateJWT)
+   Update: status=confirmed, gate_id, confirmed_by, confirmed_at, gate_jwt
+6. Push JWT ke screen via SSE:
+   GetSSEClient(code) → ch <- gateJWT → RemoveSSEClient(code)
+   (kalau screen sudah disconnect → non-fatal, JWT tetap tersimpan di DB)
+7. Return { gate_jwt, expires_at, gate info }
+```
+
+### Gate Pairing — DB Schema
+
+```
+gate_pairing_codes:
+  id           uuid PK
+  code         varchar(6) UNIQUE NOT NULL     — 6 alphanumeric
+  status       varchar(20) NOT NULL default pending  — pending | confirmed
+  expires_at   timestamptz NOT NULL
+  created_at   timestamptz autoCreateTime
+  ip_address   varchar(45) NOT NULL           — IP screen yang request
+  gate_id      uuid NULL                      — diisi saat confirm
+  confirmed_by uuid NULL                      — user_id admin
+  confirmed_at timestamptz NULL
+  gate_jwt     text NULL                      — JWT yang di-push ke screen
+```
+
+Expired check selalu dari `expires_at < now()` — tidak ada status expired di DB.
+Invalidate = set `expires_at = now()` paksa.
+Record tidak dihapus — disimpan sebagai history.
+
+### ValidateGateToken
+
+```go
+gate.ServicePort implements middleware.GateTokenValidator:
+
+ValidateGateToken(ctx, jwtToken):
+  1. Parse JWT
+  2. Cek claims["kind"] == "gate"
+  3. Extract gate_id, gate_type, zone_id, gate_name
+  4. Return *middleware.GateClaims
+```
+
+Dipakai oleh `middleware.GateAuth()` untuk endpoint screen gate.
+
+### Gate Routes
+
+```
+POST /api/v1/gate/authenticate              — token-first (no auth)
+POST /api/v1/gate/pairing/request           — screen request QR (no auth)
+GET  /api/v1/gate/pairing/:code/listen      — SSE listener screen (no auth)
+GET  /api/v1/gate/pairing/:code             — admin lihat info (user auth required)
+POST /api/v1/gate/pairing/:code/confirm     — admin confirm + assign gate (user auth required)
 ```
 
 ---
@@ -706,13 +987,6 @@ OCR_STORAGE_PREFIX=/mnt/storage/photos  # path container untuk Python OCR
 ## Logic yang Belum Diimplementasi (planned)
 
 Lihat `agents-prepare.md` untuk detail lengkap. Ringkasan:
-
-### Payment (planned)
-
-- Cash: hitung kembalian, langsung complete
-- QRIS: Midtrans API → webhook → validasi signature SHA-512
-- Setiap webhook hit → log ke `midtrans_callbacks` dulu, baru proses
-- Signature: `SHA512(order_id + status_code + gross_amount + server_key)`
 
 ### Override (planned)
 

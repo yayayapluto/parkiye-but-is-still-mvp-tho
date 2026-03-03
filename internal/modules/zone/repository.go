@@ -2,6 +2,7 @@ package zone
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -100,6 +101,12 @@ func (r *gateRepository) FindByZoneID(ctx context.Context, zoneID uuid.UUID, onl
 	return gates, total, errors.FromDB(err, "")
 }
 
+func (r *gateRepository) FindByToken(ctx context.Context, token string) (*Gate, error) {
+	var gate Gate
+	err := r.db.WithContext(ctx).Preload("Zone").First(&gate, "gate_token = ? AND is_active = true", token).Error
+	return &gate, errors.FromDB(err, "gate not found")
+}
+
 func (r *gateRepository) Create(ctx context.Context, gate *Gate) error {
 	return errors.FromDB(r.db.WithContext(ctx).Create(gate).Error, "")
 }
@@ -107,6 +114,14 @@ func (r *gateRepository) Create(ctx context.Context, gate *Gate) error {
 func (r *gateRepository) Update(ctx context.Context, gate *Gate) error {
 	return errors.FromDB(
 		r.db.WithContext(ctx).Model(gate).Select("*").Updates(gate).Error,
+		"",
+	)
+}
+
+func (r *gateRepository) UpdateTokenLastUsed(ctx context.Context, id uuid.UUID) error {
+	now := time.Now()
+	return errors.FromDB(
+		r.db.WithContext(ctx).Model(&Gate{}).Where("id = ?", id).Update("token_last_used_at", now).Error,
 		"",
 	)
 }

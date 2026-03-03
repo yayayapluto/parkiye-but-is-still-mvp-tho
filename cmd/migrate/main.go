@@ -15,10 +15,10 @@ func main() {
 		envFile  = flag.String("env", ".env", "Path to .env file")
 		runSeed  = flag.Bool("seed", false, "Run seeder after migration")
 		seedOnly = flag.Bool("seed-only", false, "Run seeder without migration")
+		truncate = flag.Bool("truncate", false, "Truncate all tables before seeding (requires -seed or -seed-only)")
 	)
 	flag.Parse()
 
-	// Load .env before anything else
 	config.LoadEnv(*envFile)
 
 	cfg, err := config.Load()
@@ -45,6 +45,14 @@ func main() {
 	}
 
 	if *runSeed || *seedOnly {
+		if *truncate {
+			fmt.Println("→ Truncating all tables...")
+			if err := database.Truncate(db.DB); err != nil {
+				log.Fatalf("truncate: %v", err)
+			}
+			fmt.Println("✓ Truncate complete")
+		}
+
 		fmt.Println("→ Running Seeder...")
 		if err := database.Seed(db.DB); err != nil {
 			log.Fatalf("seed: %v", err)

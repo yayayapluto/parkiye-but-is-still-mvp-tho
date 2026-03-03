@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -105,7 +104,6 @@ func (s *service) processJob(ctx context.Context, job *OCRJob, imagePath string,
 		s.log.Error(ctx, "ocr: failed to mark job as processing", "job_id", job.ID, "error", err)
 	}
 
-	// Health check before attempting OCR
 	if err := s.adapter.ping(ctx); err != nil {
 		s.log.Warn(ctx, "ocr: python service unavailable, skipping job",
 			"job_id", job.ID,
@@ -116,7 +114,6 @@ func (s *service) processJob(ctx context.Context, job *OCRJob, imagePath string,
 		return
 	}
 
-	// Attempt OCR with retries
 	var result *detectPlateResponse
 	var lastErr error
 
@@ -166,13 +163,10 @@ func (s *service) handleSuccess(ctx context.Context, job *OCRJob, result *detect
 		return
 	}
 
+	// Python now returns a public S3 URL directly — store it as-is.
 	if result.OutputImagePath != "" {
+		job.OutputImageURL = &result.OutputImagePath
 		job.OutputImagePath = &result.OutputImagePath
-		// Derive the public URL from just the filename — the full container path
-		// is not meaningful to API consumers.
-		filename := filepath.Base(result.OutputImagePath)
-		url := "/storage/photos/" + filename
-		job.OutputImageURL = &url
 	}
 
 	confidence := decimal.NewFromFloat(result.Confidence)
@@ -191,7 +185,6 @@ func (s *service) handleSuccess(ctx context.Context, job *OCRJob, result *detect
 		ocrResult.VerifiedAt = &now
 	}
 
-	// Vehicle upsert requires a known type; skip silently if zone has none configured.
 	var vehicleID *uuid.UUID
 	if vehicleTypeID != uuid.Nil {
 		vehicle, err := s.vehicleSvc.UpsertVehicle(ctx, &vehicleDomain.UpsertVehicleRequest{
@@ -210,12 +203,11 @@ func (s *service) handleSuccess(ctx context.Context, job *OCRJob, result *detect
 		}
 		vehicleID = &vehicle.ID
 		ocrResult.VehicleID = vehicleID
-
-		// ActualPlate is the canonical plate from the resolved vehicle record.
-		// is_match compares what OCR detected vs what's stored on the vehicle.
+		// ActualPlate mirrors the canonical vehicle record. is_match is intentionally
+		// left nil here — it is only meaningful for the entry-vs-exit comparison done
+		// in createReviewLog, not for OCR-vs-vehicle-record (which is always identical
+		// because we just upserted with the detected plate).
 		ocrResult.ActualPlate = vehicle.PlateNumber
-		match := normalizePlate(result.DetectedPlate) == normalizePlate(vehicle.PlateNumber)
-		ocrResult.IsMatch = &match
 	} else {
 		s.log.Info(ctx, "ocr: zone has no for_vehicle_type_id, plate detected but vehicle not linked",
 			"job_id", job.ID,
@@ -230,7 +222,6 @@ func (s *service) handleSuccess(ctx context.Context, job *OCRJob, result *detect
 		return
 	}
 
-	// Link vehicle to transaction — non-fatal if this fails, skipped if no vehicle was upserted.
 	if vehicleID != nil {
 		if err := updateTransactionVehicle(ctx, s.db, job.TransactionID, *vehicleID); err != nil {
 			s.log.Error(ctx, "ocr: failed to update transaction vehicle_id",
@@ -242,8 +233,7 @@ func (s *service) handleSuccess(ctx context.Context, job *OCRJob, result *detect
 		}
 	}
 
-	// For exit jobs: compare detected plate against the entry OCR result and
-	// create a review log row with auto_match_result pre-filled.
+	// For exit jobs: compare exit plate against entry OCR plate and flag mismatch.
 	if job.PhotoType == types.OCRPhotoTypeExit {
 		s.createReviewLog(ctx, job, ocrResult, result.DetectedPlate)
 	}
@@ -255,14 +245,18 @@ func (s *service) handleSuccess(ctx context.Context, job *OCRJob, result *detect
 		s.log.Error(ctx, "ocr: failed to mark job as completed", "job_id", job.ID, "error", err)
 	}
 
+	outputURL := ""
+	if result.OutputImagePath != "" {
+		outputURL = result.OutputImagePath
+	}
+
 	s.log.Info(ctx, "ocr: job completed",
 		"job_id", job.ID,
 		"transaction_id", job.TransactionID,
+		"photo_type", job.PhotoType,
 		"plate_detected", result.DetectedPlate,
-		"actual_plate", ocrResult.ActualPlate,
-		"is_match", ocrResult.IsMatch,
 		"confidence", result.Confidence,
-		"output_image", result.OutputImagePath,
+		"output_image_url", outputURL,
 		"auto_verified", isAutoVerified,
 	)
 }
@@ -287,7 +281,6 @@ func (s *service) resolveVehicleTypeID(ctx context.Context, zoneID uuid.UUID) (u
 func (s *service) createReviewLog(ctx context.Context, job *OCRJob, exitResult *OCRResult, exitPlate string) {
 	entryResult, err := s.resultRepo.FindEntryResultByTransactionID(ctx, job.TransactionID)
 	if err != nil {
-		// Entry OCR hasn't completed yet or wasn't done — log as nil (pending review).
 		s.log.Warn(ctx, "ocr: entry result not found for plate-match, skipping review log",
 			"job_id", job.ID,
 			"transaction_id", job.TransactionID,
@@ -296,6 +289,9 @@ func (s *service) createReviewLog(ctx context.Context, job *OCRJob, exitResult *
 		return
 	}
 
+	// Compare exit plate against what was detected at entry, not against the vehicle record.
+	// The vehicle record always matches the detected plate (we upserted it), so that
+	// comparison would always be true and never catch entry-exit mismatches.
 	autoMatch := normalizePlate(exitPlate) == normalizePlate(entryResult.PlateDetected)
 
 	reviewLog := &OCRReviewLog{
@@ -304,7 +300,6 @@ func (s *service) createReviewLog(ctx context.Context, job *OCRJob, exitResult *
 		OCRPlate:        exitPlate,
 		OCRConfidence:   exitResult.Confidence,
 		AutoMatchResult: &autoMatch,
-		// ManualPlate, ReviewedBy, Match, ReviewNote, ReviewedAt — filled later by operator.
 	}
 
 	if err := s.reviewLogRepo.Create(ctx, reviewLog); err != nil {
@@ -316,24 +311,29 @@ func (s *service) createReviewLog(ctx context.Context, job *OCRJob, exitResult *
 		return
 	}
 
+	mismatch := !autoMatch
+	if err := s.db.WithContext(ctx).Model(&struct {
+		ID uuid.UUID `gorm:"primaryKey"`
+	}{ID: job.TransactionID}).Table("transactions").Update("plate_mismatch", mismatch).Error; err != nil {
+		s.log.Error(ctx, "ocr: failed to stamp plate_mismatch on transaction",
+			"job_id", job.ID,
+			"transaction_id", job.TransactionID,
+			"error", err,
+		)
+	}
+
 	s.log.Info(ctx, "ocr: plate match review log created",
 		"job_id", job.ID,
 		"transaction_id", job.TransactionID,
 		"entry_plate", entryResult.PlateDetected,
 		"exit_plate", exitPlate,
-		"auto_match_result", autoMatch,
+		"auto_match", autoMatch,
+		"plate_mismatch_flagged", mismatch,
 	)
 }
 
-// normalizePlate strips spaces and uppercases the plate string for comparison.
 func normalizePlate(plate string) string {
-	result := ""
-	for _, c := range plate {
-		if c != ' ' {
-			result += string(c)
-		}
-	}
-	return strings.ToUpper(result)
+	return strings.ToUpper(strings.ReplaceAll(plate, " ", ""))
 }
 
 func (s *service) markJobFailed(ctx context.Context, job *OCRJob, reason string) {

@@ -8,6 +8,7 @@ import (
 	auditDomain "parkieee/internal/modules/audit"
 	authDomain "parkieee/internal/modules/auth"
 	feeDomain "parkieee/internal/modules/fee"
+	gateDomain "parkieee/internal/modules/gate"
 	ocrDomain "parkieee/internal/modules/ocr"
 	overrideDomain "parkieee/internal/modules/override"
 	paymentDomain "parkieee/internal/modules/payment"
@@ -73,6 +74,8 @@ func Migrate(db *gorm.DB) error {
 		&auditDomain.AuditLogExport{}, // depends on users
 
 		&zoneDomain.ZoneCapacityLog{},
+
+		&gateDomain.GatePairingCode{}, // depends on zones (via gate_id)
 	}
 
 	if err := db.AutoMigrate(models...); err != nil {
@@ -181,6 +184,9 @@ func applyManualConstraints(db *gorm.DB) error {
 
 		`CREATE INDEX IF NOT EXISTS idx_payments_transaction_status
 			ON payments (transaction_id, status)`,
+
+		`CREATE UNIQUE INDEX IF NOT EXISTS uidx_gates_token
+			ON gates (gate_token)`,
 	}
 
 	for _, stmt := range stmts {

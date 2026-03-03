@@ -5,6 +5,7 @@ import (
 
 	"parkieee/internal/modules/auth"
 	"parkieee/internal/modules/fee"
+	"parkieee/internal/modules/gate"
 	"parkieee/internal/modules/ocr"
 	"parkieee/internal/modules/payment"
 	"parkieee/internal/modules/rfid"
@@ -60,6 +61,9 @@ type Container struct {
 	OCRResultRepo    ocr.OCRResultRepositoryPort
 	OCRReviewLogRepo ocr.OCRReviewLogRepositoryPort
 	OCRService       ocr.ServicePort
+
+	GatePairingRepo gate.PairingRepositoryPort
+	GateService     gate.ServicePort
 }
 
 func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
@@ -97,6 +101,9 @@ func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
 		return nil, err
 	}
 	if err := container.initPaymentModule(); err != nil {
+		return nil, err
+	}
+	if err := container.initGateModule(); err != nil {
 		return nil, err
 	}
 
@@ -211,6 +218,17 @@ func (c *Container) initPaymentModule() error {
 		c.PaymentRepo,
 		c.TransactionService,
 		c.Config.Midtrans,
+		c.Log,
+	)
+	return nil
+}
+
+func (c *Container) initGateModule() error {
+	c.GatePairingRepo = gate.NewPairingRepository(c.DB)
+	c.GateService = gate.NewService(
+		c.GateRepo,
+		c.GatePairingRepo,
+		c.Config,
 		c.Log,
 	)
 	return nil

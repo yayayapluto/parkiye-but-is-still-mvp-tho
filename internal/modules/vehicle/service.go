@@ -36,6 +36,7 @@ func (s *service) CreateVehicleType(ctx context.Context, req *CreateVehicleTypeR
 		Description: req.Description,
 	}
 	if err := s.vtRepo.Create(ctx, vt); err != nil {
+		s.log.Error(ctx, "failed to create vehicle type", "name", vt.Name, "error", err)
 		return nil, err
 	}
 	s.log.Info(ctx, "vehicle type created", "id", vt.ID, "name", vt.Name)
@@ -45,6 +46,7 @@ func (s *service) CreateVehicleType(ctx context.Context, req *CreateVehicleTypeR
 func (s *service) UpdateVehicleType(ctx context.Context, id uuid.UUID, req *UpdateVehicleTypeRequest) (*VehicleType, error) {
 	vt, err := s.vtRepo.FindByID(ctx, id)
 	if err != nil {
+		s.log.Warn(ctx, "update vehicle type failed: not found", "id", id)
 		return nil, err
 	}
 	if req.Name != nil {
@@ -57,6 +59,7 @@ func (s *service) UpdateVehicleType(ctx context.Context, id uuid.UUID, req *Upda
 		vt.Description = *req.Description
 	}
 	if err := s.vtRepo.Update(ctx, vt); err != nil {
+		s.log.Error(ctx, "failed to update vehicle type", "id", id, "error", err)
 		return nil, err
 	}
 	s.log.Info(ctx, "vehicle type updated", "id", id)
@@ -65,6 +68,7 @@ func (s *service) UpdateVehicleType(ctx context.Context, id uuid.UUID, req *Upda
 
 func (s *service) DeleteVehicleType(ctx context.Context, id uuid.UUID) error {
 	if err := s.vtRepo.Delete(ctx, id); err != nil {
+		s.log.Error(ctx, "failed to delete vehicle type", "id", id, "error", err)
 		return err
 	}
 	s.log.Info(ctx, "vehicle type deleted", "id", id)
@@ -89,6 +93,7 @@ func (s *service) GetVehicleByPlate(ctx context.Context, plate string) (*Vehicle
 
 func (s *service) UpsertVehicle(ctx context.Context, req *UpsertVehicleRequest) (*Vehicle, error) {
 	if _, err := s.vtRepo.FindByID(ctx, req.VehicleTypeID); err != nil {
+		s.log.Warn(ctx, "upsert vehicle failed: vehicle type not found", "vehicle_type_id", req.VehicleTypeID)
 		return nil, errors.New(errors.ErrNotFound, "vehicle type not found")
 	}
 
@@ -102,6 +107,7 @@ func (s *service) UpsertVehicle(ctx context.Context, req *UpsertVehicleRequest) 
 
 	result, err := s.vRepo.Upsert(ctx, v)
 	if err != nil {
+		s.log.Error(ctx, "failed to upsert vehicle", "plate", v.PlateNumber, "error", err)
 		return nil, err
 	}
 	s.log.Info(ctx, "vehicle upserted", "id", result.ID, "plate", result.PlateNumber)
@@ -111,10 +117,12 @@ func (s *service) UpsertVehicle(ctx context.Context, req *UpsertVehicleRequest) 
 func (s *service) UpdateVehicle(ctx context.Context, id uuid.UUID, req *UpdateVehicleRequest) (*Vehicle, error) {
 	v, err := s.vRepo.FindByID(ctx, id)
 	if err != nil {
+		s.log.Warn(ctx, "update vehicle failed: not found", "id", id)
 		return nil, err
 	}
 	if req.VehicleTypeID != nil {
 		if _, err := s.vtRepo.FindByID(ctx, *req.VehicleTypeID); err != nil {
+			s.log.Warn(ctx, "update vehicle failed: vehicle type not found", "vehicle_type_id", req.VehicleTypeID)
 			return nil, errors.New(errors.ErrNotFound, "vehicle type not found")
 		}
 		v.VehicleTypeID = *req.VehicleTypeID
@@ -123,6 +131,7 @@ func (s *service) UpdateVehicle(ctx context.Context, id uuid.UUID, req *UpdateVe
 		v.Notes = *req.Notes
 	}
 	if err := s.vRepo.Update(ctx, v); err != nil {
+		s.log.Error(ctx, "failed to update vehicle", "id", id, "error", err)
 		return nil, err
 	}
 	s.log.Info(ctx, "vehicle updated", "id", id)

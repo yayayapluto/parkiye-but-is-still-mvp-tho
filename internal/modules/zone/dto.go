@@ -51,14 +51,16 @@ type ZoneResponse struct {
 }
 
 type GateResponse struct {
-	ID           uuid.UUID      `json:"id"`
-	ZoneID       uuid.UUID      `json:"zone_id"`
-	Name         string         `json:"name"`
-	GateType     types.GateType `json:"gate_type"`
-	LocationDesc string         `json:"location_desc"`
-	IsActive     bool           `json:"is_active"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
+	ID              uuid.UUID      `json:"id"`
+	ZoneID          uuid.UUID      `json:"zone_id"`
+	Name            string         `json:"name"`
+	GateType        types.GateType `json:"gate_type"`
+	LocationDesc    string         `json:"location_desc"`
+	GateToken       string         `json:"gate_token"` // hanya tampil ke admin — jangan expose ke publik
+	TokenLastUsedAt *time.Time     `json:"token_last_used_at"`
+	IsActive        bool           `json:"is_active"`
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
 }
 
 type ZoneCapacityResponse struct {
@@ -85,13 +87,15 @@ func toZoneResponse(z *Zone) ZoneResponse {
 
 func toGateResponse(g *Gate) GateResponse {
 	return GateResponse{
-		ID:           g.ID,
-		ZoneID:       g.ZoneID,
-		Name:         g.Name,
-		GateType:     g.GateType,
-		LocationDesc: g.LocationDesc,
-		IsActive:     g.IsActive,
-		CreatedAt:    g.CreatedAt,
-		UpdatedAt:    g.UpdatedAt,
+		ID:              g.ID,
+		ZoneID:          g.ZoneID,
+		Name:            g.Name,
+		GateType:        g.GateType,
+		LocationDesc:    g.LocationDesc,
+		GateToken:       g.GateToken,
+		TokenLastUsedAt: g.TokenLastUsedAt,
+		IsActive:        g.IsActive,
+		CreatedAt:       g.CreatedAt,
+		UpdatedAt:       g.UpdatedAt,
 	}
 }

@@ -24,4 +24,5 @@ func RegisterRoutes(router fiber.Router, svc ServicePort, auth middleware.TokenV
 	router.Post("/zones/:id/gates", authMw, manageMw, adapter.h.createGate)
 	router.Patch("/zones/:id/gates/:gateId", authMw, manageMw, adapter.h.updateGate)
 	router.Delete("/zones/:id/gates/:gateId", authMw, manageMw, adapter.h.deactivateGate)
+	router.Post("/zones/:id/gates/:gateId/regenerate-token", authMw, manageMw, adapter.h.regenerateGateToken)
 }

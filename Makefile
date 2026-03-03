@@ -24,8 +24,8 @@ help:
 	@echo ""
 	@echo "Database"
 	@echo "  make migrate      Run AutoMigrate (create/alter tables)"
-	@echo "  make migrate-seed Run AutoMigrate + seeder"
-	@echo "  make seed         Run seeder only (idempotent)"
+	@echo "  make migrate-seed Run AutoMigrate + truncate all tables + seeder"
+	@echo "  make seed         Run truncate all tables + seeder"
 	@echo ""
 	@echo "Go"
 	@echo "  make tidy         go mod tidy"
@@ -89,10 +89,10 @@ migrate:
 	go run ./cmd/migrate
 
 migrate-seed:
-	go run ./cmd/migrate -seed
+	go run ./cmd/migrate -seed -truncate
 
 seed:
-	go run ./cmd/migrate -seed-only
+	go run ./cmd/migrate -seed-only -truncate
 
 tidy:
 	go mod tidy
@@ -103,7 +103,7 @@ kill:
 build: tidy
 	go build -o bin/api.exe ./cmd/api
 
-run: kill build
+run: kill
 	./bin/api.exe
 
 refresh: down up wait-db run

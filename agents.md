@@ -7,7 +7,7 @@ Parking management system. Go monorepo. Read this before making any changes.
 ## Quick Start
 
 ```bash
-cp .env.example .env        # edit JWT_SECRET_KEY (min 32 chars)
+cp .env.example .env        # edit JWT_SECRET_KEY (min 32 chars) + QR_SECRET + S3_*
 make setup                  # tidy + up + migrate + seed
 make dev                    # start infra + run API locally
 ```
@@ -46,16 +46,14 @@ internal/
     logger.go               # newLogger() — maps config.Config → logger.Config
     observability.go        # initObservability() — Prometheus + OTel tracing
     server.go               # NewServer() — Fiber app, middleware, routes
-  modules/<name>/           # one folder per domain (see Module Layout below)
+  modules/<n>/           # one folder per domain (see Module Layout below)
 pkg/
   config/
-    config.go               # Config structs + Load() + env helpers — PLACE_NAME, QR_SECRET added
+    config.go               # Config structs + Load() + env helpers — S3Config, PLACE_NAME, QR_SECRET added
   qr/
     qr.go                   # Ticket PNG generator — 512x512, Go Mono font, HMAC filename obfuscation
   photo/
-    photo.go                # Save(): multipart upload → local path + OCR container path (POSIX-safe)
-  storage/
-    storage.go              # POST /storage/photos standalone upload endpoint
+    photo.go                # Save(): multipart upload → S3-compatible storage (AWS Sig V4), returns publicURL + ocrPath
   errors/
     error.go                # AppError type + error codes
   helpers/                  # utilities — add as needed (currently empty)
@@ -69,7 +67,7 @@ pkg/
     metrics.go              # Prometheus counters/histograms/gauges
     middleware.go           # Fiber middleware — records HTTP metrics per request
   middleware/
-    auth.go                 # JWT auth middleware
+    auth.go                 # JWT auth middleware + GateAuth middleware + helpers
   response/
     response.go             # Response, Meta structs + Success/Created/BadRequest/etc
     errors.go               # ErrorHandler (AppError → fiber.Error → fallback)
@@ -81,7 +79,7 @@ pkg/
     gate.go                 # gate-related enums
     misc.go                 # shared enums
     payment.go              # payment-related enums
-    transaction.go          # transaction-related enums
+    transaction.go          # transaction-related enums + FlagTypePlateMismatch
   validator/
     core.go                 # validator instance
     global.go               # global singleton
@@ -165,6 +163,7 @@ RFIDCardID *uuid.UUID `gorm:"type:uuid;index"`
 9.  OCRJob, OCRResult, OCRReviewLog
 10. AuditLog, AuditLogExport
 11. ZoneCapacityLog   ← last (depends on both zones and transactions)
+12. GatePairingCode   ← gate pairing flow
 ```
 
 Place new models **after** all their FK dependencies.
@@ -214,6 +213,26 @@ Required env (app panics without):
 Optional env (ada default):
 
 - `PLACE_NAME` — nama tempat yang tampil di tiket (default: `Parkir`)
+
+S3 storage env (wajib untuk upload foto):
+
+- `S3_ENDPOINT` — e.g. `https://s3.nevaobjects.id`
+- `S3_BUCKET` — nama bucket
+- `S3_ACCESS_KEY` / `S3_SECRET_KEY`
+- `S3_REGION` — default `us-east-1`
+- `S3_PUBLIC_BASE_URL` — base URL publik untuk serve file, e.g. `https://parkieee.s3.nevaobjects.id`
+
+### Photo Upload (`pkg/photo`)
+
+```go
+publicURL, ocrPath, err := photo.Save(fileHeader, "entry", cfg.S3)
+// publicURL → "https://parkieee.s3.nevaobjects.id/entry_abc12345_1772000000.jpg"
+// ocrPath   → sama dengan publicURL (OCR fetch via HTTP, bukan volume mount)
+```
+
+- Upload ke S3-compatible storage menggunakan AWS Signature V4 native (tanpa SDK)
+- `EnsureBucketPolicy(cfg.S3)` dipanggil saat startup untuk set bucket public-read
+- Foto diakses OCR via URL publik, bukan shared volume
 
 ### Logger (`pkg/logger`)
 
@@ -316,32 +335,29 @@ Seed data (idempotent):
 
 | Area                                 | Status                                                                              |
 |--------------------------------------|-------------------------------------------------------------------------------------|
-| `pkg/types`                          | ✅ done                                                                              |
-| `pkg/config`                         | ✅ done                                                                              |
+| `pkg/types`                          | ✅ done — FlagTypePlateMismatch ditambahkan                                          |
+| `pkg/config`                         | ✅ done — S3Config added, StorageConfig masih ada (fallback)                         |
 | `pkg/logger`                         | ✅ done                                                                              |
 | `pkg/errors`                         | ✅ done                                                                              |
 | `pkg/response`                       | ✅ done — paginated response, prev/next links always present                         |
 | `pkg/validator`                      | ✅ done                                                                              |
 | `pkg/metrics`                        | ✅ done                                                                              |
 | `pkg/tracer`                         | ✅ done                                                                              |
-| `pkg/middleware/auth.go`             | ✅ done                                                                              |
+| `pkg/middleware/auth.go`             | ✅ done — GateAuth + GateTokenValidator + GetGate* helpers                           |
 | `pkg/helpers`                        | ⬜ empty — add utilities as needed                                                   |
 | `pkg/types/date.go`                  | ✅ done — DateOnly type for YYYY-MM-DD JSON fields                                   |
-| `pkg/photo/`                         | ✅ done — Save(): multipart → local + OCR path, POSIX-safe                           |
-| `pkg/storage/`                       | ✅ done — POST /storage/photos upload endpoint                                       |
-| `database/migrate.go`                | ✅ done                                                                              |
+| `pkg/photo/`                         | ✅ done — Save(): multipart → S3 via AWS Sig V4, EnsureBucketPolicy()               |
+| `database/migrate.go`                | ✅ done — GatePairingCode ditambahkan                                                |
 | `database/seed.go`                   | ✅ done — gofakeit, all 11 modules, 25–80 rows per entity                            |
-| `internal/bootstrap/*`               | ⬜ done: auth + zone + vehicle + rfid + fee + transaction + ocr — payment perlu initPaymentModule + RegisterRoutes |
-| `pkg/qr/`                            | ✅ done — 512x512 thermal ticket PNG, Go Mono font, HMAC-SHA256 filename obfuscation |
-| `cmd/api/main.go`                    | ✅ done                                                                              |
-| `internal/modules/*/domain.go`       | ⬜ done (all 11 modules) — payment: perlu rename QRISUrl→QRISString + tambah QRISImageURL |
-| `internal/modules/*/ports.go`        | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr — payment: ada, perlu update HandleMidtransWebhook signature — transaction: perlu tambah MarkPaid + MarkExited |
-| `internal/modules/*/repository.go`   | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
-| `internal/modules/*/service.go`      | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr — transaction: perlu tambah MarkPaid + MarkExited |
-| `internal/modules/*/dto.go`          | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr — payment: ada, perlu update ikut rename domain |
-| `internal/modules/*/handler.go`      | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
-| `internal/modules/*/http_adapter.go` | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
-| `internal/modules/*/routes.go`       | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
+| `internal/bootstrap/*`               | ✅ done: semua module sudah terwire (auth, zone, vehicle, rfid, fee, ocr, transaction, payment, gate) |
+| `internal/modules/*/domain.go`       | ✅ done (all 11 modules)                                                              |
+| `internal/modules/*/ports.go`        | ✅ done: auth, zone, vehicle, rfid, fee, transaction (incl. MarkPaid+MarkExited), ocr, payment, gate — override, audit: placeholder |
+| `internal/modules/*/repository.go`   | ✅ done: auth, zone, vehicle, rfid, fee, transaction, ocr, payment, gate — override, audit: kosong |
+| `internal/modules/*/service.go`      | ✅ done: auth, zone, vehicle, rfid, fee, transaction, ocr, payment, gate — override, audit: kosong |
+| `internal/modules/*/dto.go`          | ✅ done: auth, zone, vehicle, rfid, fee, transaction, ocr, payment, gate — override, audit: placeholder |
+| `internal/modules/*/handler.go`      | ✅ done: auth, zone, vehicle, rfid, fee, transaction, ocr, payment, gate — override, audit: kosong |
+| `internal/modules/*/http_adapter.go` | ✅ done: auth, zone, vehicle, rfid, fee, transaction, ocr, payment, gate — override, audit: placeholder |
+| `internal/modules/*/routes.go`       | ✅ done: auth, zone, vehicle, rfid, fee, transaction, ocr, payment, gate — override, audit: placeholder |
 | `docs/Parkieee - Auth.*`             | ✅ done — biasa + full test suite                                                    |
 | `docs/Parkieee - Zone.*`             | ✅ done — biasa + full test suite                                                    |
 | `docs/Parkieee - Vehicle.*`          | ✅ done — biasa + full test suite                                                    |
@@ -350,7 +366,7 @@ Seed data (idempotent):
 | `docs/Parkieee - Transaction.*`      | ✅ done — biasa + full test suite                                                    |
 
 **Next:** implement modules in dependency order:
-`auth` ✅ → `zone` ✅ → `vehicle` ✅ → `rfid` ✅ → `fee` ✅ → `transaction` ✅ → `ocr` ✅ → `payment` 🔄 → `override` → `audit`
+`auth` ✅ → `zone` ✅ → `vehicle` ✅ → `rfid` ✅ → `fee` ✅ → `transaction` ✅ → `ocr` ✅ → `payment` ✅ → `gate` ✅ → `override` → `audit`
 
 ---
 
@@ -359,41 +375,37 @@ Seed data (idempotent):
 ### `pkg/photo` — Save()
 
 ```go
-publicURL, ocrPath, err := photo.Save(fileHeader, "entry", cfg.Storage.Dir, cfg.Storage.OCRPathPrefix)
-// publicURL → "/storage/photos/entry_abc12345_1772000000.jpg"  (served via Go API)
-// ocrPath   → "/mnt/storage/photos/entry_abc12345_..."          (container path untuk Python OCR)
+publicURL, ocrPath, err := photo.Save(fileHeader, "entry", cfg.S3)
+// publicURL → "https://parkieee.s3.nevaobjects.id/entry_abc12345_1772000000.jpg"
+// ocrPath   → sama dengan publicURL
 ```
 
-- `storageDir` = `STORAGE_DIR` dari config (local path di host)
-- `ocrPrefix` = `OCR_STORAGE_PREFIX` dari config (path di dalam Docker container)
-- Kalau `ocrPrefix` kosong, fallback ke `filepath.ToSlash(localPath)`
-- Selalu pakai `cfg.Storage.OCRPathPrefix` langsung — jangan `os.Getenv`, Git Bash akan terjemahkan POSIX path
+- Upload ke S3-compatible storage via raw AWS Signature V4 (bukan SDK)
+- `EnsureBucketPolicy(cfg.S3)` dipanggil saat startup (`bootstrap/app.go`)
+- OCR service fetch image via URL publik (bukan volume mount)
+- Kalau S3 tidak dikonfigurasi, `signedPut` akan error — pastikan env S3_* terisi
 
-### `pkg/storage` — Upload Endpoint
+### Transaction Handler — Photo Upload
 
-```
-POST /storage/photos  (multipart/form-data, field: photo)
-→ 201 { path, url }
-```
+Handler `recordEntry` dan `recordExit` di `transaction/handler.go` menerima foto via `multipart/form-data` (field: `photo`):
 
-Endpoint independen untuk client upload foto sebelum scan RFID/QR.
-Path yang dikembalikan (`path`) dikirim ke `entry_photo_path` / `exit_photo_path`.
-
-### Docker Volume — Shared Storage
-
-Go API dan Python OCR **harus share volume yang sama** (bind mount, bukan named volume):
-
-```yaml
-services:
-  app:
-    volumes:
-      - ./storage:/mnt/storage   # bind mount
-  python-ocr:
-    volumes:
-      - ./storage:/mnt/storage   # sama persis
+```go
+if form, err := c.MultipartForm(); err == nil {
+    if files := form.File["photo"]; len(files) > 0 {
+        publicURL, volumePath, photoErr := photo.Save(files[0], "entry", h.s3cfg)
+        // ...
+    }
+}
 ```
 
-Named Docker volume (`parking_storage: driver: local`) **tidak bisa di-share** secara transparan antar container.
+`handler` dan `httpAdapter` di transaction module menerima `config.S3Config` sebagai dependency.
+`RegisterRoutes` juga menerima `s3cfg config.S3Config`.
+
+### Gate Pairing — SSE
+
+SSE state disimpan in-memory di `gate/repository.go` (map[code]chan + sync.RWMutex).
+Bukan di DB — hanya survive selama proses Go berjalan.
+Kalau server restart, screen perlu request pairing baru.
 
 ---
 
@@ -401,9 +413,9 @@ Named Docker volume (`parking_storage: driver: local`) **tidak bisa di-share** s
 
 - **Never run `make db-reset`** unless explicitly asked — wipes all data
 - **Never commit `.env`** — in `.gitignore`
-- **Never use named Docker volume** untuk shared storage Go ↔ Python — selalu bind mount `./storage:/mnt/storage`
-- **Always use `cfg.Storage.OCRPathPrefix`** bukan `os.Getenv("OCR_STORAGE_PREFIX")` — Git Bash corrupt POSIX paths
+- **Never use named Docker volume** untuk shared storage Go ↔ Python — photo sekarang di S3 (HTTP access)
 - **Never batch AutoMigrate** — always one model at a time
 - **Always add `column:` tag** on every new model field, especially acronyms
 - **Always update `applyManualConstraints`** when adding composite uniques or CHECK constraints
 - When unsure about module pattern, read the nearest completed module as reference
+- **photo.Save() signature** sekarang `(file, prefix, s3cfg)` — bukan `(file, prefix, storageDir, ocrPrefix)`

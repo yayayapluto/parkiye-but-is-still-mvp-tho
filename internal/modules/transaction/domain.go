@@ -33,6 +33,7 @@ type Transaction struct {
 	Status           types.TransactionStatus `gorm:"type:varchar(20);not null"` // "open"|"awaiting_payment"|"paid"|"exited"|"overridden"|"cancelled"
 	ReceiptPrinted   bool                    `gorm:"not null;default:false"`
 	ReceiptPrintedAt *time.Time
+	PlateMismatch    *bool     `gorm:"default:null"` // null=not yet checked, true=entry/exit plates differ, false=matched
 	ZoneID           uuid.UUID `gorm:"type:uuid;not null;index"`
 	CreatedAt        time.Time `gorm:"autoCreateTime"`
 	UpdatedAt        time.Time `gorm:"autoUpdateTime"`

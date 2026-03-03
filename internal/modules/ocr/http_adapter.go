@@ -49,9 +49,6 @@ func (a *httpAdapter) ping(ctx context.Context) error {
 // callDetectPlate sends imagePath to POST /detect-plate and returns the result.
 // Returns an error for non-2xx responses or network failures.
 func (a *httpAdapter) callDetectPlate(ctx context.Context, imagePath string) (*detectPlateResponse, error) {
-	// TODO: remove after debugging path issues
-	fmt.Printf("[OCR DEBUG] sending image_path to Python: %q\n", imagePath)
-
 	body, err := json.Marshal(detectPlateRequest{ImagePath: imagePath})
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)

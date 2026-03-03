@@ -10,9 +10,11 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/monitor"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
+	"log"
 	"net/http"
 	"parkieee/internal/modules/auth"
 	"parkieee/internal/modules/fee"
+	"parkieee/internal/modules/gate"
 	"parkieee/internal/modules/payment"
 	"parkieee/internal/modules/rfid"
 	"parkieee/internal/modules/transaction"
@@ -20,7 +22,6 @@ import (
 	"parkieee/internal/modules/zone"
 	pkgerrors "parkieee/pkg/errors"
 	"parkieee/pkg/response"
-	"parkieee/pkg/storage"
 )
 
 func NewServer(container *Container) *fiber.App {
@@ -72,19 +73,18 @@ func NewServer(container *Container) *fiber.App {
 	rfid.RegisterRoutes(api, container.RFIDService, container.AuthService, container.Validator)
 	fee.RegisterRoutes(api, container.FeeService, container.AuthService, container.Validator)
 	transaction.RegisterRoutes(api, container.TransactionService, container.AuthService, container.Validator,
-		container.Config.Storage.Dir, container.Config.Storage.OCRPathPrefix)
+		container.Config.S3)
 	payment.RegisterRoutes(api, container.PaymentService, container.AuthService, container.Validator)
-	storage.RegisterRoutes(api, container.AuthService)
+	gate.RegisterRoutes(api, container.GateService, container.AuthService, container.Validator)
 
 	return app
 }
 
 func errorHandler(c *fiber.Ctx, err error) error {
-	// Log unhandled errors for debugging
 	var appErr *pkgerrors.AppError
 	var fiberErr *fiber.Error
 	if !errors.As(err, &appErr) && !errors.As(err, &fiberErr) {
-		c.Context().Logger().Printf("[UNHANDLED ERROR] %T: %v", err, err)
+		log.Printf("[ERROR] %s %s → %T: %v", c.Method(), c.Path(), err, err)
 	}
 	return response.ErrorHandler(c, err)
 }

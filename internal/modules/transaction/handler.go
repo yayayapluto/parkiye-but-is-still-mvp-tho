@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"parkieee/pkg/config"
 	"parkieee/pkg/middleware"
 	"parkieee/pkg/photo"
 	"parkieee/pkg/response"
@@ -15,14 +16,13 @@ import (
 )
 
 type handler struct {
-	svc        ServicePort
-	v          *validator.Validator
-	storageDir string
-	ocrPrefix  string
+	svc   ServicePort
+	v     *validator.Validator
+	s3cfg config.S3Config
 }
 
-func newHandler(svc ServicePort, v *validator.Validator, storageDir, ocrPrefix string) *handler {
-	return &handler{svc: svc, v: v, storageDir: storageDir, ocrPrefix: ocrPrefix}
+func newHandler(svc ServicePort, v *validator.Validator, s3cfg config.S3Config) *handler {
+	return &handler{svc: svc, v: v, s3cfg: s3cfg}
 }
 
 func (h *handler) listTransactions(c *fiber.Ctx) error {
@@ -147,12 +147,11 @@ func (h *handler) recordEntry(c *fiber.Ctx) error {
 		return response.BadRequest(c, "validation failed", errs)
 	}
 
-	// Save photo if provided via multipart — non-fatal if absent or not multipart.
 	if form, err := c.MultipartForm(); err == nil {
 		if files := form.File["photo"]; len(files) > 0 {
-			publicURL, volumePath, err := photo.Save(files[0], "entry", h.storageDir, h.ocrPrefix)
-			if err != nil {
-				return response.InternalError(c, "failed to save entry photo")
+			publicURL, volumePath, photoErr := photo.Save(files[0], "entry", h.s3cfg)
+			if photoErr != nil {
+				return fmt.Errorf("save entry photo: %w", photoErr)
 			}
 			req.EntryPhotoURL = publicURL
 			req.EntryPhotoPath = volumePath
@@ -182,12 +181,11 @@ func (h *handler) recordExit(c *fiber.Ctx) error {
 		return response.BadRequest(c, "validation failed", errs)
 	}
 
-	// Save photo if provided via multipart — non-fatal if absent or not multipart.
 	if form, err := c.MultipartForm(); err == nil {
 		if files := form.File["photo"]; len(files) > 0 {
-			publicURL, volumePath, err := photo.Save(files[0], "exit", h.storageDir, h.ocrPrefix)
-			if err != nil {
-				return response.InternalError(c, "failed to save exit photo")
+			publicURL, volumePath, photoErr := photo.Save(files[0], "exit", h.s3cfg)
+			if photoErr != nil {
+				return fmt.Errorf("save exit photo: %w", photoErr)
 			}
 			req.ExitPhotoURL = publicURL
 			req.ExitPhotoPath = volumePath

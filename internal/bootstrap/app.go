@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"parkieee/pkg/config"
 	"parkieee/pkg/logger"
+	"parkieee/pkg/photo"
 	"syscall"
 	"time"
 )
@@ -39,6 +40,11 @@ func NewApp() (*App, error) {
 	}
 
 	server := NewServer(container)
+
+	// Ensure S3 bucket is publicly readable on every startup
+	if err := photo.EnsureBucketPolicy(cfg.S3); err != nil {
+		log.Warn(context.Background(), "s3 bucket policy: could not set public-read", "error", err)
+	}
 
 	return &App{
 		Config:    cfg,

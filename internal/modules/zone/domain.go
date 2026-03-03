@@ -41,15 +41,17 @@ func (ZoneCapacityLog) TableName() string { return "zone_capacity_logs" }
 
 // Gate is a physical entry or exit point in a zone.
 type Gate struct {
-	ID           uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	ZoneID       uuid.UUID      `gorm:"type:uuid;not null;index"`
-	Name         string         `gorm:"type:varchar(100);not null"`
-	GateType     types.GateType `gorm:"type:varchar(10);not null"` // "entry"|"exit"
-	LocationDesc string         `gorm:"type:text"`
-	IsActive     bool           `gorm:"not null;default:true"`
-	CreatedBy    *uuid.UUID     `gorm:"type:uuid"`
-	CreatedAt    time.Time      `gorm:"autoCreateTime"`
-	UpdatedAt    time.Time      `gorm:"autoUpdateTime"`
+	ID              uuid.UUID      `gorm:"column:id;type:uuid;primaryKey;default:gen_random_uuid()"`
+	ZoneID          uuid.UUID      `gorm:"column:zone_id;type:uuid;not null;index"`
+	Name            string         `gorm:"column:name;type:varchar(100);not null"`
+	GateType        types.GateType `gorm:"column:gate_type;type:varchar(10);not null"` // "entry"|"exit"
+	LocationDesc    string         `gorm:"column:location_desc;type:text"`
+	GateToken       string         `gorm:"column:gate_token;type:varchar(60);uniqueIndex;not null"` // token untuk screen auth
+	TokenLastUsedAt *time.Time     `gorm:"column:token_last_used_at"`
+	IsActive        bool           `gorm:"column:is_active;not null;default:true"`
+	CreatedBy       *uuid.UUID     `gorm:"column:created_by;type:uuid"`
+	CreatedAt       time.Time      `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt       time.Time      `gorm:"column:updated_at;autoUpdateTime"`
 
 	Zone *Zone `gorm:"foreignKey:ZoneID"`
 }

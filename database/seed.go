@@ -1,8 +1,10 @@
 package database
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
-	"math/rand"
+	mathrand "math/rand"
 	"strings"
 	"time"
 
@@ -26,6 +28,53 @@ import (
 	zoneDomain "parkieee/internal/modules/zone"
 	"parkieee/pkg/types"
 )
+
+// Truncate removes all rows from every table in reverse FK-dependency order,
+// then resets sequences. Safe to call before Seed for a clean slate.
+func Truncate(db *gorm.DB) error {
+	tables := []string{
+		"audit_log_exports",
+		"audit_logs",
+		"ocr_review_logs",
+		"ocr_results",
+		"ocr_jobs",
+		"operator_overrides",
+		"refunds",
+		"midtrans_callbacks",
+		"payments",
+		"unclosed_transaction_flags",
+		"transaction_logs",
+		"transactions",
+		"gate_pairing_codes",
+		"zone_capacity_logs",
+		"gate_devices",
+		"gates",
+		"zones",
+		"override_configs",
+		"ocr_configs",
+		"holiday_rates",
+		"fee_tiers",
+		"fee_configs",
+		"rfid_cards",
+		"vehicles",
+		"vehicle_types",
+		"role_permissions",
+		"user_login_stats",
+		"user_login_logs",
+		"user_sessions",
+		"users",
+		"permissions",
+		"roles",
+	}
+
+	// TRUNCATE ... RESTART IDENTITY CASCADE handles FK deps and resets sequences in one shot.
+	for _, t := range tables {
+		if err := db.Exec("TRUNCATE TABLE \"" + t + "\" RESTART IDENTITY CASCADE").Error; err != nil {
+			return fmt.Errorf("truncate %s: %w", t, err)
+		}
+	}
+	return nil
+}
 
 // Seed inserts base data required for the app to function, then fills each
 // module with realistic random rows (25–80 per entity where applicable).
@@ -159,7 +208,7 @@ func seedUsers(db *gorm.DB) error {
 			Name:         gofakeit.Name(),
 			Email:        email,
 			PasswordHash: string(hash),
-			RoleID:       roleID(roleNames[rand.Intn(len(roleNames))]),
+			RoleID:       roleID(roleNames[mathrand.Intn(len(roleNames))]),
 			IsActive:     gofakeit.Bool(),
 		})
 	}
@@ -206,8 +255,8 @@ func seedVehicles(db *gorm.DB) error {
 		vehicles = append(vehicles, vehicleDomain.Vehicle{
 			ID:            uuid.New(),
 			PlateNumber:   plate,
-			VehicleTypeID: vtypePool[rand.Intn(len(vtypePool))],
-			Source:        sources[rand.Intn(len(sources))],
+			VehicleTypeID: vtypePool[mathrand.Intn(len(vtypePool))],
+			Source:        sources[mathrand.Intn(len(sources))],
 			Notes:         gofakeit.RandomString([]string{"", "", gofakeit.Sentence(4)}),
 		})
 	}
@@ -231,6 +280,29 @@ func seedZonesAndGates(db *gorm.DB) error {
 		// Assign motorcycle to remaining null zones as a safe default.
 		db.Model(&zoneDomain.Zone{}).Where("for_vehicle_type_id IS NULL").
 			Update("for_vehicle_type_id", vtMotorcycleFix)
+
+		// Backfill gates for any zone that has none. This handles the case where
+		// zones were seeded in a previous run but gates were skipped or partially inserted.
+		adminIDBackfill := deterministicUUID("seed:admin")
+		var zonesWithoutGates []zoneDomain.Zone
+		db.Raw(`SELECT z.* FROM zones z LEFT JOIN gates g ON g.zone_id = z.id WHERE g.id IS NULL`).Scan(&zonesWithoutGates)
+		if len(zonesWithoutGates) > 0 {
+			locationDescsBackfill := []string{
+				"Pintu utara", "Pintu selatan", "Pintu timur", "Pintu barat",
+				"Pintu basement", "Pintu utama", "Pintu samping", "Pintu darurat",
+			}
+			seenTokensBackfill := map[string]bool{}
+			var backfillGates []zoneDomain.Gate
+			for _, z := range zonesWithoutGates {
+				backfillGates = append(backfillGates,
+					zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Masuk", GateType: types.GateTypeEntry, LocationDesc: pick(locationDescsBackfill), GateToken: uniqueToken(seenTokensBackfill), IsActive: true, CreatedBy: &adminIDBackfill},
+					zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Keluar", GateType: types.GateTypeExit, LocationDesc: pick(locationDescsBackfill), GateToken: uniqueToken(seenTokensBackfill), IsActive: true, CreatedBy: &adminIDBackfill},
+				)
+			}
+			if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&backfillGates).Error; err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 
@@ -257,13 +329,13 @@ func seedZonesAndGates(db *gorm.DB) error {
 	for i := 0; i < extraN; i++ {
 		name := uniqueZoneName(seenNames, areaWords, labels)
 		seenNames[name] = true
-		vtID := vtPool[rand.Intn(len(vtPool))]
+		vtID := vtPool[mathrand.Intn(len(vtPool))]
 		extra = append(extra, zoneDomain.Zone{
 			ID:               uuid.New(),
 			Name:             name,
 			Description:      gofakeit.Sentence(6),
 			Capacity:         gofakeit.IntRange(10, 300),
-			AdditionalFee:    feeOptions[rand.Intn(len(feeOptions))],
+			AdditionalFee:    feeOptions[mathrand.Intn(len(feeOptions))],
 			ForVehicleTypeID: &vtID,
 			IsActive:         gofakeit.Bool(),
 			CreatedBy:        &adminID,
@@ -280,16 +352,17 @@ func seedZonesAndGates(db *gorm.DB) error {
 		"Pintu basement", "Pintu utama", "Pintu samping", "Pintu darurat",
 	}
 
+	seenTokens := map[string]bool{}
 	var gates []zoneDomain.Gate
 	for _, z := range allZones {
 		gates = append(gates,
-			zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Masuk", GateType: types.GateTypeEntry, LocationDesc: pick(locationDescs), IsActive: true, CreatedBy: &adminID},
-			zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Keluar", GateType: types.GateTypeExit, LocationDesc: pick(locationDescs), IsActive: true, CreatedBy: &adminID},
+			zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Masuk", GateType: types.GateTypeEntry, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: true, CreatedBy: &adminID},
+			zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Keluar", GateType: types.GateTypeExit, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: true, CreatedBy: &adminID},
 		)
 		if gofakeit.Bool() {
 			gates = append(gates,
-				zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Masuk 2", GateType: types.GateTypeEntry, LocationDesc: pick(locationDescs), IsActive: gofakeit.Bool(), CreatedBy: &adminID},
-				zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Keluar 2", GateType: types.GateTypeExit, LocationDesc: pick(locationDescs), IsActive: gofakeit.Bool(), CreatedBy: &adminID},
+				zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Masuk 2", GateType: types.GateTypeEntry, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: gofakeit.Bool(), CreatedBy: &adminID},
+				zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Keluar 2", GateType: types.GateTypeExit, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: gofakeit.Bool(), CreatedBy: &adminID},
 			)
 		}
 	}
@@ -327,7 +400,7 @@ func seedRFIDCards(db *gorm.DB) error {
 			CreatedAt: gofakeit.DateRange(time.Now().AddDate(-1, 0, 0), time.Now()),
 		}
 		if len(vehicleIDs) > 0 && gofakeit.Bool() {
-			vid := vehicleIDs[rand.Intn(len(vehicleIDs))]
+			vid := vehicleIDs[mathrand.Intn(len(vehicleIDs))]
 			card.VehicleID = &vid
 		}
 		cards = append(cards, card)
@@ -509,11 +582,11 @@ func seedHolidayRates(db *gorm.DB) error {
 	for i := 0; i < n; i++ {
 		start := gofakeit.DateRange(now, now.AddDate(1, 0, 0))
 		end := start.AddDate(0, 0, gofakeit.IntRange(1, 7))
-		rt := rateTypes[rand.Intn(len(rateTypes))]
+		rt := rateTypes[mathrand.Intn(len(rateTypes))]
 
 		hr := feeDomain.HolidayRate{
 			ID:        uuid.New(),
-			Name:      names[rand.Intn(len(names))],
+			Name:      names[mathrand.Intn(len(names))],
 			DateStart: start,
 			DateEnd:   end,
 			RateType:  rt,
@@ -610,10 +683,10 @@ func seedTransactions(db *gorm.DB) error {
 	logs := make([]txDomain.TransactionLog, 0, n)
 
 	for i := 0; i < n; i++ {
-		eg := entryGates[rand.Intn(len(entryGates))]
+		eg := entryGates[mathrand.Intn(len(entryGates))]
 		entryAt := gofakeit.DateRange(time.Now().AddDate(0, -3, 0), time.Now())
-		status := statusPool[rand.Intn(len(statusPool))]
-		method := entryMethods[rand.Intn(len(entryMethods))]
+		status := statusPool[mathrand.Intn(len(statusPool))]
+		method := entryMethods[mathrand.Intn(len(entryMethods))]
 
 		tx := txDomain.Transaction{
 			ID:              uuid.New(),
@@ -626,7 +699,7 @@ func seedTransactions(db *gorm.DB) error {
 		}
 
 		if method == types.EntryMethodRFID && len(rfidCards) > 0 {
-			cid := rfidCards[rand.Intn(len(rfidCards))].ID
+			cid := rfidCards[mathrand.Intn(len(rfidCards))].ID
 			tx.RFIDCardID = &cid
 		} else {
 			qr := gofakeit.UUID()
@@ -634,7 +707,7 @@ func seedTransactions(db *gorm.DB) error {
 		}
 
 		if len(vehicles) > 0 && gofakeit.Bool() {
-			vid := vehicles[rand.Intn(len(vehicles))].ID
+			vid := vehicles[mathrand.Intn(len(vehicles))].ID
 			tx.VehicleID = &vid
 		}
 
@@ -644,13 +717,13 @@ func seedTransactions(db *gorm.DB) error {
 			status == types.TransactionStatusOverridden {
 			exitAt := entryAt.Add(time.Duration(gofakeit.IntRange(10, 480)) * time.Minute)
 			tx.ExitAt = &exitAt
-			em := exitMethods[rand.Intn(len(exitMethods))]
+			em := exitMethods[mathrand.Intn(len(exitMethods))]
 			tx.ExitMethod = &em
 			fee := pick([]int{2000, 3000, 5000, 8000, 10000, 15000, 20000})
 			tx.CalculatedFee = &fee
 
 			if zoneExits, ok := exitByZone[eg.ZoneID]; ok {
-				xgID := zoneExits[rand.Intn(len(zoneExits))]
+				xgID := zoneExits[mathrand.Intn(len(zoneExits))]
 				tx.ExitGateID = &xgID
 			}
 		}
@@ -700,7 +773,7 @@ func seedPayments(db *gorm.DB) error {
 		if tx.CalculatedFee != nil {
 			fee = *tx.CalculatedFee
 		}
-		method := methods[rand.Intn(len(methods))]
+		method := methods[mathrand.Intn(len(methods))]
 		paidAt := tx.EntryAt.Add(time.Duration(gofakeit.IntRange(1, 30)) * time.Minute)
 
 		p := paymentDomain.Payment{
@@ -758,14 +831,14 @@ func seedOperatorOverrides(db *gorm.DB) error {
 
 	overrides := make([]overrideDomain.OperatorOverride, 0, len(txs))
 	for _, tx := range txs {
-		op := operatorUsers[rand.Intn(len(operatorUsers))]
+		op := operatorUsers[mathrand.Intn(len(operatorUsers))]
 		origFee := pick([]int{5000, 10000, 15000})
 		adjFee := pick([]int{0, 2000, 5000})
 		overrides = append(overrides, overrideDomain.OperatorOverride{
 			ID:            uuid.New(),
 			TransactionID: tx.ID,
 			OperatorID:    op.ID,
-			OverrideType:  overrideTypes[rand.Intn(len(overrideTypes))],
+			OverrideType:  overrideTypes[mathrand.Intn(len(overrideTypes))],
 			Reason:        gofakeit.Sentence(8),
 			OriginalFee:   &origFee,
 			AdjustedFee:   &adjFee,
@@ -800,7 +873,7 @@ func seedOCRJobsAndResults(db *gorm.DB) error {
 	results := make([]ocrDomain.OCRResult, 0, len(txs))
 
 	for _, tx := range txs {
-		jobStatus := statusPool[rand.Intn(len(statusPool))]
+		jobStatus := statusPool[mathrand.Intn(len(statusPool))]
 		queuedAt := tx.EntryAt
 		startedAt := queuedAt.Add(2 * time.Second)
 		completedAt := startedAt.Add(time.Duration(gofakeit.IntRange(1, 5)) * time.Second)
@@ -881,7 +954,7 @@ func seedAuditLogs(db *gorm.DB) error {
 	logs := make([]auditDomain.AuditLog, 0, n)
 
 	for i := 0; i < n; i++ {
-		actor := users[rand.Intn(len(users))]
+		actor := users[mathrand.Intn(len(users))]
 		roleName := roleNameByID[actor.RoleID]
 		if roleName == "" {
 			roleName = "operator"
@@ -890,10 +963,10 @@ func seedAuditLogs(db *gorm.DB) error {
 
 		logs = append(logs, auditDomain.AuditLog{
 			ID:          uuid.New(),
-			EventType:   eventTypes[rand.Intn(len(eventTypes))],
+			EventType:   eventTypes[mathrand.Intn(len(eventTypes))],
 			ActorID:     actor.ID,
 			ActorRole:   roleName,
-			TargetType:  targetTypes[rand.Intn(len(targetTypes))],
+			TargetType:  targetTypes[mathrand.Intn(len(targetTypes))],
 			TargetID:    &targetID,
 			BeforeState: datatypes.JSON(`{"state":"before"}`),
 			AfterState:  datatypes.JSON(`{"state":"after"}`),
@@ -913,9 +986,15 @@ func deterministicUUID(name string) uuid.UUID { return uuid.NewSHA1(seedNamespac
 func roleID(name string) uuid.UUID            { return deterministicUUID("role:" + name) }
 func permID(node string) uuid.UUID            { return deterministicUUID("perm:" + node) }
 
-func randBetween(min, max int) int { return min + rand.Intn(max-min+1) }
+func randBetween(min, max int) int { return min + mathrand.Intn(max-min+1) }
 
-func pick[T any](slice []T) T { return slice[rand.Intn(len(slice))] }
+func pick[T any](slice []T) T { return slice[mathrand.Intn(len(slice))] }
+
+func randomToken() string {
+	b := make([]byte, 30)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
 
 func uniqueEmail(seen map[string]bool) string {
 	for {
@@ -929,11 +1008,20 @@ func uniqueEmail(seen map[string]bool) string {
 	}
 }
 
+func uniqueToken(seen map[string]bool) string {
+	for {
+		t := randomToken()
+		if !seen[t] {
+			return t
+		}
+	}
+}
+
 func uniquePlate(seen map[string]bool) string {
 	prefixes := []string{"B", "D", "F", "H", "L", "N", "AB", "AD", "AE", "AG", "BK", "BM", "BG"}
 	for {
 		p := fmt.Sprintf("%s %d %s",
-			prefixes[rand.Intn(len(prefixes))],
+			prefixes[mathrand.Intn(len(prefixes))],
 			gofakeit.IntRange(1000, 9999),
 			strings.ToUpper(gofakeit.Lexify("???")),
 		)
@@ -957,11 +1045,11 @@ func uniqueCardUID(seen map[string]bool) string {
 
 func uniqueZoneName(seen map[string]bool, words, labels []string) string {
 	for {
-		name := fmt.Sprintf("%s %s", words[rand.Intn(len(words))], labels[rand.Intn(len(labels))])
+		name := fmt.Sprintf("%s %s", words[mathrand.Intn(len(words))], labels[mathrand.Intn(len(labels))])
 		if !seen[name] {
 			return name
 		}
-		name = fmt.Sprintf("%s %s-%d", words[rand.Intn(len(words))], labels[rand.Intn(len(labels))], gofakeit.IntRange(2, 9))
+		name = fmt.Sprintf("%s %s-%d", words[mathrand.Intn(len(words))], labels[mathrand.Intn(len(labels))], gofakeit.IntRange(2, 9))
 		if !seen[name] {
 			return name
 		}

@@ -72,8 +72,11 @@ func (s *service) PayCash(ctx context.Context, req PayCashRequest, handledBy uui
 	}
 
 	if err := s.repo.CreatePayment(ctx, p); err != nil {
+		s.log.Error(ctx, "failed to create cash payment record", "tx_id", req.TransactionID, "error", err)
 		return nil, err
 	}
+
+	s.log.Info(ctx, "cash payment recorded", "payment_id", p.ID, "tx_id", req.TransactionID, "amount", p.Amount, "tendered", req.CashTendered, "change", cashChange, "handled_by", handledBy)
 
 	if err := s.txSvc.MarkPaid(ctx, req.TransactionID, types.TriggeredByCashier, &handledBy); err != nil {
 		s.log.Error(ctx, "failed to mark transaction as paid after cash payment",
@@ -150,8 +153,11 @@ func (s *service) InitiateQRIS(ctx context.Context, req InitiateQRISRequest) (*P
 	}
 
 	if err := s.repo.CreatePayment(ctx, p); err != nil {
+		s.log.Error(ctx, "failed to create QRIS payment record", "tx_id", req.TransactionID, "error", err)
 		return nil, err
 	}
+
+	s.log.Info(ctx, "QRIS payment initiated", "payment_id", p.ID, "tx_id", req.TransactionID, "order_id", orderID, "amount", p.Amount)
 
 	return p, nil
 }
@@ -211,11 +217,14 @@ func (s *service) HandleMidtransWebhook(ctx context.Context, rawBody []byte, pay
 	}
 
 	if p.Status == types.PaymentStatusCompleted {
+		s.log.Info(ctx, "QRIS payment settled via webhook", "order_id", payload.OrderID, "tx_id", p.TransactionID)
 		if err := s.txSvc.MarkPaid(ctx, p.TransactionID, types.TriggeredByWebhook, nil); err != nil {
 			s.log.Error(ctx, "failed to mark transaction paid from webhook", "tx_id", p.TransactionID, "error", err)
 		} else if err := s.txSvc.MarkExited(ctx, p.TransactionID, types.TriggeredByWebhook); err != nil {
 			s.log.Error(ctx, "failed to mark transaction exited from webhook", "tx_id", p.TransactionID, "error", err)
 		}
+	} else {
+		s.log.Info(ctx, "QRIS payment failed/expired via webhook", "order_id", payload.OrderID, "status", payload.TransactionStatus, "tx_id", p.TransactionID)
 	}
 
 	now := time.Now()
@@ -239,12 +248,15 @@ func (s *service) ListByTransaction(ctx context.Context, transactionID uuid.UUID
 func (s *service) RequestRefund(ctx context.Context, req RequestRefundRequest, requestedBy uuid.UUID) (*Refund, error) {
 	p, err := s.repo.FindPaymentByID(ctx, req.PaymentID)
 	if err != nil {
+		s.log.Warn(ctx, "request refund failed: payment not found", "payment_id", req.PaymentID)
 		return nil, err
 	}
 	if p.Status != types.PaymentStatusCompleted {
+		s.log.Warn(ctx, "request refund rejected: payment not completed", "payment_id", req.PaymentID, "status", p.Status)
 		return nil, errors.New(errors.ErrValidation, "refund can only be requested for completed payments")
 	}
 	if req.RefundAmount > p.Amount {
+		s.log.Warn(ctx, "request refund rejected: amount exceeds payment", "payment_id", req.PaymentID, "refund_amount", req.RefundAmount, "payment_amount", p.Amount)
 		return nil, errors.New(errors.ErrValidation, "refund amount exceeds payment amount")
 	}
 
@@ -267,8 +279,10 @@ func (s *service) RequestRefund(ctx context.Context, req RequestRefundRequest, r
 		RequestedBy:   requestedBy,
 	}
 	if err := s.repo.CreateRefund(ctx, ref); err != nil {
+		s.log.Error(ctx, "failed to create refund request", "payment_id", req.PaymentID, "error", err)
 		return nil, err
 	}
+	s.log.Info(ctx, "refund requested", "refund_id", ref.ID, "payment_id", req.PaymentID, "amount", req.RefundAmount, "requested_by", requestedBy)
 	return ref, nil
 }
 
@@ -303,17 +317,21 @@ func (s *service) ApproveRefund(ctx context.Context, refundID uuid.UUID, approve
 	ref.ProcessedAt = &now
 
 	if err := s.repo.UpdateRefund(ctx, ref); err != nil {
+		s.log.Error(ctx, "failed to update refund after approval", "refund_id", refundID, "error", err)
 		return nil, err
 	}
+	s.log.Info(ctx, "refund approved", "refund_id", refundID, "payment_id", ref.PaymentID, "amount", ref.RefundAmount, "approved_by", approvedBy)
 	return ref, nil
 }
 
 func (s *service) RejectRefund(ctx context.Context, refundID uuid.UUID, rejectedBy uuid.UUID) (*Refund, error) {
 	ref, err := s.repo.FindRefundByID(ctx, refundID)
 	if err != nil {
+		s.log.Warn(ctx, "reject refund failed: refund not found", "refund_id", refundID)
 		return nil, err
 	}
 	if ref.Status != types.RefundStatusPending {
+		s.log.Warn(ctx, "reject refund failed: not pending", "refund_id", refundID, "status", ref.Status)
 		return nil, errors.New(errors.ErrValidation, fmt.Sprintf(
 			"refund is not pending (status: %s)", ref.Status,
 		))
@@ -323,8 +341,10 @@ func (s *service) RejectRefund(ctx context.Context, refundID uuid.UUID, rejected
 	ref.ApprovedBy = &rejectedBy
 
 	if err := s.repo.UpdateRefund(ctx, ref); err != nil {
+		s.log.Error(ctx, "failed to update refund after rejection", "refund_id", refundID, "error", err)
 		return nil, err
 	}
+	s.log.Info(ctx, "refund rejected", "refund_id", refundID, "payment_id", ref.PaymentID, "rejected_by", rejectedBy)
 	return ref, nil
 }
 

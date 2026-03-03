@@ -17,8 +17,10 @@ type ZoneRepositoryPort interface {
 type GateRepositoryPort interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*Gate, error)
 	FindByZoneID(ctx context.Context, zoneID uuid.UUID, onlyActive bool, page, pageSize int) ([]Gate, int64, error)
+	FindByToken(ctx context.Context, token string) (*Gate, error)
 	Create(ctx context.Context, gate *Gate) error
 	Update(ctx context.Context, gate *Gate) error
+	UpdateTokenLastUsed(ctx context.Context, id uuid.UUID) error
 	Deactivate(ctx context.Context, id uuid.UUID) error
 }
 
@@ -53,6 +55,7 @@ type ServicePort interface {
 	CreateGate(ctx context.Context, req *CreateGateRequest, actorID uuid.UUID) (*Gate, error)
 	UpdateGate(ctx context.Context, id uuid.UUID, req *UpdateGateRequest) (*Gate, error)
 	DeactivateGate(ctx context.Context, id uuid.UUID) error
+	RegenerateGateToken(ctx context.Context, id uuid.UUID) (*Gate, error)
 
 	// Capacity
 	GetCapacity(ctx context.Context, zoneID uuid.UUID) (*ZoneCapacityResponse, error)
