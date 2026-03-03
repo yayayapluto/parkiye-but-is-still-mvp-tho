@@ -338,44 +338,135 @@ func seedRFIDCards(db *gorm.DB) error {
 // ── fee ───────────────────────────────────────────────────────────────────────
 
 func seedFeeConfigsAndTiers(db *gorm.DB) error {
-	var existing int64
-	db.Model(&feeDomain.FeeConfig{}).Count(&existing)
-	if existing > 0 {
+	adminID := deterministicUUID("seed:admin")
+	now := time.Now()
+
+	// Deterministic fee configs for the 3 fixed zones x 3 vehicle types.
+	// grace_period_minutes=0 and base_fee>0 ensures calculated_fee is never 0
+	// even for very short parking durations (important for payment testing).
+	type tierDef struct{ dur, fee int }
+	type fixedCfg struct {
+		zoneKey string
+		vtKey   string
+		baseFee int
+		tiers   []tierDef
+	}
+	fixed := []fixedCfg{
+		{"zone:motor", "vtype:motorcycle", 2000, []tierDef{{60, 2000}, {120, 3000}, {240, 5000}}},
+		{"zone:motor", "vtype:car", 3000, []tierDef{{60, 3000}, {120, 5000}, {240, 8000}}},
+		{"zone:motor", "vtype:truck", 5000, []tierDef{{60, 5000}, {120, 8000}, {240, 12000}}},
+		{"zone:mobil", "vtype:motorcycle", 2000, []tierDef{{60, 2000}, {120, 3000}, {240, 5000}}},
+		{"zone:mobil", "vtype:car", 5000, []tierDef{{60, 5000}, {120, 8000}, {240, 12000}}},
+		{"zone:mobil", "vtype:truck", 8000, []tierDef{{60, 8000}, {120, 12000}, {240, 20000}}},
+		{"zone:vip", "vtype:motorcycle", 3000, []tierDef{{60, 3000}, {120, 5000}, {240, 8000}}},
+		{"zone:vip", "vtype:car", 10000, []tierDef{{60, 10000}, {120, 15000}, {240, 25000}}},
+		{"zone:vip", "vtype:truck", 15000, []tierDef{{60, 15000}, {120, 20000}, {240, 30000}}},
+	}
+
+	var configs []feeDomain.FeeConfig
+	var tiers []feeDomain.FeeTier
+
+	for _, f := range fixed {
+		cfgID := deterministicUUID("fee:" + f.zoneKey + ":" + f.vtKey)
+		configs = append(configs, feeDomain.FeeConfig{
+			ID:                 cfgID,
+			ZoneID:             deterministicUUID(f.zoneKey),
+			VehicleTypeID:      deterministicUUID(f.vtKey),
+			BaseFee:            f.baseFee,
+			GracePeriodMinutes: 0,
+			IsActive:           true,
+			EffectiveFrom:      now.AddDate(-1, 0, 0),
+			CreatedBy:          &adminID,
+		})
+		for i, t := range f.tiers {
+			tiers = append(tiers, feeDomain.FeeTier{
+				ID:              deterministicUUID(fmt.Sprintf("tier:%s:%s:%d", f.zoneKey, f.vtKey, i)),
+				FeeConfigID:     cfgID,
+				TierOrder:       i + 1,
+				DurationMinutes: t.dur,
+				FeeAmount:       t.fee,
+				IsLastTier:      i == len(f.tiers)-1,
+			})
+		}
+	}
+
+	if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&configs).Error; err != nil {
+		return err
+	}
+
+	// Verify which config IDs actually exist in DB before inserting tiers,
+	// because ON CONFLICT DO NOTHING silently skips duplicates and tiers
+	// would violate the FK if their parent config was skipped.
+	cfgIDSet := map[uuid.UUID]bool{}
+	for _, c := range configs {
+		cfgIDSet[c.ID] = true
+	}
+	var existingCfgs []feeDomain.FeeConfig
+	cfgIDs := make([]uuid.UUID, 0, len(configs))
+	for id := range cfgIDSet {
+		cfgIDs = append(cfgIDs, id)
+	}
+	db.Where("id IN ?", cfgIDs).Select("id").Find(&existingCfgs)
+	validCfgIDs := map[uuid.UUID]bool{}
+	for _, c := range existingCfgs {
+		validCfgIDs[c.ID] = true
+	}
+
+	var validTiers []feeDomain.FeeTier
+	for _, t := range tiers {
+		if validCfgIDs[t.FeeConfigID] {
+			validTiers = append(validTiers, t)
+		}
+	}
+	if len(validTiers) > 0 {
+		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&validTiers).Error; err != nil {
+			return err
+		}
+	}
+
+	// Random configs for the remaining (non-fixed) zones, skip if already seeded
+	var existingCount int64
+	db.Model(&feeDomain.FeeConfig{}).Count(&existingCount)
+	if existingCount > int64(len(fixed)) {
 		return nil
 	}
 
-	var zones []zoneDomain.Zone
-	db.Select("id").Find(&zones)
+	fixedZoneIDs := map[uuid.UUID]bool{
+		deterministicUUID("zone:motor"): true,
+		deterministicUUID("zone:mobil"): true,
+		deterministicUUID("zone:vip"):   true,
+	}
 	vtypeIDs := []uuid.UUID{
 		deterministicUUID("vtype:motorcycle"),
 		deterministicUUID("vtype:car"),
 		deterministicUUID("vtype:truck"),
 	}
 
-	adminID := deterministicUUID("seed:admin")
-	now := time.Now()
+	var allZones []zoneDomain.Zone
+	db.Select("id").Find(&allZones)
 
-	var configs []feeDomain.FeeConfig
-	var tiers []feeDomain.FeeTier
+	var randConfigs []feeDomain.FeeConfig
+	var randTiers []feeDomain.FeeTier
 
-	for _, z := range zones {
+	for _, z := range allZones {
+		if fixedZoneIDs[z.ID] {
+			continue
+		}
 		for _, vtID := range vtypeIDs {
 			cfgID := uuid.New()
-			configs = append(configs, feeDomain.FeeConfig{
+			randConfigs = append(randConfigs, feeDomain.FeeConfig{
 				ID:                 cfgID,
 				ZoneID:             z.ID,
 				VehicleTypeID:      vtID,
-				BaseFee:            pick([]int{0, 1000, 2000, 3000}),
-				GracePeriodMinutes: pick([]int{0, 5, 10, 15}),
+				BaseFee:            pick([]int{1000, 2000, 3000}),
+				GracePeriodMinutes: pick([]int{0, 5, 10}),
 				IsActive:           true,
 				EffectiveFrom:      now.AddDate(-1, 0, 0),
 				CreatedBy:          &adminID,
 			})
-
-			// 2–3 tiers per config
 			tierCount := gofakeit.IntRange(2, 3)
 			for t := 1; t <= tierCount; t++ {
-				tiers = append(tiers, feeDomain.FeeTier{
+				randTiers = append(randTiers, feeDomain.FeeTier{
 					ID:              uuid.New(),
 					FeeConfigID:     cfgID,
 					TierOrder:       t,
@@ -387,10 +478,17 @@ func seedFeeConfigsAndTiers(db *gorm.DB) error {
 		}
 	}
 
-	if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&configs).Error; err != nil {
-		return err
+	if len(randConfigs) > 0 {
+		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&randConfigs).Error; err != nil {
+			return err
+		}
 	}
-	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&tiers).Error
+	if len(randTiers) > 0 {
+		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&randTiers).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func seedHolidayRates(db *gorm.DB) error {

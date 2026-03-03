@@ -6,6 +6,7 @@ import (
 	"parkieee/internal/modules/auth"
 	"parkieee/internal/modules/fee"
 	"parkieee/internal/modules/ocr"
+	"parkieee/internal/modules/payment"
 	"parkieee/internal/modules/rfid"
 	"parkieee/internal/modules/transaction"
 	"parkieee/internal/modules/vehicle"
@@ -52,6 +53,9 @@ type Container struct {
 	TransactionLogRepo transaction.TransactionLogRepositoryPort
 	TransactionService transaction.ServicePort
 
+	PaymentRepo    payment.RepositoryPort
+	PaymentService payment.ServicePort
+
 	OCRJobRepo       ocr.OCRJobRepositoryPort
 	OCRResultRepo    ocr.OCRResultRepositoryPort
 	OCRReviewLogRepo ocr.OCRReviewLogRepositoryPort
@@ -90,6 +94,9 @@ func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
 		return nil, err
 	}
 	if err := container.initTransactionModule(); err != nil {
+		return nil, err
+	}
+	if err := container.initPaymentModule(); err != nil {
 		return nil, err
 	}
 
@@ -194,6 +201,17 @@ func (c *Container) initTransactionModule() error {
 		c.Config.BaseURL(),
 		c.Config.App.PlaceName,
 		c.Config.App.QRSecret,
+	)
+	return nil
+}
+
+func (c *Container) initPaymentModule() error {
+	c.PaymentRepo = payment.NewRepository(c.DB)
+	c.PaymentService = payment.NewService(
+		c.PaymentRepo,
+		c.TransactionService,
+		c.Config.Midtrans,
+		c.Log,
 	)
 	return nil
 }

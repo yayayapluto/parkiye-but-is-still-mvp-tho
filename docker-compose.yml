@@ -44,24 +44,33 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       DB_NAME: ${DB_NAME:-parkieee}
       DB_SSLMODE: ${DB_SSLMODE:-disable}
+      DB_LOG_LEVEL: ${DB_LOG_LEVEL:-warn}
+      DB_MAX_OPEN_CONNS: ${DB_MAX_OPEN_CONNS:-25}
+      DB_MAX_IDLE_CONNS: ${DB_MAX_IDLE_CONNS:-10}
+      DB_CONN_MAX_LIFETIME_SECONDS: ${DB_CONN_MAX_LIFETIME_SECONDS:-300}
+      DB_CONN_MAX_IDLE_TIME_SECONDS: ${DB_CONN_MAX_IDLE_TIME_SECONDS:-60}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ACCESS_TOKEN_TTL: ${JWT_ACCESS_TOKEN_TTL:-15m}
+      JWT_REFRESH_TOKEN_TTL: ${JWT_REFRESH_TOKEN_TTL:-168h}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_JSON_FORMAT: "true"
       LOG_OUTPUT_PATHS: stdout,storage/logs/app.log
+      LOG_ADD_SOURCE: ${LOG_ADD_SOURCE:-false}
       ENABLE_TRACING: ${ENABLE_TRACING:-true}
       TEMPO_ENDPOINT: tempo:4318
       ENABLE_PROFILING: ${ENABLE_PROFILING:-false}
       PYROSCOPE_ENDPOINT: http://pyroscope:4040
+      MIDTRANS_SERVER_KEY: ${MIDTRANS_SERVER_KEY}
+      MIDTRANS_ENV: ${MIDTRANS_ENV:-sandbox}
       OCR_ENABLED: ${OCR_ENABLED:-true}
       OCR_API_URL: http://python-ocr:8000
       OCR_TIMEOUT: ${OCR_TIMEOUT:-15s}
       OCR_MAX_RETRIES: ${OCR_MAX_RETRIES:-2}
       OCR_AUTO_ACCEPT_THRESHOLD: ${OCR_AUTO_ACCEPT_THRESHOLD:-0.80}
-      STORAGE_DIR: /mnt/storage/photos
-      OCR_STORAGE_PREFIX: /mnt/storage/photos
+      STORAGE_DIR: /app/storage/photos
+      OCR_STORAGE_PREFIX: /app/storage/photos
     volumes:
-      - ./storage/logs:/app/storage/logs
-      - ./storage:/mnt/storage
+      - ./storage:/app/storage
     depends_on:
       postgres:
         condition: service_healthy
@@ -174,6 +183,16 @@ services:
       - ./scripts/tempo.yml:/etc/tempo/tempo.yml:ro
       - tempo_data:/var/tempo
     command: -config.file=/etc/tempo/tempo.yml
+    networks:
+      - parkieee_net
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: parkieee_cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token eyJhIjoiZGNiYjM3NjI4MDMxZTQ1ZDhiODc3OTE5YzdhOTFjZmQiLCJ0IjoiZmQwZTkzNDctMWZiOS00YjA1LTg5YmYtMGUxYzMxZDM3N2E2IiwicyI6IlpUZGtPRFU0TWprdE5tRmtNQzAwWkRjeExXSXhaakl0WldSaVlqVTBOemN3T1dNNCJ9
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - parkieee_net
 

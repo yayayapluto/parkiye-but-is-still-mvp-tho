@@ -17,12 +17,19 @@ type Config struct {
 	App       AppConfig
 	Storage   StorageConfig
 	OCR       OCRConfig
+	Midtrans  MidtransConfig
 	Database  DatabaseConfig
 	JWT       JWTConfig
 	Server    ServerConfig
 	Tracing   TracingConfig
 	Profiling ProfilingConfig
 	Logger    LoggerConfig
+}
+
+type MidtransConfig struct {
+	ServerKey string // MIDTRANS_SERVER_KEY
+	ClientKey string // MIDTRANS_CLIENT_KEY
+	Env       string // MIDTRANS_ENV: "sandbox" | "production", default "sandbox"
 }
 
 type AppConfig struct {
@@ -115,6 +122,11 @@ func Load() (*Config, error) {
 		Storage: StorageConfig{
 			Dir:           getEnv("STORAGE_DIR", "./storage/photos"),
 			OCRPathPrefix: getEnv("OCR_STORAGE_PREFIX", ""),
+		},
+		Midtrans: MidtransConfig{
+			ServerKey: getEnv("MIDTRANS_SERVER_KEY", ""),
+			ClientKey: getEnv("MIDTRANS_CLIENT_KEY", ""),
+			Env:       getEnv("MIDTRANS_ENV", "sandbox"),
 		},
 		OCR: OCRConfig{
 			Enabled:             getEnvBool("OCR_ENABLED", true),

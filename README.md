@@ -165,3 +165,7 @@ RFIDCardID *uuid.UUID `gorm:"type:uuid"`
 
 **Gunakan `pkg/errors.AppError`** untuk semua error yang dikembalikan dari service/repository, jangan return raw GORM
 error ke handler.
+
+```
+cloudflared tunnel run parkir-api
+```

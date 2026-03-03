@@ -12,8 +12,11 @@ help:
 	@echo "PARKIEEE - available commands"
 	@echo ""
 	@echo "Docker"
-	@echo "  make up           Start all services (postgres + observability)"
-	@echo "  make down         Stop all services"
+	@echo "  make docker-up    Build + start all services including Go app (production-like)"
+	@echo "  make docker-down  Stop all services (volumes preserved)"
+	@echo "  make logs         Tail Go app logs"
+	@echo "  make up           Start infrastructure only (postgres + observability, no app)"
+	@echo "  make down         Stop all services + remove volumes"
 	@echo ""
 	@echo "Development"
 	@echo "  make dev          Start infrastructure + migrate + seed + run API"
@@ -33,11 +36,26 @@ help:
 	@echo ""
 
 up:
-	docker compose up -d
-	@echo "OK All services started"
+	docker compose up -d --scale app=0
+	@echo "OK Infrastructure started (no app)"
 	@echo "  Grafana    -> http://localhost:${GRAFANA_PORT}"
 	@echo "  Prometheus -> http://localhost:${PROMETHEUS_PORT}"
 	@echo "  Loki       -> http://localhost:${LOKI_PORT}"
+
+docker-up:
+	docker compose up -d --build
+	@echo "OK All services started (including app)"
+	@echo "  API        -> http://localhost:${SERVER_PORT}"
+	@echo "  Grafana    -> http://localhost:${GRAFANA_PORT}"
+	@echo "  Prometheus -> http://localhost:${PROMETHEUS_PORT}"
+	@echo "  Loki       -> http://localhost:${LOKI_PORT}"
+
+docker-down:
+	docker compose down
+	@echo "OK All services stopped (volumes preserved)"
+
+logs:
+	docker compose logs -f app
 
 down:
 	docker compose down -v

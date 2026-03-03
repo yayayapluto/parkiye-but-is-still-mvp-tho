@@ -331,14 +331,14 @@ Seed data (idempotent):
 | `pkg/storage/`                       | ✅ done — POST /storage/photos upload endpoint                                       |
 | `database/migrate.go`                | ✅ done                                                                              |
 | `database/seed.go`                   | ✅ done — gofakeit, all 11 modules, 25–80 rows per entity                            |
-| `internal/bootstrap/*`               | ✅ done — container wires auth + zone + vehicle + rfid + fee + transaction + ocr     |
+| `internal/bootstrap/*`               | ⬜ done: auth + zone + vehicle + rfid + fee + transaction + ocr — payment perlu initPaymentModule + RegisterRoutes |
 | `pkg/qr/`                            | ✅ done — 512x512 thermal ticket PNG, Go Mono font, HMAC-SHA256 filename obfuscation |
 | `cmd/api/main.go`                    | ✅ done                                                                              |
-| `internal/modules/*/domain.go`       | ✅ done (all 11 modules)                                                             |
-| `internal/modules/*/ports.go`        | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
+| `internal/modules/*/domain.go`       | ⬜ done (all 11 modules) — payment: perlu rename QRISUrl→QRISString + tambah QRISImageURL |
+| `internal/modules/*/ports.go`        | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr — payment: ada, perlu update HandleMidtransWebhook signature — transaction: perlu tambah MarkPaid + MarkExited |
 | `internal/modules/*/repository.go`   | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
-| `internal/modules/*/service.go`      | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
-| `internal/modules/*/dto.go`          | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
+| `internal/modules/*/service.go`      | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr — transaction: perlu tambah MarkPaid + MarkExited |
+| `internal/modules/*/dto.go`          | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr — payment: ada, perlu update ikut rename domain |
 | `internal/modules/*/handler.go`      | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
 | `internal/modules/*/http_adapter.go` | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
 | `internal/modules/*/routes.go`       | ⬜ finished: auth, zone, vehicle, rfid, fee, transaction, ocr                        |
@@ -350,7 +350,7 @@ Seed data (idempotent):
 | `docs/Parkieee - Transaction.*`      | ✅ done — biasa + full test suite                                                    |
 
 **Next:** implement modules in dependency order:
-`auth` ✅ → `zone` ✅ → `vehicle` ✅ → `rfid` ✅ → `fee` ✅ → `transaction` ✅ → `ocr` ✅ → `payment` → `override` → `audit`
+`auth` ✅ → `zone` ✅ → `vehicle` ✅ → `rfid` ✅ → `fee` ✅ → `transaction` ✅ → `ocr` ✅ → `payment` 🔄 → `override` → `audit`
 
 ---
 

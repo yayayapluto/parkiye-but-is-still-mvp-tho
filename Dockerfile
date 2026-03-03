@@ -1,14 +1,14 @@
-FROM golang:1.25-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
 RUN apk add --no-cache git
 
 COPY go.mod go.sum ./
-RUN go mod download
+RUN GOTOOLCHAIN=auto go mod download
 
 COPY . .
-RUN go build -o bin/api ./cmd/api
+RUN GOTOOLCHAIN=auto go build -o bin/api ./cmd/api
 
 FROM alpine:3.21
 

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"parkieee/internal/modules/auth"
 	"parkieee/internal/modules/fee"
+	"parkieee/internal/modules/payment"
 	"parkieee/internal/modules/rfid"
 	"parkieee/internal/modules/transaction"
 	"parkieee/internal/modules/vehicle"
@@ -72,6 +73,7 @@ func NewServer(container *Container) *fiber.App {
 	fee.RegisterRoutes(api, container.FeeService, container.AuthService, container.Validator)
 	transaction.RegisterRoutes(api, container.TransactionService, container.AuthService, container.Validator,
 		container.Config.Storage.Dir, container.Config.Storage.OCRPathPrefix)
+	payment.RegisterRoutes(api, container.PaymentService, container.AuthService, container.Validator)
 	storage.RegisterRoutes(api, container.AuthService)
 
 	return app

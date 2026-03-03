@@ -53,6 +53,13 @@ type ServicePort interface {
 	// Cancel marks an open transaction as cancelled.
 	Cancel(ctx context.Context, id uuid.UUID, reason string, operatorID uuid.UUID) (*Transaction, error)
 
+	// MarkPaid moves status awaiting_payment → paid.
+	// handledByUserID nil for webhook (no user context).
+	MarkPaid(ctx context.Context, txID uuid.UUID, triggeredBy types.TriggeredBy, handledByUserID *uuid.UUID) error
+
+	// MarkExited moves status paid → exited.
+	MarkExited(ctx context.Context, txID uuid.UUID, triggeredBy types.TriggeredBy) error
+
 	GetTransaction(ctx context.Context, id uuid.UUID) (*Transaction, error)
 	GetByCode(ctx context.Context, code string) (*Transaction, error)
 	ListTransactions(ctx context.Context, filter ListFilter, page, pageSize int) ([]Transaction, int64, error)

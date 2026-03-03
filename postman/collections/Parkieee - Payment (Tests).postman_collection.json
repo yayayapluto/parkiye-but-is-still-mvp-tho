@@ -1,0 +1,1149 @@
+{
+  "info": {
+    "_postman_id": "a9f1b2c3-pay0-4pay-b000-pay000000001",
+    "name": "Parkieee - Payment (Tests)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. [Setup] Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json().data;",
+              "pm.collectionVariables.set('token', data.token);",
+              "pm.collectionVariables.set('adminUserId', data.user.id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "id": "setup-login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@parkieee.local\",\n  \"password\": \"Admin@123!\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "1. [Setup] Siapkan transaksi awaiting_payment (entry → exit)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "const base  = pm.collectionVariables.get('baseUrl');",
+              "const auth  = { Authorization: 'Bearer ' + pm.collectionVariables.get('token'), 'Content-Type': 'application/json' };",
+              "",
+              "pm.sendRequest({ url: base + '/zones?page=1&page_size=50', method: 'GET', header: auth },",
+              "  (err, zonesRes) => {",
+              "    const zones = zonesRes.json().data || [];",
+              "    const zone = zones.find(z => z.name === 'Parkir Motor') || zones[0];",
+              "    if (!zone) { console.error('NO ZONE FOUND'); return; }",
+              "    pm.collectionVariables.set('zoneId', zone.id);",
+              "",
+              "    pm.sendRequest({ url: `${base}/zones/${zone.id}/gates?active=true&page=1&page_size=20`, method: 'GET', header: auth },",
+              "      (err2, gatesRes) => {",
+              "        const gates = gatesRes.json().data || [];",
+              "        const entryGate = gates.find(g => g.gate_type === 'entry');",
+              "        const exitGate  = gates.find(g => g.gate_type === 'exit');",
+              "        if (!entryGate || !exitGate) { console.error('GATES NOT FOUND'); return; }",
+              "        pm.collectionVariables.set('entryGateId', entryGate.id);",
+              "        pm.collectionVariables.set('exitGateId', exitGate.id);",
+              "",
+              "        pm.sendRequest({ url: base + '/vehicle-types', method: 'GET', header: auth },",
+              "          (err3, vtRes) => {",
+              "            const vts = vtRes.json().data || [];",
+              "            const moto = vts.find(v => v.name === 'motorcycle') || vts[0];",
+              "            if (!moto) { console.error('NO VEHICLE TYPE'); return; }",
+              "            pm.collectionVariables.set('vehicleTypeId', moto.id);",
+              "",
+              "            const uid = 'PY:' + Date.now().toString(16).toUpperCase().slice(-6).match(/../g).join(':');",
+              "            pm.collectionVariables.set('rfidUid', uid);",
+              "            pm.sendRequest({",
+              "              url: base + '/rfid/cards', method: 'POST', header: auth,",
+              "              body: { mode: 'raw', raw: JSON.stringify({ card_uid: uid }) }",
+              "            }, (err4, rfidRes) => {",
+              "              if (rfidRes.code !== 201) { console.error('RFID REG FAILED', rfidRes.text()); return; }",
+              "",
+              "              pm.sendRequest({",
+              "                url: base + '/transactions/entry', method: 'POST', header: auth,",
+              "                body: { mode: 'raw', raw: JSON.stringify({",
+              "                  entry_gate_id: entryGate.id,",
+              "                  entry_method: 'rfid',",
+              "                  rfid_card_uid: uid",
+              "                })}",
+              "              }, (err5, entryRes) => {",
+              "                if (entryRes.code !== 201) { console.error('ENTRY FAILED', entryRes.text()); return; }",
+              "                const tx = entryRes.json().data;",
+              "                pm.collectionVariables.set('txId', tx.id);",
+              "",
+              "                pm.sendRequest({",
+              "                  url: `${base}/transactions/${tx.id}/exit`, method: 'POST', header: auth,",
+              "                  body: { mode: 'raw', raw: JSON.stringify({",
+              "                    exit_gate_id: exitGate.id,",
+              "                    exit_method: 'rfid',",
+              "                    rfid_card_uid: uid,",
+              "                    vehicle_type_id: moto.id",
+              "                  })}",
+              "                }, (err6, exitRes) => {",
+              "                  if (exitRes.code !== 200) { console.error('EXIT FAILED', exitRes.text()); return; }",
+              "                  const txAfterExit = exitRes.json().data;",
+              "                  pm.collectionVariables.set('calculatedFee', txAfterExit.calculated_fee);",
+              "                  console.log('Setup done. txId:', tx.id, 'fee:', txAfterExit.calculated_fee);",
+              "                });",
+              "              });",
+              "            });",
+              "          }",
+              "        );",
+              "      }",
+              "    );",
+              "  }",
+              ");"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('txId tersimpan', () => pm.expect(pm.collectionVariables.get('txId')).to.be.a('string').and.not.empty);",
+              "pm.test('entryGateId tersimpan', () => pm.expect(pm.collectionVariables.get('entryGateId')).to.be.a('string').and.not.empty);",
+              "pm.test('exitGateId tersimpan', () => pm.expect(pm.collectionVariables.get('exitGateId')).to.be.a('string').and.not.empty);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "id": "setup-transaction",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/transactions/{{txId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["transactions", "{{txId}}"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "2. Payments - Cash",
+      "item": [
+        {
+          "name": "Pay Cash - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json().data;",
+                  "pm.test('method cash', () => pm.expect(d.method).to.eql('cash'));",
+                  "pm.test('status completed', () => pm.expect(d.status).to.eql('completed'));",
+                  "pm.test('cash_tendered ada', () => pm.expect(d.cash_tendered).to.be.a('number'));",
+                  "pm.test('cash_change ada', () => pm.expect(d.cash_change).to.be.a('number'));",
+                  "pm.test('cash_change = tendered - amount', () => pm.expect(d.cash_change).to.eql(d.cash_tendered - d.amount));",
+                  "pm.test('paid_at ada', () => pm.expect(d.paid_at).to.exist);",
+                  "pm.collectionVariables.set('cashPaymentId', d.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "pay-cash-happy",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_id\": \"{{txId}}\",\n  \"cash_tendered\": 50000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/cash",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "cash"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Pay Cash - Transaksi sudah paid → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "pay-cash-already-paid",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_id\": \"{{txId}}\",\n  \"cash_tendered\": 50000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/cash",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "cash"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Pay Cash - cash_tendered kurang dari fee → 400",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const base = pm.collectionVariables.get('baseUrl');",
+                  "const auth = { Authorization: 'Bearer ' + pm.collectionVariables.get('token'), 'Content-Type': 'application/json' };",
+                  "const uid = 'CF:' + Date.now().toString(16).toUpperCase().slice(-6).match(/../g).join(':');",
+                  "const entryGateId = pm.collectionVariables.get('entryGateId');",
+                  "const exitGateId  = pm.collectionVariables.get('exitGateId');",
+                  "const vtId        = pm.collectionVariables.get('vehicleTypeId');",
+                  "pm.sendRequest({ url: base + '/rfid/cards', method: 'POST', header: auth,",
+                  "  body: { mode: 'raw', raw: JSON.stringify({ card_uid: uid }) }",
+                  "}, () => {",
+                  "  pm.sendRequest({ url: base + '/transactions/entry', method: 'POST', header: auth,",
+                  "    body: { mode: 'raw', raw: JSON.stringify({ entry_gate_id: entryGateId, entry_method: 'rfid', rfid_card_uid: uid }) }",
+                  "  }, (e2, entryRes) => {",
+                  "    const txId = entryRes.json().data.id;",
+                  "    pm.sendRequest({ url: `${base}/transactions/${txId}/exit`, method: 'POST', header: auth,",
+                  "      body: { mode: 'raw', raw: JSON.stringify({ exit_gate_id: exitGateId, exit_method: 'rfid', rfid_card_uid: uid, vehicle_type_id: vtId }) }",
+                  "    }, () => { pm.collectionVariables.set('txIdForCashTest', txId); });",
+                  "  });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400 (cash kurang)', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "pay-cash-insufficient",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_id\": \"{{txIdForCashTest}}\",\n  \"cash_tendered\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/cash",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "cash"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Pay Cash - transaction_id tidak ada → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "pay-cash-not-found",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_id\": \"00000000-0000-0000-0000-000000000000\",\n  \"cash_tendered\": 50000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/cash",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "cash"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Pay Cash - body kosong → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "pay-cash-empty-body",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{baseUrl}}/payments/cash",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "cash"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Pay Cash - Tanpa Auth → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "pay-cash-no-auth",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_id\": \"{{txId}}\",\n  \"cash_tendered\": 50000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/cash",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "cash"]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "cash-group"
+    },
+    {
+      "name": "3. Payments - QRIS",
+      "item": [
+        {
+          "name": "[Setup] Buat transaksi baru untuk QRIS test",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const base = pm.collectionVariables.get('baseUrl');",
+                  "const auth = { Authorization: 'Bearer ' + pm.collectionVariables.get('token'), 'Content-Type': 'application/json' };",
+                  "const uid = 'QR:' + Date.now().toString(16).toUpperCase().slice(-6).match(/../g).join(':');",
+                  "const entryGateId = pm.collectionVariables.get('entryGateId');",
+                  "const exitGateId  = pm.collectionVariables.get('exitGateId');",
+                  "const vtId        = pm.collectionVariables.get('vehicleTypeId');",
+                  "pm.sendRequest({ url: base + '/rfid/cards', method: 'POST', header: auth,",
+                  "  body: { mode: 'raw', raw: JSON.stringify({ card_uid: uid }) }",
+                  "}, () => {",
+                  "  pm.sendRequest({ url: base + '/transactions/entry', method: 'POST', header: auth,",
+                  "    body: { mode: 'raw', raw: JSON.stringify({ entry_gate_id: entryGateId, entry_method: 'rfid', rfid_card_uid: uid }) }",
+                  "  }, (e2, entryRes) => {",
+                  "    const txId = entryRes.json().data.id;",
+                  "    pm.sendRequest({ url: `${base}/transactions/${txId}/exit`, method: 'POST', header: auth,",
+                  "      body: { mode: 'raw', raw: JSON.stringify({ exit_gate_id: exitGateId, exit_method: 'rfid', rfid_card_uid: uid, vehicle_type_id: vtId }) }",
+                  "    }, () => {",
+                  "      pm.collectionVariables.set('txIdQRIS', txId);",
+                  "      console.log('QRIS test tx ready:', txId);",
+                  "    });",
+                  "  });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('txIdQRIS tersimpan', () => pm.expect(pm.collectionVariables.get('txIdQRIS')).to.be.a('string').and.not.empty);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "qris-setup",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{txIdQRIS}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions", "{{txIdQRIS}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Initiate QRIS - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json().data;",
+                  "pm.test('method qris', () => pm.expect(d.method).to.eql('qris'));",
+                  "pm.test('status pending', () => pm.expect(d.status).to.eql('pending'));",
+                  "pm.test('qris_string ada', () => pm.expect(d.qris_string).to.be.a('string').and.not.empty);",
+                  "pm.test('qris_image_url ada', () => pm.expect(d.qris_image_url).to.be.a('string').and.not.empty);",
+                  "pm.test('qris_expires_at ada', () => pm.expect(d.qris_expires_at).to.exist);",
+                  "pm.test('midtrans_order_id ada', () => pm.expect(d.midtrans_order_id).to.be.a('string').and.not.empty);",
+                  "pm.collectionVariables.set('qrisPaymentId', d.id);",
+                  "pm.collectionVariables.set('midtransOrderId', d.midtrans_order_id);",
+                  "pm.collectionVariables.set('midtransTransactionId', d.midtrans_transaction_id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "qris-initiate",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_id\": \"{{txIdQRIS}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/qris",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "qris"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Initiate QRIS - Idempotent (request sama → return existing)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('id sama (idempotent)', () => pm.expect(pm.response.json().data.id).to.eql(pm.collectionVariables.get('qrisPaymentId')));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "qris-idempotent",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_id\": \"{{txIdQRIS}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/qris",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "qris"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Initiate QRIS - transaction_id tidak ada → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "qris-not-found",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_id\": \"00000000-0000-0000-0000-000000000000\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/qris",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "qris"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Initiate QRIS - body kosong → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "qris-empty-body",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{baseUrl}}/payments/qris",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "qris"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Initiate QRIS - Tanpa Auth → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "qris-no-auth",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_id\": \"{{txIdQRIS}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/qris",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "qris"]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "qris-group"
+    },
+    {
+      "name": "4. Payments - Get & List",
+      "item": [
+        {
+          "name": "Get Payment by ID - Happy Path (cash)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json().data;",
+                  "pm.test('id sesuai', () => pm.expect(d.id).to.eql(pm.collectionVariables.get('cashPaymentId')));",
+                  "pm.test('method cash', () => pm.expect(d.method).to.eql('cash'));",
+                  "pm.test('status completed', () => pm.expect(d.status).to.eql('completed'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "get-payment-by-id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{cashPaymentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "{{cashPaymentId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Payment by ID - Tidak Ada → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "get-payment-not-found",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/payments/00000000-0000-0000-0000-000000000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "00000000-0000-0000-0000-000000000000"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Payment by ID - Bukan UUID → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "get-payment-bad-uuid",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/payments/bukan-uuid",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "bukan-uuid"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Payments by Transaction - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.test('data array', () => pm.expect(data).to.be.an('array'));",
+                  "pm.test('ada payment untuk transaksi ini', () => pm.expect(data.length).to.be.greaterThan(0));",
+                  "pm.test('semua payment milik transaksi yang benar', () => {",
+                  "  data.forEach(p => pm.expect(p.transaction_id).to.eql(pm.collectionVariables.get('txId')));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "list-payments-by-tx",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/payments/transaction/{{txId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "transaction", "{{txId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Payments by Transaction - Tx Tidak Ada (array kosong)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('array kosong', () => pm.expect(pm.response.json().data).to.be.an('array').and.empty);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "list-payments-by-tx-empty",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/payments/transaction/00000000-0000-0000-0000-000000000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "transaction", "00000000-0000-0000-0000-000000000000"]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "get-list-group"
+    },
+    {
+      "name": "5. Refunds",
+      "item": [
+        {
+          "name": "Request Refund - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json().data;",
+                  "pm.test('status pending', () => pm.expect(d.status).to.eql('pending'));",
+                  "pm.test('payment_id sesuai', () => pm.expect(d.payment_id).to.eql(pm.collectionVariables.get('cashPaymentId')));",
+                  "pm.test('refund_amount ada', () => pm.expect(d.refund_amount).to.be.a('number'));",
+                  "pm.test('reason ada', () => pm.expect(d.reason).to.be.a('string').and.not.empty);",
+                  "pm.collectionVariables.set('refundId', d.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "refund-request",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_id\": \"{{cashPaymentId}}\",\n  \"refund_amount\": 2000,\n  \"reason\": \"Kendaraan salah masuk zone, perlu refund parsial\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/refunds",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "refunds"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Request Refund - Duplicate (sudah ada refund pending) → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "refund-duplicate",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_id\": \"{{cashPaymentId}}\",\n  \"refund_amount\": 2000,\n  \"reason\": \"Kendaraan salah masuk zone, perlu refund parsial\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/refunds",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "refunds"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Request Refund - refund_amount melebihi payment amount → 400",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const base = pm.collectionVariables.get('baseUrl');",
+                  "const auth = { Authorization: 'Bearer ' + pm.collectionVariables.get('token'), 'Content-Type': 'application/json' };",
+                  "const uid = 'RX:' + Date.now().toString(16).toUpperCase().slice(-6).match(/../g).join(':');",
+                  "const entryGateId = pm.collectionVariables.get('entryGateId');",
+                  "const exitGateId  = pm.collectionVariables.get('exitGateId');",
+                  "const vtId        = pm.collectionVariables.get('vehicleTypeId');",
+                  "pm.sendRequest({ url: base + '/rfid/cards', method: 'POST', header: auth,",
+                  "  body: { mode: 'raw', raw: JSON.stringify({ card_uid: uid }) }",
+                  "}, () => {",
+                  "  pm.sendRequest({ url: base + '/transactions/entry', method: 'POST', header: auth,",
+                  "    body: { mode: 'raw', raw: JSON.stringify({ entry_gate_id: entryGateId, entry_method: 'rfid', rfid_card_uid: uid }) }",
+                  "  }, (e2, entryRes) => {",
+                  "    const txId = entryRes.json().data.id;",
+                  "    pm.sendRequest({ url: `${base}/transactions/${txId}/exit`, method: 'POST', header: auth,",
+                  "      body: { mode: 'raw', raw: JSON.stringify({ exit_gate_id: exitGateId, exit_method: 'rfid', rfid_card_uid: uid, vehicle_type_id: vtId }) }",
+                  "    }, () => {",
+                  "      pm.sendRequest({ url: base + '/payments/cash', method: 'POST', header: auth,",
+                  "        body: { mode: 'raw', raw: JSON.stringify({ transaction_id: txId, cash_tendered: 50000 }) }",
+                  "      }, (e4, payRes) => {",
+                  "        pm.collectionVariables.set('paymentIdForRefundTest', payRes.json().data.id);",
+                  "      });",
+                  "    });",
+                  "  });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400 (amount melebihi)', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "refund-exceed-amount",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_id\": \"{{paymentIdForRefundTest}}\",\n  \"refund_amount\": 999999999,\n  \"reason\": \"Mencoba refund melebihi amount payment yang ada\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/refunds",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "refunds"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Request Refund - reason terlalu pendek → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "refund-short-reason",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_id\": \"{{paymentIdForRefundTest}}\",\n  \"refund_amount\": 1000,\n  \"reason\": \"ok\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/refunds",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "refunds"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Refunds - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('data array', () => pm.expect(pm.response.json().data).to.be.an('array'));",
+                  "pm.test('pagination ada', () => pm.expect(pm.response.json().pagination).to.exist);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "list-refunds",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/payments/refunds?page=1&page_size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "refunds"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "page_size", "value": "10" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Approve Refund - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json().data;",
+                  "pm.test('status processed', () => pm.expect(d.status).to.eql('processed'));",
+                  "pm.test('approved_by ada', () => pm.expect(d.approved_by).to.exist);",
+                  "pm.test('processed_at ada', () => pm.expect(d.processed_at).to.exist);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "approve-refund",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/payments/refunds/{{refundId}}/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "refunds", "{{refundId}}", "approve"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Approve Refund - Sudah Diproses → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400 (already processed)', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "approve-refund-already",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/payments/refunds/{{refundId}}/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "refunds", "{{refundId}}", "approve"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "[Setup] Buat refund baru untuk reject test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('refundIdForReject', pm.response.json().data.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "setup-refund-for-reject",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_id\": \"{{paymentIdForRefundTest}}\",\n  \"refund_amount\": 1000,\n  \"reason\": \"Test reject - kendaraan salah zone dan meminta pengembalian dana\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/refunds",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "refunds"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Refund - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('status rejected', () => pm.expect(pm.response.json().data.status).to.eql('rejected'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "reject-refund",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/payments/refunds/{{refundIdForReject}}/reject",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "refunds", "{{refundIdForReject}}", "reject"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Refund - Sudah Rejected → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "reject-refund-already",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/payments/refunds/{{refundIdForReject}}/reject",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "refunds", "{{refundIdForReject}}", "reject"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Approve/Reject - ID Tidak Ada → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "refund-approve-not-found",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/payments/refunds/00000000-0000-0000-0000-000000000000/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "refunds", "00000000-0000-0000-0000-000000000000", "approve"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Approve/Reject - Tanpa Auth → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "refund-no-auth",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/refunds/{{refundId}}/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "refunds", "{{refundId}}", "approve"]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "refunds-group"
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080/api/v1" },
+    { "key": "token", "value": "" },
+    { "key": "adminUserId", "value": "" },
+    { "key": "zoneId", "value": "" },
+    { "key": "entryGateId", "value": "" },
+    { "key": "exitGateId", "value": "" },
+    { "key": "vehicleTypeId", "value": "" },
+    { "key": "rfidUid", "value": "" },
+    { "key": "txId", "value": "" },
+    { "key": "txIdQRIS", "value": "" },
+    { "key": "txIdForCashTest", "value": "" },
+    { "key": "calculatedFee", "value": "" },
+    { "key": "cashPaymentId", "value": "" },
+    { "key": "qrisPaymentId", "value": "" },
+    { "key": "midtransOrderId", "value": "" },
+    { "key": "midtransTransactionId", "value": "" },
+    { "key": "refundId", "value": "" },
+    { "key": "refundIdForReject", "value": "" },
+    { "key": "paymentIdForRefundTest", "value": "" }
+  ]
+}

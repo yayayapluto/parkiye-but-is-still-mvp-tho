@@ -298,6 +298,69 @@ func (s *service) Cancel(ctx context.Context, id uuid.UUID, reason string, opera
 	return s.txRepo.FindByID(ctx, id)
 }
 
+func (s *service) MarkPaid(ctx context.Context, txID uuid.UUID, triggeredBy types.TriggeredBy, handledByUserID *uuid.UUID) error {
+	existing, err := s.txRepo.FindByID(ctx, txID)
+	if err != nil {
+		return err
+	}
+	if existing.Status != types.TransactionStatusAwaitingPayment {
+		return errors.New(errors.ErrValidation, fmt.Sprintf(
+			"transaction is not awaiting payment (current status: %s)", existing.Status,
+		))
+	}
+
+	dbErr := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		fromStatus := string(existing.Status)
+		existing.Status = types.TransactionStatusPaid
+		if err := s.txRepo.Update(ctx, tx, existing); err != nil {
+			return fmt.Errorf("update transaction: %w", err)
+		}
+		return s.logRepo.Append(ctx, tx, &TransactionLog{
+			TransactionID:     existing.ID,
+			FromStatus:        &fromStatus,
+			ToStatus:          string(types.TransactionStatusPaid),
+			Event:             types.EventPaymentReceived,
+			TriggeredBy:       triggeredBy,
+			TriggeredByUserID: handledByUserID,
+		})
+	})
+	if dbErr != nil {
+		return errors.Wrap(dbErr, errors.ErrDatabaseError, "failed to mark transaction as paid")
+	}
+	return nil
+}
+
+func (s *service) MarkExited(ctx context.Context, txID uuid.UUID, triggeredBy types.TriggeredBy) error {
+	existing, err := s.txRepo.FindByID(ctx, txID)
+	if err != nil {
+		return err
+	}
+	if existing.Status != types.TransactionStatusPaid {
+		return errors.New(errors.ErrValidation, fmt.Sprintf(
+			"transaction is not paid (current status: %s)", existing.Status,
+		))
+	}
+
+	dbErr := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		fromStatus := string(existing.Status)
+		existing.Status = types.TransactionStatusExited
+		if err := s.txRepo.Update(ctx, tx, existing); err != nil {
+			return fmt.Errorf("update transaction: %w", err)
+		}
+		return s.logRepo.Append(ctx, tx, &TransactionLog{
+			TransactionID: existing.ID,
+			FromStatus:    &fromStatus,
+			ToStatus:      string(types.TransactionStatusExited),
+			Event:         types.EventExitRecorded,
+			TriggeredBy:   triggeredBy,
+		})
+	})
+	if dbErr != nil {
+		return errors.Wrap(dbErr, errors.ErrDatabaseError, "failed to mark transaction as exited")
+	}
+	return nil
+}
+
 func (s *service) GetTransaction(ctx context.Context, id uuid.UUID) (*Transaction, error) {
 	return s.txRepo.FindByID(ctx, id)
 }
