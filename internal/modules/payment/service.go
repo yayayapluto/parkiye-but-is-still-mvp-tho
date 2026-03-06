@@ -200,31 +200,19 @@ func (s *service) HandleMidtransWebhook(ctx context.Context, rawBody []byte, pay
 	}
 
 	switch payload.TransactionStatus {
-	case "settlement":
-		now := time.Now()
-		p.Status = types.PaymentStatusCompleted
-		p.PaidAt = &now
+	case "settlement", "capture":
+		if err := s.markQRISPaid(ctx, p, payload.TransactionStatus); err != nil {
+			s.log.Error(ctx, "webhook: markQRISPaid failed", "order_id", payload.OrderID, "error", err)
+		}
 	case "expire", "cancel", "deny", "failure":
 		p.Status = types.PaymentStatusFailed
+		p.MidtransStatus = &payload.TransactionStatus
+		if err := s.repo.UpdatePayment(ctx, p); err != nil {
+			s.log.Error(ctx, "failed to update failed payment from webhook", "order_id", payload.OrderID, "error", err)
+		}
+		s.log.Info(ctx, "QRIS payment failed/expired via webhook", "order_id", payload.OrderID, "status", payload.TransactionStatus)
 	default:
 		return nil // pending, dll — ignore
-	}
-
-	p.MidtransStatus = &payload.TransactionStatus
-	if err := s.repo.UpdatePayment(ctx, p); err != nil {
-		s.log.Error(ctx, "failed to update payment from webhook", "order_id", payload.OrderID, "error", err)
-		return nil
-	}
-
-	if p.Status == types.PaymentStatusCompleted {
-		s.log.Info(ctx, "QRIS payment settled via webhook", "order_id", payload.OrderID, "tx_id", p.TransactionID)
-		if err := s.txSvc.MarkPaid(ctx, p.TransactionID, types.TriggeredByWebhook, nil); err != nil {
-			s.log.Error(ctx, "failed to mark transaction paid from webhook", "tx_id", p.TransactionID, "error", err)
-		} else if err := s.txSvc.MarkExited(ctx, p.TransactionID, types.TriggeredByWebhook); err != nil {
-			s.log.Error(ctx, "failed to mark transaction exited from webhook", "tx_id", p.TransactionID, "error", err)
-		}
-	} else {
-		s.log.Info(ctx, "QRIS payment failed/expired via webhook", "order_id", payload.OrderID, "status", payload.TransactionStatus, "tx_id", p.TransactionID)
 	}
 
 	now := time.Now()
@@ -234,6 +222,29 @@ func (s *service) HandleMidtransWebhook(ctx context.Context, rawBody []byte, pay
 		s.log.Error(ctx, "failed to mark callback processed", "error", err)
 	}
 
+	return nil
+}
+
+// markQRISPaid update payment status ke completed dan trigger MarkPaid + MarkExited.
+// Dipanggil dari webhook dan poll agar logicnya tidak duplikat.
+func (s *service) markQRISPaid(ctx context.Context, p *Payment, midtransStatus string) error {
+	if p.Status == types.PaymentStatusCompleted {
+		return nil // idempotent
+	}
+	now := time.Now()
+	p.Status = types.PaymentStatusCompleted
+	p.PaidAt = &now
+	p.MidtransStatus = &midtransStatus
+	if err := s.repo.UpdatePayment(ctx, p); err != nil {
+		return fmt.Errorf("update payment: %w", err)
+	}
+	if err := s.txSvc.MarkPaid(ctx, p.TransactionID, types.TriggeredByWebhook, nil); err != nil {
+		s.log.Error(ctx, "markQRISPaid: failed to mark tx paid", "tx_id", p.TransactionID, "error", err)
+	}
+	if err := s.txSvc.MarkExited(ctx, p.TransactionID, types.TriggeredByWebhook); err != nil {
+		s.log.Error(ctx, "markQRISPaid: failed to mark tx exited", "tx_id", p.TransactionID, "error", err)
+	}
+	s.log.Info(ctx, "QRIS payment marked paid", "payment_id", p.ID, "tx_id", p.TransactionID, "source", midtransStatus)
 	return nil
 }
 
@@ -350,6 +361,38 @@ func (s *service) RejectRefund(ctx context.Context, refundID uuid.UUID, rejected
 
 func (s *service) ListRefunds(ctx context.Context, page, pageSize int) ([]Refund, int64, error) {
 	return s.repo.ListRefunds(ctx, page, pageSize)
+}
+
+func (s *service) PollPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*Payment, error) {
+	p, err := s.repo.FindPaymentByID(ctx, paymentID)
+	if err != nil {
+		return nil, err
+	}
+	// Kalau sudah paid di DB, langsung return — tidak perlu hit Midtrans lagi
+	if p.Status == types.PaymentStatusPaid {
+		return p, nil
+	}
+	// Kalau bukan QRIS atau tidak punya order_id, tidak bisa poll
+	if p.Method != types.PaymentMethodQRIS || p.MidtransOrderID == nil {
+		return p, nil
+	}
+
+	status, err := s.midtrans.checkStatus(*p.MidtransOrderID)
+	if err != nil {
+		s.log.Warn(ctx, "poll midtrans status failed", "payment_id", paymentID, "error", err)
+		return p, nil // return DB state, jangan error
+	}
+
+	// settlement atau capture = bayar lunas
+	if status.TransactionStatus == "settlement" || status.TransactionStatus == "capture" {
+		if err := s.markQRISPaid(ctx, p, status.TransactionStatus); err != nil {
+			s.log.Error(ctx, "poll: failed to mark payment paid", "payment_id", paymentID, "error", err)
+			return p, nil
+		}
+		return s.repo.FindPaymentByID(ctx, paymentID)
+	}
+
+	return p, nil
 }
 
 func verifyMidtransSignature(orderID, statusCode, grossAmount, serverKey, incoming string) bool {

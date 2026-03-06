@@ -79,6 +79,18 @@ func (h *handler) getPayment(c *fiber.Ctx) error {
 	return response.Success(c, "ok", toPaymentResponse(p))
 }
 
+func (h *handler) pollPaymentStatus(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.BadRequest(c, "invalid payment id", nil)
+	}
+	p, err := h.svc.PollPaymentStatus(c.Context(), id)
+	if err != nil {
+		return err
+	}
+	return response.Success(c, "ok", toPaymentResponse(p))
+}
+
 func (h *handler) listByTransaction(c *fiber.Ctx) error {
 	txID, err := uuid.Parse(c.Params("txID"))
 	if err != nil {

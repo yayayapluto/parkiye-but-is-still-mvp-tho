@@ -29,6 +29,10 @@ type TransactionRepositoryPort interface {
 	// Used to prevent double-entry by the same card.
 	FindOpenByRFIDCard(ctx context.Context, cardID uuid.UUID) (*Transaction, error)
 
+	// FindAwaitingPaymentByRFIDCard returns the most recent awaiting_payment transaction for a card.
+	// Used at exit gate when card is tapped again after exit was already recorded.
+	FindAwaitingPaymentByRFIDCard(ctx context.Context, cardID uuid.UUID) (*Transaction, error)
+
 	// CountByDatePrefix counts rows whose transaction_code starts with prefix (e.g. "PKR-20260301-").
 	// Must run on the passed tx so the count is consistent within the same DB transaction.
 	CountByDatePrefix(ctx context.Context, db *gorm.DB, prefix string) (int64, error)
@@ -43,6 +47,9 @@ type TransactionLogRepositoryPort interface {
 }
 
 type ServicePort interface {
+	// SimulateEntryTime backdates entry_at by the given minutes (dev/sim only).
+	SimulateEntryTime(ctx context.Context, id uuid.UUID, minutesAgo int) (*Transaction, error)
+
 	// RecordEntry creates an open parking session. Atomic: tx + log + capacity in one DB txn.
 	RecordEntry(ctx context.Context, req RecordEntryRequest, operatorID uuid.UUID) (*Transaction, error)
 
@@ -62,6 +69,7 @@ type ServicePort interface {
 
 	GetTransaction(ctx context.Context, id uuid.UUID) (*Transaction, error)
 	GetByCode(ctx context.Context, code string) (*Transaction, error)
+	GetOpenByRFIDUID(ctx context.Context, uid string) (*Transaction, error)
 	ListTransactions(ctx context.Context, filter ListFilter, page, pageSize int) ([]Transaction, int64, error)
 	GetLogs(ctx context.Context, txID uuid.UUID) ([]TransactionLog, error)
 	LoadOCRSummary(ctx context.Context, txID uuid.UUID) []ocrDomain.OCRResultWithJob

@@ -22,7 +22,7 @@ make dev                   # start infra + jalankan API lokal
 
 Setelah `make dev`, API berjalan di `http://localhost:8080`.
 
-Default admin seed: `admin@parkieee.local` / `Admin@123!`
+  Default admin seed: `admin@parkieee.local` / `Admin@123!`
 
 ## Perintah Make
 
@@ -85,7 +85,7 @@ http_adapter.go # wiring handler ke router
 routes.go       # registrasi routes
 ```
 
-**Daftar modul:** `auth` · `zone` · `gate` · `vehicle` · `rfid` · `fee` · `transaction` · `payment` · `override` ·
+**Daftar modul:** `auth` · `zone` · `gate` · `vehicle` · `rfid` · `fee` · `transaction` · `payment` · `kiosk` · `override` ·
 `ocr` · `audit`
 
 ## Observability
@@ -166,6 +166,37 @@ RFIDCardID *uuid.UUID `gorm:"type:uuid"`
 **Gunakan `pkg/errors.AppError`** untuk semua error yang dikembalikan dari service/repository, jangan return raw GORM
 error ke handler.
 
+## Kiosk Gate API
+
+Endpoint khusus untuk kiosk (autentikasi gate token, bukan JWT user):
+
 ```
+# Transactions
+GET    /gate/transactions                  list transaksi (filter: status, page)
+GET    /gate/transactions/:id              detail transaksi
+GET    /gate/transactions/code/:code       cari by kode QR
+GET    /gate/transactions/rfid/:uid        cari open/awaiting_payment by RFID
+POST   /gate/transactions/entry            catat masuk (multipart, foto opsional)
+POST   /gate/transactions/:id/exit         catat keluar (multipart, foto opsional)
+PATCH  /gate/transactions/:id/simulate     mundurkan entry_at (dev only)
+
+# Payments
+POST   /gate/payments/qris                 buat QRIS (idempotent)
+POST   /gate/payments/cash                 catat intent tunai
+GET    /gate/payments/transaction/:txID    daftar payment per transaksi
+GET    /gate/payments/:id                  detail payment
+GET    /gate/payments/:id/poll             cek status Midtrans + update DB
+
+# Kiosk
+GET    /kiosk/tariff                       tarif zona gate (filter by vehicle type)
+```
+
+## Tunnel (Development)
+
+```bash
+# Backend
 cloudflared tunnel run parkir-api
+
+# Frontend kiosk (dari folder apps/kiosk)
+pnpm tunnel   # = cloudflared tunnel --url http://localhost:5174
 ```

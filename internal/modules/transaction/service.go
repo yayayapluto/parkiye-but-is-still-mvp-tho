@@ -369,6 +369,23 @@ func (s *service) GetByCode(ctx context.Context, code string) (*Transaction, err
 	return s.txRepo.FindByCode(ctx, code)
 }
 
+func (s *service) GetOpenByRFIDUID(ctx context.Context, uid string) (*Transaction, error) {
+	card, err := s.rfidSvc.GetCardByUID(ctx, uid)
+	if err != nil {
+		return nil, errors.New(errors.ErrNotFound, "rfid card not found")
+	}
+	// Cari open dulu, kalau tidak ada cari awaiting_payment
+	// (kendaraan tempel kartu ulang setelah exit tercatat)
+	tx, err := s.txRepo.FindOpenByRFIDCard(ctx, card.ID)
+	if err != nil {
+		tx, err = s.txRepo.FindAwaitingPaymentByRFIDCard(ctx, card.ID)
+		if err != nil {
+			return nil, errors.New(errors.ErrNotFound, "no active transaction for this rfid card")
+		}
+	}
+	return tx, nil
+}
+
 func (s *service) LoadOCRSummary(ctx context.Context, txID uuid.UUID) []ocrDomain.OCRResultWithJob {
 	results, err := s.ocrResultRepo.FindSummaryByTransactionID(ctx, txID)
 	if err != nil || len(results) == 0 {
@@ -379,6 +396,26 @@ func (s *service) LoadOCRSummary(ctx context.Context, txID uuid.UUID) []ocrDomai
 
 func (s *service) ListTransactions(ctx context.Context, filter ListFilter, page, pageSize int) ([]Transaction, int64, error) {
 	return s.txRepo.FindAll(ctx, filter, page, pageSize)
+}
+
+func (s *service) SimulateEntryTime(ctx context.Context, id uuid.UUID, minutesAgo int) (*Transaction, error) {
+	existing, err := s.txRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if existing.Status != types.TransactionStatusOpen {
+		return nil, errors.New(errors.ErrValidation, "only open transactions can be simulated")
+	}
+	newEntryAt := time.Now().Add(-time.Duration(minutesAgo) * time.Minute)
+	existing.EntryAt = newEntryAt
+	dbErr := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return s.txRepo.Update(ctx, tx, existing)
+	})
+	if dbErr != nil {
+		return nil, errors.Wrap(dbErr, errors.ErrDatabaseError, "failed to simulate entry time")
+	}
+	s.log.Info(ctx, "[SIM] entry_at backdated", "tx_id", id, "minutes_ago", minutesAgo, "new_entry_at", newEntryAt)
+	return s.txRepo.FindByID(ctx, id)
 }
 
 func (s *service) GetLogs(ctx context.Context, txID uuid.UUID) ([]TransactionLog, error) {
@@ -439,9 +476,9 @@ func (s *service) resolveRFIDForEntry(ctx context.Context, req RecordEntryReques
 	if req.RFIDCardUID == "" {
 		return nil, errors.New(errors.ErrValidation, "rfid_card_uid is required for rfid entry method")
 	}
-	card, err := s.rfidSvc.GetCardByUID(ctx, req.RFIDCardUID)
+	card, err := s.rfidSvc.RegisterOrGet(ctx, req.RFIDCardUID)
 	if err != nil {
-		return nil, errors.New(errors.ErrNotFound, "rfid card not found")
+		return nil, errors.New(errors.ErrInternal, "failed to register rfid card")
 	}
 	if !card.IsActive {
 		return nil, errors.New(errors.ErrValidation, "rfid card is inactive")
@@ -490,7 +527,7 @@ func (s *service) validateRFIDForExit(ctx context.Context, req RecordExitRequest
 }
 
 // resolveVehicleTypeForFee returns vehicle type ID for fee calculation.
-// Priority: vehicle already linked to transaction > vehicle_type_id from request.
+// Priority: vehicle linked to tx > vehicle_type_id in request > zone default vehicle type.
 func (s *service) resolveVehicleTypeForFee(ctx context.Context, existing *Transaction, req RecordExitRequest) (uuid.UUID, error) {
 	if existing.VehicleID != nil {
 		vehicle, err := s.vehicleSvc.GetVehicle(ctx, *existing.VehicleID)
@@ -499,11 +536,19 @@ func (s *service) resolveVehicleTypeForFee(ctx context.Context, existing *Transa
 		}
 		return vehicle.VehicleTypeID, nil
 	}
-	if req.VehicleTypeID == nil {
-		return uuid.Nil, errors.New(errors.ErrValidation,
-			"vehicle_type_id is required: no vehicle has been linked to this transaction yet")
+	if req.VehicleTypeID != nil {
+		return *req.VehicleTypeID, nil
 	}
-	return *req.VehicleTypeID, nil
+	// Fallback: pakai default vehicle type dari zone (set saat konfigurasi zona)
+	zone, err := s.zoneRepo.FindByID(ctx, existing.ZoneID)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("get zone for vehicle type fallback: %w", err)
+	}
+	if zone.ForVehicleTypeID != nil {
+		return *zone.ForVehicleTypeID, nil
+	}
+	return uuid.Nil, errors.New(errors.ErrValidation,
+		"vehicle_type_id is required: no vehicle linked, no vehicle_type_id in request, and zone has no default vehicle type")
 }
 
 func (s *service) checkZoneCapacity(ctx context.Context, gate *zoneDomain.Gate, zone *zoneDomain.Zone) (*zoneDomain.ZoneCapacityResponse, error) {

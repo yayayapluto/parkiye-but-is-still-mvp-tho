@@ -167,6 +167,18 @@ func (h *handler) recordEntry(c *fiber.Ctx) error {
 	return response.Created(c, fmt.Sprintf("entry recorded: %s", tx.TransactionCode), toResponse(tx, nil))
 }
 
+func (h *handler) getOpenByRFID(c *fiber.Ctx) error {
+	uid := c.Params("uid")
+	if uid == "" {
+		return response.BadRequest(c, "rfid uid is required", nil)
+	}
+	tx, err := h.svc.GetOpenByRFIDUID(c.Context(), uid)
+	if err != nil {
+		return err
+	}
+	return response.Success(c, "transaction found", toResponse(tx, nil))
+}
+
 func (h *handler) recordExit(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
@@ -199,6 +211,24 @@ func (h *handler) recordExit(c *fiber.Ctx) error {
 		return err
 	}
 	return response.Success(c, fmt.Sprintf("exit recorded, fee: Rp%d", *tx.CalculatedFee), toResponse(tx, nil))
+}
+
+func (h *handler) simulate(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.BadRequest(c, "invalid transaction id", nil)
+	}
+	var body struct {
+		MinutesAgo int `json:"minutes_ago"`
+	}
+	if err := c.BodyParser(&body); err != nil || body.MinutesAgo <= 0 {
+		return response.BadRequest(c, "minutes_ago must be a positive integer", nil)
+	}
+	tx, err := h.svc.SimulateEntryTime(c.Context(), id, body.MinutesAgo)
+	if err != nil {
+		return err
+	}
+	return response.Success(c, "entry_at simulated", toResponse(tx, nil))
 }
 
 func (h *handler) cancel(c *fiber.Ctx) error {

@@ -79,6 +79,18 @@ func (r *transactionRepo) FindOpenByRFIDCard(ctx context.Context, cardID uuid.UU
 	return &t, nil
 }
 
+func (r *transactionRepo) FindAwaitingPaymentByRFIDCard(ctx context.Context, cardID uuid.UUID) (*Transaction, error) {
+	var t Transaction
+	err := r.db.WithContext(ctx).
+		Where("rfid_card_id = ? AND status = ?", cardID, types.TransactionStatusAwaitingPayment).
+		Order("exit_at DESC").
+		First(&t).Error
+	if err != nil {
+		return nil, errors.FromDB(err, "awaiting payment transaction not found")
+	}
+	return &t, nil
+}
+
 func (r *transactionRepo) CountByDatePrefix(ctx context.Context, db *gorm.DB, prefix string) (int64, error) {
 	var count int64
 	err := db.WithContext(ctx).

@@ -111,7 +111,7 @@ storage/
 - `GET /metrics` → Fiber built-in monitor dashboard
 
 **Modules (domains):**
-`auth` · `zone` · `gate` · `vehicle` · `rfid` · `fee` · `transaction` · `payment` · `override` · `ocr` · `audit`
+`auth` · `zone` · `gate` · `vehicle` · `rfid` · `fee` · `transaction` · `payment` · `kiosk` · `override` · `ocr` · `audit`
 
 ---
 
@@ -312,6 +312,43 @@ defer span.End()
 Every webhook hit → logged to `midtrans_callbacks` regardless of signature.
 Never process a callback without checking `signature_valid = true` first.
 
+### Gate Routes — ordering rule (Fiber)
+
+Fiber evaluates routes sequentially. **Static segments must be registered before parametric ones** inside the same group:
+
+```go
+// ✅ correct — "/" and "/code/:code" registered before "/:id"
+gateTx.Get("/", h.listTransactions)
+gateTx.Get("/code/:code", h.getByCode)
+gateTx.Get("/rfid/:uid", h.getOpenByRFID)
+gateTx.Get("/:id", h.getTransaction)
+
+// ❌ wrong — "/:id" would swallow "/" and "/code/:code"
+gateTx.Get("/:id", h.getTransaction)
+gateTx.Get("/", h.listTransactions)
+```
+
+Same rule applies to payment gate routes (`/gate/payments`).
+
+### QRIS Payment — Polling vs Webhook
+
+Midtrans webhook requires a public URL — does not work on `localhost`.
+For local dev, the kiosk polls `GET /gate/payments/:id/poll` every 3 s.
+`PollPaymentStatus` calls `midtrans.checkStatus(orderID)` directly and applies
+`markQRISPaid` if Midtrans returns `settlement` or `capture`.
+Webhook still works in production when a public tunnel (cloudflared) is active.
+
+### Transaction — RFID exit fallback
+
+`GetOpenByRFIDUID` first looks for `status = open`, then falls back to
+`status = awaiting_payment` (card tapped again after exit already recorded).
+Frontend also skips `recordExit` if the found transaction is already `awaiting_payment`.
+
+### Simulation endpoint (dev only)
+
+`PATCH /gate/payments/:id/simulate` body `{ "minutes_ago": N }` — backdates
+`entry_at` of an open transaction. Gate-authenticated. Only works on `status = open`.
+
 ---
 
 ## Database
@@ -364,9 +401,33 @@ Seed data (idempotent):
 | `docs/Parkieee - RFID.*`             | ✅ done — biasa + full test suite                                                    |
 | `docs/Parkieee - Fee.*`              | ✅ done — full test suite (postman collection)                                       |
 | `docs/Parkieee - Transaction.*`      | ✅ done — biasa + full test suite                                                    |
+| `internal/modules/kiosk/*`           | ✅ done — `GET /api/v1/kiosk/tariff` (GateAuth), aggregate vehicle types + fee configs, filter by `zone.for_vehicle_type_id` |
 
 **Next:** implement modules in dependency order:
-`auth` ✅ → `zone` ✅ → `vehicle` ✅ → `rfid` ✅ → `fee` ✅ → `transaction` ✅ → `ocr` ✅ → `payment` ✅ → `gate` ✅ → `override` → `audit`
+`auth` ✅ → `zone` ✅ → `vehicle` ✅ → `rfid` ✅ → `fee` ✅ → `transaction` ✅ → `ocr` ✅ → `payment` ✅ → `gate` ✅ → `kiosk` ✅ → `override` → `audit`
+
+### Gate API Summary (kiosk-facing endpoints)
+
+```
+# Transactions
+GET    /gate/transactions                  list open/all (filter: status, page)
+GET    /gate/transactions/:id              get by ID
+GET    /gate/transactions/code/:code       get by QR code
+GET    /gate/transactions/rfid/:uid        get open or awaiting_payment by RFID UID
+POST   /gate/transactions/entry            record entry (multipart, optional photo)
+POST   /gate/transactions/:id/exit         record exit (multipart, optional photo)
+PATCH  /gate/transactions/:id/simulate     backdate entry_at (dev only)
+
+# Payments
+POST   /gate/payments/qris                 initiate QRIS (idempotent)
+POST   /gate/payments/cash                 record cash intent
+GET    /gate/payments/transaction/:txID    list payments for transaction
+GET    /gate/payments/:id                  get payment by ID
+GET    /gate/payments/:id/poll             check Midtrans status + update DB if paid
+
+# Kiosk
+GET    /kiosk/tariff                       get tariffs for gate's zone
+```
 
 ---
 

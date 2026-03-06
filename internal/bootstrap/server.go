@@ -15,6 +15,7 @@ import (
 	"parkieee/internal/modules/auth"
 	"parkieee/internal/modules/fee"
 	"parkieee/internal/modules/gate"
+	"parkieee/internal/modules/kiosk"
 	"parkieee/internal/modules/payment"
 	"parkieee/internal/modules/rfid"
 	"parkieee/internal/modules/transaction"
@@ -38,9 +39,10 @@ func NewServer(container *Container) *fiber.App {
 	//app.Use(recover.New())
 	app.Use(requestid.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
-		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS,PATCH",
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowOrigins:     "*",
+		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS,PATCH",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+		AllowCredentials: false,
 	}))
 
 	initObservability(app, container)
@@ -72,10 +74,11 @@ func NewServer(container *Container) *fiber.App {
 	vehicle.RegisterRoutes(api, container.VehicleService, container.AuthService, container.Validator)
 	rfid.RegisterRoutes(api, container.RFIDService, container.AuthService, container.Validator)
 	fee.RegisterRoutes(api, container.FeeService, container.AuthService, container.Validator)
-	transaction.RegisterRoutes(api, container.TransactionService, container.AuthService, container.Validator,
+	transaction.RegisterRoutes(api, container.TransactionService, container.AuthService, container.GateService, container.Validator,
 		container.Config.S3)
-	payment.RegisterRoutes(api, container.PaymentService, container.AuthService, container.Validator)
+	payment.RegisterRoutes(api, container.PaymentService, container.AuthService, container.GateService, container.Validator)
 	gate.RegisterRoutes(api, container.GateService, container.AuthService, container.Validator)
+	kiosk.RegisterRoutes(api, container.FeeService, container.VehicleService, container.ZoneService, container.GateService)
 
 	return app
 }

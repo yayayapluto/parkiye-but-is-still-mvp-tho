@@ -29,6 +29,9 @@ type ServicePort interface {
 	HandleMidtransWebhook(ctx context.Context, rawBody []byte, payload MidtransWebhookPayload) error
 
 	GetPayment(ctx context.Context, id uuid.UUID) (*Payment, error)
+	// PollPaymentStatus cek status ke Midtrans langsung, update DB kalau sudah paid.
+	// Dipakai saat webhook tidak bisa masuk (localhost dev).
+	PollPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*Payment, error)
 	ListByTransaction(ctx context.Context, transactionID uuid.UUID) ([]Payment, error)
 
 	RequestRefund(ctx context.Context, req RequestRefundRequest, requestedBy uuid.UUID) (*Refund, error)

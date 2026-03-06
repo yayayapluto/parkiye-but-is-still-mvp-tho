@@ -6,9 +6,10 @@ import (
 	"parkieee/pkg/validator"
 )
 
-func RegisterRoutes(router fiber.Router, svc ServicePort, auth middleware.TokenValidator, v *validator.Validator) {
+func RegisterRoutes(router fiber.Router, svc ServicePort, auth middleware.TokenValidator, gateSvc middleware.GateTokenValidator, v *validator.Validator) {
 	adapter := newHTTPAdapter(svc, v)
 	authMw := middleware.Auth(auth)
+	gateAuthMw := middleware.GateAuth(gateSvc)
 	managerMw := middleware.RequirePermission("config.edit")
 
 	// Webhook harus di luar group authMw karena Midtrans tidak kirim JWT
@@ -20,6 +21,14 @@ func RegisterRoutes(router fiber.Router, svc ServicePort, auth middleware.TokenV
 	p.Get("/:id", adapter.h.getPayment)
 	p.Post("/cash", adapter.h.payCash)
 	p.Post("/qris", adapter.h.initiateQRIS)
+
+	// Route payment untuk kiosk gate — memakai gate token, bukan user JWT
+	gp := router.Group("/gate/payments", gateAuthMw)
+	gp.Post("/cash", adapter.h.payCash)
+	gp.Post("/qris", adapter.h.initiateQRIS)
+	gp.Get("/transaction/:txID", adapter.h.listByTransaction)
+	gp.Get("/:id/poll", adapter.h.pollPaymentStatus)
+	gp.Get("/:id", adapter.h.getPayment)
 
 	r := router.Group("/payments/refunds", authMw)
 	r.Post("/", adapter.h.requestRefund)

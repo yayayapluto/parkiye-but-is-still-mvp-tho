@@ -5,10 +5,19 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"parkieee/database"
 	"parkieee/pkg/config"
 )
+
+func init() {
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		log.Fatal("failed to load timezone Asia/Jakarta: ", err)
+	}
+	time.Local = loc
+}
 
 func main() {
 	var (

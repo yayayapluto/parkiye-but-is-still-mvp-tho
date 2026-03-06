@@ -87,6 +87,40 @@ func (m *midtransClient) chargeQRIS(orderID string, grossAmount int) (*qrisCharg
 	return &result, nil
 }
 
+type midtransStatusResponse struct {
+	TransactionID     string `json:"transaction_id"`
+	OrderID           string `json:"order_id"`
+	TransactionStatus string `json:"transaction_status"`
+	FraudStatus       string `json:"fraud_status"`
+	StatusCode        string `json:"status_code"`
+	StatusMessage     string `json:"status_message"`
+}
+
+func (m *midtransClient) checkStatus(orderID string) (*midtransStatusResponse, error) {
+	req, err := http.NewRequest(http.MethodGet, m.baseURL+"/v2/"+orderID+"/status", nil)
+	if err != nil {
+		return nil, fmt.Errorf("create status request: %w", err)
+	}
+	req.Header.Set("Authorization", m.authHeader())
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("execute status request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read status response: %w", err)
+	}
+
+	var result midtransStatusResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal status response: %w", err)
+	}
+	return &result, nil
+}
+
 func (m *midtransClient) refund(midtransTransactionID, refundKey string, amount int, reason string) error {
 	body := map[string]any{
 		"refund_key": refundKey,

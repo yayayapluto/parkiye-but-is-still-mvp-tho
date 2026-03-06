@@ -362,7 +362,11 @@ func (s *service) parseJWT(tokenStr string) (*middleware.TokenClaims, error) {
 		return nil, errors.New(errors.ErrUnauthorized, "invalid token claims")
 	}
 
-	userID, err := uuid.Parse(claims["sub"].(string))
+	subStr, _ := claims["sub"].(string)
+	if subStr == "" {
+		return nil, errors.New(errors.ErrUnauthorized, "invalid token subject")
+	}
+	userID, err := uuid.Parse(subStr)
 	if err != nil {
 		return nil, errors.New(errors.ErrUnauthorized, "invalid token subject")
 	}
@@ -375,10 +379,16 @@ func (s *service) parseJWT(tokenStr string) (*middleware.TokenClaims, error) {
 		}
 	}
 
+	email, _ := claims["email"].(string)
+	role, _ := claims["role"].(string)
+	if email == "" || role == "" {
+		return nil, errors.New(errors.ErrUnauthorized, "invalid token claims: missing email or role")
+	}
+
 	return &middleware.TokenClaims{
 		UserID:      userID,
-		Email:       claims["email"].(string),
-		Role:        claims["role"].(string),
+		Email:       email,
+		Role:        role,
 		Permissions: permStrings,
 	}, nil
 }
