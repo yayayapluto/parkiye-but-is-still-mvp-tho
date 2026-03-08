@@ -3,7 +3,9 @@ package gate
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -50,6 +52,11 @@ func (r *pairingRepository) InvalidatePendingByIP(ctx context.Context, ip string
 }
 
 func (r *pairingRepository) Confirm(ctx context.Context, id uuid.UUID, gateID uuid.UUID, confirmedBy uuid.UUID, gateJWT string) error {
+	// Simpan hash SHA-256 dari JWT, bukan plaintext.
+	// JWT asli hanya dikirim ke screen via SSE channel — tidak pernah disimpan ke DB.
+	h := sha256.Sum256([]byte(gateJWT))
+	jwtHash := hex.EncodeToString(h[:])
+
 	now := time.Now()
 	return errors.FromDB(
 		r.db.WithContext(ctx).
@@ -60,7 +67,7 @@ func (r *pairingRepository) Confirm(ctx context.Context, id uuid.UUID, gateID uu
 				"gate_id":      gateID,
 				"confirmed_by": confirmedBy,
 				"confirmed_at": now,
-				"gate_jwt":     gateJWT,
+				"gate_jwt":     jwtHash,
 			}).Error,
 		"",
 	)

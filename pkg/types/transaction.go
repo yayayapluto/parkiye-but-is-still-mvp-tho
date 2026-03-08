@@ -35,6 +35,7 @@ const (
 	EventPaymentReceived  TransactionEvent = "payment_received"
 	EventGateOpened       TransactionEvent = "gate_opened"
 	EventExitRecorded     TransactionEvent = "exit_recorded"
+	EventCancelled        TransactionEvent = "cancelled"
 	EventOverrideApplied  TransactionEvent = "override_applied"
 	EventFlaggedUnclosed  TransactionEvent = "flagged_unclosed"
 	EventReceiptPrinted   TransactionEvent = "receipt_printed"

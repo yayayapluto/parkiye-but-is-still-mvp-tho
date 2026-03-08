@@ -82,7 +82,7 @@ func (s *service) ValidateGateToken(ctx context.Context, jwtToken string) (*midd
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New(errors.ErrUnauthorized, "unexpected signing method")
 		}
-		return []byte(s.cfg.JWT.SecretKey), nil
+		return []byte(s.cfg.GateJWTSecret()), nil
 	})
 	if err != nil || !t.Valid {
 		return nil, errors.New(errors.ErrUnauthorized, "invalid gate token")
@@ -283,6 +283,6 @@ func (s *service) generateGateJWT(gate *zoneDomain.Gate) (string, time.Time, err
 	}
 
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	token, err := t.SignedString([]byte(s.cfg.JWT.SecretKey))
+	token, err := t.SignedString([]byte(s.cfg.GateJWTSecret()))
 	return token, expiresAt, err
 }

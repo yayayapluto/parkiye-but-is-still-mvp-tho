@@ -118,11 +118,30 @@ func RegisterRoutes(router fiber.Router, svc ServicePort, auth middleware.TokenV
 ```
 TransactionService  ← FeeService, OCRService             (✅ terwire)
 OCRService          ← VehicleService, ZoneRepo            (✅ terwire)
+                      + SetTransactionStamper(TransactionService) dipanggil setelah initTransactionModule
 PaymentService      ← TransactionService                  (✅ terwire)
 GateService         ← GateRepo, PairingRepo, Config       (✅ terwire)
 OverrideService     ← TransactionService                  (planned — belum ada di container)
 AuditService        − standalone                          (planned)
 ```
+
+## Security Fixes yang Sudah Diimplementasi
+
+| Fix | File | Keterangan |
+|-----|------|------------|
+| HTTP client timeout | `pkg/photo/photo.go` | `httpClient` dengan `Timeout: 30s`, ganti `http.DefaultClient` |
+| Cross-module DB write OCR | `internal/modules/ocr/service.go`, `ports.go` | Hapus `db *gorm.DB`, inject `TransactionStamperPort` via `SetTransactionStamper` |
+| Non-atomic MarkPaid+MarkExited | `internal/modules/payment/service.go` | Ganti dua call dengan satu `MarkPaidAndExited` (wrapped DB transaction) |
+| Wildcard CORS | `internal/bootstrap/server.go` | Production pakai `APP_URL`, non-production `*` |
+| Shared JWT secret | `pkg/config/config.go`, `internal/modules/gate/service.go` | Tambah `JWT_GATE_SECRET_KEY`, helper `GateJWTSecret()` |
+| Session DB lookup per request | `internal/modules/auth/service.go` | `sessionCache` sync.Map TTL 60s + `userRevokedAt` sync.Map |
+| Password complexity | `internal/modules/auth/service.go` | `validatePasswordComplexity`: min 8, huruf+angka |
+| Gate JWT plaintext di DB | `internal/modules/gate/repository.go` | `Confirm()` simpan SHA-256 hash, bukan plaintext JWT |
+| Wrong event type Cancel | `internal/modules/transaction/service.go` | `EventCancelled` bukan `EventExitRecorded` |
+| Dead code cleanup | `pkg/config/config.go`, `internal/modules/fee/service.go` | Hapus `Config.DSN()`, hapus custom `min()` |
+| httpAdapter wrapper | `internal/modules/transaction/` | Hapus layer tidak berguna, gunakan handler langsung |
+
+---
 
 ## Env Variables yang Sudah Ada
 
@@ -149,6 +168,10 @@ MIDTRANS_ENV=sandbox
 
 # Gate JWT (✅ done)
 JWT_GATE_TOKEN_TTL=8760h   # 365 hari (default)
+JWT_GATE_SECRET_KEY=       # optional — kalau kosong fallback ke JWT_SECRET_KEY
+
+# App URL (✅ done — untuk CORS di production)
+APP_URL=                   # e.g. https://parkieee.example.com
 ```
 
 ## Perubahan Breaking dari Versi Sebelumnya

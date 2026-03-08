@@ -78,14 +78,8 @@ func (s *service) PayCash(ctx context.Context, req PayCashRequest, handledBy uui
 
 	s.log.Info(ctx, "cash payment recorded", "payment_id", p.ID, "tx_id", req.TransactionID, "amount", p.Amount, "tendered", req.CashTendered, "change", cashChange, "handled_by", handledBy)
 
-	if err := s.txSvc.MarkPaid(ctx, req.TransactionID, types.TriggeredByCashier, &handledBy); err != nil {
-		s.log.Error(ctx, "failed to mark transaction as paid after cash payment",
-			"tx_id", req.TransactionID, "payment_id", p.ID, "error", err)
-		return nil, err
-	}
-
-	if err := s.txSvc.MarkExited(ctx, req.TransactionID, types.TriggeredByCashier); err != nil {
-		s.log.Error(ctx, "failed to mark transaction as exited after cash payment",
+	if err := s.txSvc.MarkPaidAndExited(ctx, req.TransactionID, types.TriggeredByCashier, &handledBy); err != nil {
+		s.log.Error(ctx, "failed to mark transaction as paid and exited after cash payment",
 			"tx_id", req.TransactionID, "payment_id", p.ID, "error", err)
 		return nil, err
 	}
@@ -238,11 +232,8 @@ func (s *service) markQRISPaid(ctx context.Context, p *Payment, midtransStatus s
 	if err := s.repo.UpdatePayment(ctx, p); err != nil {
 		return fmt.Errorf("update payment: %w", err)
 	}
-	if err := s.txSvc.MarkPaid(ctx, p.TransactionID, types.TriggeredByWebhook, nil); err != nil {
-		s.log.Error(ctx, "markQRISPaid: failed to mark tx paid", "tx_id", p.TransactionID, "error", err)
-	}
-	if err := s.txSvc.MarkExited(ctx, p.TransactionID, types.TriggeredByWebhook); err != nil {
-		s.log.Error(ctx, "markQRISPaid: failed to mark tx exited", "tx_id", p.TransactionID, "error", err)
+	if err := s.txSvc.MarkPaidAndExited(ctx, p.TransactionID, types.TriggeredByWebhook, nil); err != nil {
+		s.log.Error(ctx, "markQRISPaid: failed to mark tx paid and exited", "tx_id", p.TransactionID, "error", err)
 	}
 	s.log.Info(ctx, "QRIS payment marked paid", "payment_id", p.ID, "tx_id", p.TransactionID, "source", midtransStatus)
 	return nil

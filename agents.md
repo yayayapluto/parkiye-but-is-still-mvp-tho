@@ -388,7 +388,7 @@ Seed data (idempotent):
 | `database/seed.go`                   | ✅ done — gofakeit, all 11 modules, 25–80 rows per entity                            |
 | `internal/bootstrap/*`               | ✅ done: semua module sudah terwire (auth, zone, vehicle, rfid, fee, ocr, transaction, payment, gate) |
 | `internal/modules/*/domain.go`       | ✅ done (all 11 modules)                                                              |
-| `internal/modules/*/ports.go`        | ✅ done: auth, zone, vehicle, rfid, fee, transaction (incl. MarkPaid+MarkExited), ocr, payment, gate — override, audit: placeholder |
+| `internal/modules/*/ports.go`        | ✅ done: auth, zone, vehicle, rfid, fee, transaction (incl. MarkPaid+MarkExited+MarkPaidAndExited+StampPlateMismatch), ocr (incl. TransactionStamperPort), payment, gate — override, audit: placeholder |
 | `internal/modules/*/repository.go`   | ✅ done: auth, zone, vehicle, rfid, fee, transaction, ocr, payment, gate — override, audit: kosong |
 | `internal/modules/*/service.go`      | ✅ done: auth, zone, vehicle, rfid, fee, transaction, ocr, payment, gate — override, audit: kosong |
 | `internal/modules/*/dto.go`          | ✅ done: auth, zone, vehicle, rfid, fee, transaction, ocr, payment, gate — override, audit: placeholder |
@@ -480,3 +480,9 @@ Kalau server restart, screen perlu request pairing baru.
 - **Always update `applyManualConstraints`** when adding composite uniques or CHECK constraints
 - When unsure about module pattern, read the nearest completed module as reference
 - **photo.Save() signature** sekarang `(file, prefix, s3cfg)` — bukan `(file, prefix, storageDir, ocrPrefix)`
+- **Gate JWT** — `pairingRepo.Confirm` menerima plaintext JWT tapi menyimpan SHA-256 hash ke DB. JWT plaintext hanya dikirim via SSE channel. Jangan ubah behaviour ini.
+- **Password complexity** — `CreateUser` dan `ChangePassword` wajib lolos `validatePasswordComplexity`: min 8 char, ada huruf, ada angka. Validasi dilakukan sebelum bcrypt.
+- **Session cache** — `auth.service` punya `sessionCache` (sync.Map) TTL 60 detik dan `userRevokedAt` (sync.Map). Logout harus delete dari `sessionCache`. RevokeAll harus store ke `userRevokedAt`. Jangan bypass ini.
+- **CORS** — production gunakan `APP_URL` env. Wildcard `*` hanya untuk non-production.
+- **Gate JWT secret** — gunakan `cfg.GateJWTSecret()` (bukan `cfg.JWT.SecretKey` langsung) untuk gate token. Set `JWT_GATE_SECRET_KEY` di production.
+- **OCR cross-module write** — OCR service tidak boleh menulis langsung ke tabel `transactions` via GORM. Gunakan `txStamper.StampPlateMismatch()` yang di-inject via `SetTransactionStamper`.

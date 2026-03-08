@@ -58,11 +58,21 @@ Lockout hanya bisa dibuka oleh admin (belum ada unlock endpoint — manual via D
 
 ```
 1. Parse JWT → verifikasi signature + expiry
-2. Cari session by token_hash di DB
-   └─ Tidak ada / sudah revoked → return 401
-   (double check: token valid tapi session bisa sudah di-revoke via logout)
+2. Cek sessionCache (sync.Map) by token_hash:
+   HIT + belum expired:
+     → Cek userRevokedAt[userID] — apakah ada revoke SETELAH cache dibuat?
+         Ya → hapus dari cache, return 401
+         Tidak → return claims langsung (NO DB)
+   HIT + expired / MISS:
+     → Query DB: sessionRepo.FindByTokenHash
+         Tidak ada → return 401
+         Ada → simpan ke cache (TTL 60 detik), return claims
 3. Return TokenClaims {user_id, email, role, permissions[]}
 ```
+
+**Cache invalidation:**
+- `Logout` → hapus entry token dari `sessionCache` (immediate)
+- `ChangePassword` / `DeactivateUser` → store `userRevokedAt[userID] = now()` — semua cache entry token user itu langsung ditolak saat request berikutnya (max lag: 0 detik)
 
 ### Token Storage
 
@@ -76,10 +86,16 @@ tokenHash = hex.EncodeToString(h[:])
 ### Change Password
 
 ```
-1. Verifikasi old_password dengan bcrypt
-2. Hash new_password
-3. Update user.password_hash
-4. RevokeAllByUserID() — semua session di-revoke → user harus login ulang di semua device
+1. Validasi kompleksitas new_password:
+   - Minimal 8 karakter
+   - Harus ada huruf (a-z / A-Z)
+   - Harus ada angka (0-9)
+   └─ Gagal → return ErrValidation
+2. Verifikasi old_password dengan bcrypt
+3. Hash new_password
+4. Update user.password_hash
+5. RevokeAllByUserID() — semua session di-revoke → user harus login ulang di semua device
+6. userRevokedAt[userID] = now() — invalidate semua cache entry token user ini
 ```
 
 ### Deactivate User
@@ -88,6 +104,7 @@ tokenHash = hex.EncodeToString(h[:])
 - Tidak bisa deactivate diri sendiri (actorID == userID → error)
 - SoftDelete: set deleted_at = now()
 - RevokeAllByUserID() — kick semua session aktif
+- userRevokedAt[userID] = now() — invalidate semua cache entry token user ini
 ```
 
 ### Permission Check
@@ -931,7 +948,7 @@ Butuh auth admin.
 3. FindByID(gate_id) — cek gate ada dan is_active=true
 4. generateGateJWT(gate) → JWT long-lived
 5. pairingRepo.Confirm(id, gate_id, adminID, gateJWT)
-   Update: status=confirmed, gate_id, confirmed_by, confirmed_at, gate_jwt
+   Update: status=confirmed, gate_id, confirmed_by, confirmed_at, gate_jwt (SHA-256 hash — bukan plaintext)
 6. Push JWT ke screen via SSE:
    GetSSEClient(code) → ch <- gateJWT → RemoveSSEClient(code)
    (kalau screen sudah disconnect → non-fatal, JWT tetap tersimpan di DB)
@@ -951,7 +968,7 @@ gate_pairing_codes:
   gate_id      uuid NULL                      — diisi saat confirm
   confirmed_by uuid NULL                      — user_id admin
   confirmed_at timestamptz NULL
-  gate_jwt     text NULL                      — JWT yang di-push ke screen
+  gate_jwt     text NULL                      — SHA-256 hash dari JWT (plaintext hanya dikirim via SSE, tidak disimpan)
 ```
 
 Expired check selalu dari `expires_at < now()` — tidak ada status expired di DB.

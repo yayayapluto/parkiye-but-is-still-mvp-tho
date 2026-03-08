@@ -47,6 +47,10 @@ type TransactionLogRepositoryPort interface {
 }
 
 type ServicePort interface {
+	// StampPlateMismatch sets the plate_mismatch flag on a transaction via the service layer.
+	// Called by OCR service after entry/exit plate comparison.
+	StampPlateMismatch(ctx context.Context, txID uuid.UUID, mismatch bool) error
+
 	// SimulateEntryTime backdates entry_at by the given minutes (dev/sim only).
 	SimulateEntryTime(ctx context.Context, id uuid.UUID, minutesAgo int) (*Transaction, error)
 
@@ -66,6 +70,10 @@ type ServicePort interface {
 
 	// MarkExited moves status paid → exited.
 	MarkExited(ctx context.Context, txID uuid.UUID, triggeredBy types.TriggeredBy) error
+
+	// MarkPaidAndExited atomically moves awaiting_payment → paid → exited in one DB transaction.
+	// Use this instead of calling MarkPaid + MarkExited separately.
+	MarkPaidAndExited(ctx context.Context, txID uuid.UUID, triggeredBy types.TriggeredBy, handledByUserID *uuid.UUID) error
 
 	GetTransaction(ctx context.Context, id uuid.UUID) (*Transaction, error)
 	GetByCode(ctx context.Context, code string) (*Transaction, error)

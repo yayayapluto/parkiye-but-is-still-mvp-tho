@@ -8,6 +8,12 @@ import (
 	"parkieee/pkg/types"
 )
 
+// TransactionStamperPort is a minimal write interface injected into OCR service
+// to avoid a direct cross-module DB write. Implemented by transaction.Service.
+type TransactionStamperPort interface {
+	StampPlateMismatch(ctx context.Context, txID uuid.UUID, mismatch bool) error
+}
+
 // ServicePort is the only interface transaction module needs to call.
 // It is intentionally minimal: fire-and-forget job dispatch.
 type ServicePort interface {
@@ -17,6 +23,9 @@ type ServicePort interface {
 	// photoType distinguishes entry vs exit photos so the service can run plate-match logic on exit.
 	// This method is designed to be called from a goroutine; it handles all retries and DB writes internally.
 	DispatchOCRJob(ctx context.Context, transactionID uuid.UUID, imagePath string, zoneID uuid.UUID, photoType types.OCRPhotoType)
+
+	// SetTransactionStamper injects the transaction stamper post-construction to avoid circular dependency.
+	SetTransactionStamper(stamper TransactionStamperPort)
 }
 
 type OCRJobRepositoryPort interface {

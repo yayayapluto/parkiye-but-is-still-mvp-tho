@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -17,6 +18,14 @@ import (
 	"parkieee/pkg/types"
 )
 
+const sessionCacheTTL = 60 * time.Second
+
+type cachedSession struct {
+	claims    *middleware.TokenClaims
+	cachedAt  time.Time
+	expiresAt time.Time
+}
+
 type service struct {
 	userRepo       UserRepositoryPort
 	roleRepo       RoleRepositoryPort
@@ -27,6 +36,8 @@ type service struct {
 	loginStatsRepo LoginStatsRepositoryPort
 	cfg            *config.Config
 	log            logger.Logger
+	sessionCache   sync.Map // key: tokenHash(string) → cachedSession
+	userRevokedAt  sync.Map // key: userID(string) → time.Time — kapan semua session user di-revoke
 }
 
 func NewService(
@@ -133,6 +144,9 @@ func (s *service) Logout(ctx context.Context, token string) error {
 		return err
 	}
 
+	// Invalidate cache entry supaya token langsung ditolak
+	s.sessionCache.Delete(hashToken(token))
+
 	log := &UserLoginLog{
 		UserID:      &session.UserID,
 		AttemptType: types.LoginAttemptLogout,
@@ -151,11 +165,40 @@ func (s *service) ValidateToken(ctx context.Context, token string) (*middleware.
 		return nil, errors.New(errors.ErrUnauthorized, "invalid or expired token")
 	}
 
-	// Cek session masih aktif di DB — token valid tapi session bisa sudah di-revoke
-	_, err = s.sessionRepo.FindByTokenHash(ctx, hashToken(token))
+	h := hashToken(token)
+
+	// Cache hit — skip DB lookup
+	if v, ok := s.sessionCache.Load(h); ok {
+		entry := v.(cachedSession)
+		if time.Now().Before(entry.expiresAt) {
+			// Cek apakah semua session user ini sudah di-revoke setelah cache entry dibuat
+			if rv, rOK := s.userRevokedAt.Load(entry.claims.UserID.String()); rOK {
+				revokedAt := rv.(time.Time)
+				if revokedAt.After(entry.cachedAt) {
+					// Session di-revoke setelah cache dibuat — hapus dan tolak
+					s.sessionCache.Delete(h)
+					return nil, errors.New(errors.ErrUnauthorized, "session expired or revoked")
+				}
+			}
+			return entry.claims, nil
+		}
+		// Expired — hapus dari cache dan lanjut ke DB
+		s.sessionCache.Delete(h)
+	}
+
+	// Cache miss — query DB
+	_, err = s.sessionRepo.FindByTokenHash(ctx, h)
 	if err != nil {
 		return nil, errors.New(errors.ErrUnauthorized, "session expired or revoked")
 	}
+
+	// Simpan ke cache
+	now := time.Now()
+	s.sessionCache.Store(h, cachedSession{
+		claims:    claims,
+		cachedAt:  now,
+		expiresAt: now.Add(sessionCacheTTL),
+	})
 
 	return claims, nil
 }
@@ -165,6 +208,10 @@ func (s *service) GetProfile(ctx context.Context, userID uuid.UUID) (*User, erro
 }
 
 func (s *service) CreateUser(ctx context.Context, req *CreateUserRequest) (*User, error) {
+	if err := validatePasswordComplexity(req.Password); err != nil {
+		return nil, err
+	}
+
 	if _, err := s.roleRepo.FindByID(ctx, req.RoleID); err != nil {
 		s.log.Warn(ctx, "create user failed: role not found", "role_id", req.RoleID)
 		return nil, errors.New(errors.ErrNotFound, "role not found")
@@ -223,6 +270,10 @@ func (s *service) UpdateUser(ctx context.Context, userID uuid.UUID, req *UpdateU
 }
 
 func (s *service) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error {
+	if err := validatePasswordComplexity(newPassword); err != nil {
+		return err
+	}
+
 	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		s.log.Warn(ctx, "change password failed: user not found", "user_id", userID)
@@ -250,6 +301,8 @@ func (s *service) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassw
 	if err := s.sessionRepo.RevokeAllByUserID(ctx, userID); err != nil {
 		s.log.Error(ctx, "failed to revoke sessions after password change", "user_id", userID, "error", err)
 	}
+	// Tandai semua cache entry milik user ini sebagai tidak valid
+	s.userRevokedAt.Store(userID.String(), time.Now())
 
 	s.log.Info(ctx, "password changed", "user_id", userID)
 	return nil
@@ -272,6 +325,8 @@ func (s *service) DeactivateUser(ctx context.Context, userID uuid.UUID, actorID 
 	}
 
 	_ = s.sessionRepo.RevokeAllByUserID(ctx, userID)
+	// Tandai semua cache entry milik user ini sebagai tidak valid
+	s.userRevokedAt.Store(userID.String(), time.Now())
 
 	s.log.Info(ctx, "user deactivated", "user_id", userID, "actor_id", actorID)
 	return nil
@@ -391,6 +446,29 @@ func (s *service) parseJWT(tokenStr string) (*middleware.TokenClaims, error) {
 		Role:        role,
 		Permissions: permStrings,
 	}, nil
+}
+
+// validatePasswordComplexity memastikan password minimal 8 karakter, ada huruf dan angka.
+func validatePasswordComplexity(password string) error {
+	if len(password) < 8 {
+		return errors.New(errors.ErrValidation, "password must be at least 8 characters")
+	}
+	hasLetter, hasDigit := false, false
+	for _, c := range password {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z':
+			hasLetter = true
+		case c >= '0' && c <= '9':
+			hasDigit = true
+		}
+		if hasLetter && hasDigit {
+			return nil
+		}
+	}
+	if !hasLetter {
+		return errors.New(errors.ErrValidation, "password must contain at least one letter")
+	}
+	return errors.New(errors.ErrValidation, "password must contain at least one number")
 }
 
 // hashToken SHA-256 token sebelum disimpan ke DB — token asli tidak pernah disimpan.

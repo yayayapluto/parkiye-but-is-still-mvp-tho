@@ -291,10 +291,3 @@ func validateHolidayRateFields(rateType types.HolidayRateType, multiplier *decim
 	}
 	return nil
 }
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

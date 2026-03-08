@@ -80,6 +80,7 @@ type DatabaseConfig struct {
 
 type JWTConfig struct {
 	SecretKey       string
+	GateSecretKey   string // JWT_GATE_SECRET_KEY — secret terpisah untuk gate token
 	AccessTokenTTL  time.Duration
 	RefreshTokenTTL time.Duration
 	GateTokenTTL    time.Duration // default 365 hari — token untuk screen gate
@@ -177,6 +178,7 @@ func Load() (*Config, error) {
 		},
 		JWT: JWTConfig{
 			SecretKey:       getEnvRequired("JWT_SECRET_KEY"),
+			GateSecretKey:   getEnv("JWT_GATE_SECRET_KEY", ""),
 			AccessTokenTTL:  getEnvDuration("JWT_ACCESS_TOKEN_TTL", 15*time.Minute),
 			RefreshTokenTTL: getEnvDuration("JWT_REFRESH_TOKEN_TTL", 7*24*time.Hour),
 			GateTokenTTL:    getEnvDuration("JWT_GATE_TOKEN_TTL", 365*24*time.Hour),
@@ -214,6 +216,15 @@ func Load() (*Config, error) {
 
 func (c *Config) IsDevelopment() bool { return c.App.Env == "development" }
 func (c *Config) IsProduction() bool  { return c.App.Env == "production" }
+
+// GateJWTSecret returns JWT_GATE_SECRET_KEY if set, otherwise falls back to JWT_SECRET_KEY.
+// This ensures backward compatibility when upgrading from shared-secret setup.
+func (c *Config) GateJWTSecret() string {
+	if c.JWT.GateSecretKey != "" {
+		return c.JWT.GateSecretKey
+	}
+	return c.JWT.SecretKey
+}
 
 // BaseURL returns APP_URL if set, otherwise constructs one from server host/port.
 // SERVER_HOST 0.0.0.0 is normalized to localhost for external URLs.
@@ -330,12 +341,4 @@ func getEnvStringSlice(key string, fallback []string) []string {
 		return fallback
 	}
 	return strings.Split(v, ",")
-}
-
-func (c *Config) DSN() string {
-	return fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s TimeZone=Asia/Jakarta",
-		c.Database.Host, c.Database.Port, c.Database.User,
-		c.Database.Password, c.Database.Name, c.Database.SSLMode,
-	)
 }

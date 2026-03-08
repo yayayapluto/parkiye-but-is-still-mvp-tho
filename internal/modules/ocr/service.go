@@ -19,6 +19,7 @@ import (
 )
 
 type service struct {
+	db                  *gorm.DB // used only for updateTransactionVehicle (cross-module vehicle_id update)
 	jobRepo             OCRJobRepositoryPort
 	resultRepo          OCRResultRepositoryPort
 	reviewLogRepo       OCRReviewLogRepositoryPort
@@ -26,10 +27,10 @@ type service struct {
 	zoneRepo            zoneDomain.ZoneRepositoryPort
 	adapter             *httpAdapter
 	log                 logger.Logger
-	db                  *gorm.DB
 	maxRetries          int
 	enabled             bool
 	autoAcceptThreshold float64
+	txStamper           TransactionStamperPort // injected after init to avoid circular dep
 }
 
 func NewService(
@@ -59,6 +60,11 @@ func NewService(
 		enabled:             enabled,
 		autoAcceptThreshold: autoAcceptThreshold,
 	}
+}
+
+// SetTransactionStamper injects the transaction stamper post-construction to avoid circular dependency.
+func (s *service) SetTransactionStamper(stamper TransactionStamperPort) {
+	s.txStamper = stamper
 }
 
 // DispatchOCRJob is the fire-and-forget entry point called from a goroutine.
@@ -312,13 +318,18 @@ func (s *service) createReviewLog(ctx context.Context, job *OCRJob, exitResult *
 	}
 
 	mismatch := !autoMatch
-	if err := s.db.WithContext(ctx).Model(&struct {
-		ID uuid.UUID `gorm:"primaryKey"`
-	}{ID: job.TransactionID}).Table("transactions").Update("plate_mismatch", mismatch).Error; err != nil {
-		s.log.Error(ctx, "ocr: failed to stamp plate_mismatch on transaction",
+	if s.txStamper != nil {
+		if err := s.txStamper.StampPlateMismatch(ctx, job.TransactionID, mismatch); err != nil {
+			s.log.Error(ctx, "ocr: failed to stamp plate_mismatch on transaction",
+				"job_id", job.ID,
+				"transaction_id", job.TransactionID,
+				"error", err,
+			)
+		}
+	} else {
+		s.log.Warn(ctx, "ocr: txStamper not injected, plate_mismatch not stamped",
 			"job_id", job.ID,
 			"transaction_id", job.TransactionID,
-			"error", err,
 		)
 	}
 

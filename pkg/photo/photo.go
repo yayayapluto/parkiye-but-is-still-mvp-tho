@@ -42,7 +42,12 @@ func Save(file *multipart.FileHeader, prefix string, s3cfg config.S3Config) (pub
 	if err != nil {
 		return "", "", fmt.Errorf("open uploaded file: %w", err)
 	}
-	defer src.Close()
+	defer func(src multipart.File) {
+		err := src.Close()
+		if err != nil {
+
+		}
+	}(src)
 
 	body, err := io.ReadAll(src)
 	if err != nil {
@@ -99,6 +104,10 @@ func signedPut(cfg config.S3Config, key string, data []byte, contentType string)
 	}
 	return nil
 }
+
+// httpClient is a shared HTTP client with a timeout to prevent goroutine leaks
+// when S3 endpoints are slow or unresponsive.
+var httpClient = &http.Client{Timeout: 30 * time.Second}
 
 // doSignedRequest performs an AWS Signature V4 signed HTTP request.
 // Handles both plain PUT uploads and requests with query strings (e.g. ?policy).
@@ -202,11 +211,16 @@ func doSignedRequest(cfg config.S3Config, method, rawURL, contentType string, bo
 	req.Header.Set("Authorization", authHeader)
 	req.ContentLength = int64(len(body))
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return 0, "", err
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(resp.Body)
 	respBody, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, string(respBody), nil
 }

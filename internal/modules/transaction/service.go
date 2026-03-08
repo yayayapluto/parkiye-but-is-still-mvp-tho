@@ -264,7 +264,7 @@ func (s *service) Cancel(ctx context.Context, id uuid.UUID, reason string, opera
 			TransactionID:     existing.ID,
 			FromStatus:        &fromStatus,
 			ToStatus:          string(types.TransactionStatusCancelled),
-			Event:             types.EventExitRecorded,
+			Event:             types.EventCancelled,
 			TriggeredBy:       types.TriggeredByOperator,
 			TriggeredByUserID: &operatorID,
 			Note:              "cancelled: " + reason,
@@ -418,12 +418,76 @@ func (s *service) SimulateEntryTime(ctx context.Context, id uuid.UUID, minutesAg
 	return s.txRepo.FindByID(ctx, id)
 }
 
+func (s *service) MarkPaidAndExited(ctx context.Context, txID uuid.UUID, triggeredBy types.TriggeredBy, handledByUserID *uuid.UUID) error {
+	existing, err := s.txRepo.FindByID(ctx, txID)
+	if err != nil {
+		return err
+	}
+	if existing.Status != types.TransactionStatusAwaitingPayment {
+		return errors.New(errors.ErrValidation, fmt.Sprintf(
+			"transaction is not awaiting payment (current status: %s)", existing.Status,
+		))
+	}
+
+	dbErr := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Step 1: awaiting_payment → paid
+		fromPaid := string(existing.Status)
+		existing.Status = types.TransactionStatusPaid
+		if err := s.txRepo.Update(ctx, tx, existing); err != nil {
+			return fmt.Errorf("mark paid: %w", err)
+		}
+		if err := s.logRepo.Append(ctx, tx, &TransactionLog{
+			TransactionID:     existing.ID,
+			FromStatus:        &fromPaid,
+			ToStatus:          string(types.TransactionStatusPaid),
+			Event:             types.EventPaymentReceived,
+			TriggeredBy:       triggeredBy,
+			TriggeredByUserID: handledByUserID,
+		}); err != nil {
+			return fmt.Errorf("log paid: %w", err)
+		}
+
+		// Step 2: paid → exited
+		fromExited := string(types.TransactionStatusPaid)
+		existing.Status = types.TransactionStatusExited
+		if err := s.txRepo.Update(ctx, tx, existing); err != nil {
+			return fmt.Errorf("mark exited: %w", err)
+		}
+		if err := s.logRepo.Append(ctx, tx, &TransactionLog{
+			TransactionID: existing.ID,
+			FromStatus:    &fromExited,
+			ToStatus:      string(types.TransactionStatusExited),
+			Event:         types.EventExitRecorded,
+			TriggeredBy:   triggeredBy,
+		}); err != nil {
+			return fmt.Errorf("log exited: %w", err)
+		}
+		return nil
+	})
+	if dbErr != nil {
+		return errors.Wrap(dbErr, errors.ErrDatabaseError, "failed to mark transaction paid and exited")
+	}
+	return nil
+}
+
 func (s *service) GetLogs(ctx context.Context, txID uuid.UUID) ([]TransactionLog, error) {
 	// Ensure transaction exists before returning logs.
 	if _, err := s.txRepo.FindByID(ctx, txID); err != nil {
 		return nil, err
 	}
 	return s.logRepo.FindByTransactionID(ctx, txID)
+}
+
+func (s *service) StampPlateMismatch(ctx context.Context, txID uuid.UUID, mismatch bool) error {
+	existing, err := s.txRepo.FindByID(ctx, txID)
+	if err != nil {
+		return err
+	}
+	// Only stamp on non-terminal statuses — don't overwrite a completed/cancelled transaction.
+	if existing.Status == types.TransactionStatusCancelled || existing.Status == types.TransactionStatusExited {
+		return nil
+	}
+	return s.db.WithContext(ctx).Model(existing).Update("plate_mismatch", mismatch).Error
 }
 
 func (s *service) validateEntryGate(ctx context.Context, gateID uuid.UUID) (*zoneDomain.Gate, *zoneDomain.Zone, error) {

@@ -9,6 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/monitor"
+	recover2 "github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 	"log"
 	"net/http"
@@ -36,10 +37,14 @@ func NewServer(container *Container) *fiber.App {
 		StrictRouting:     false,
 	})
 
-	//app.Use(recover.New())
+	app.Use(recover2.New())
 	app.Use(requestid.New())
+	corsOrigins := "*"
+	if container.Config.IsProduction() && container.Config.App.URL != "" {
+		corsOrigins = container.Config.App.URL
+	}
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "*",
+		AllowOrigins:     corsOrigins,
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS,PATCH",
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: false,
@@ -75,7 +80,7 @@ func NewServer(container *Container) *fiber.App {
 	rfid.RegisterRoutes(api, container.RFIDService, container.AuthService, container.Validator)
 	fee.RegisterRoutes(api, container.FeeService, container.AuthService, container.Validator)
 	transaction.RegisterRoutes(api, container.TransactionService, container.AuthService, container.GateService, container.Validator,
-		container.Config.S3)
+		container.Config.S3, *container.Config)
 	payment.RegisterRoutes(api, container.PaymentService, container.AuthService, container.GateService, container.Validator)
 	gate.RegisterRoutes(api, container.GateService, container.AuthService, container.Validator)
 	kiosk.RegisterRoutes(api, container.FeeService, container.VehicleService, container.ZoneService, container.GateService)

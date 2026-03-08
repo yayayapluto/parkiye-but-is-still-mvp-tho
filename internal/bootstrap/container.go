@@ -103,6 +103,9 @@ func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
 	if err := container.initPaymentModule(); err != nil {
 		return nil, err
 	}
+
+	// Wire OCR → Transaction stamper post-init to avoid circular dependency.
+	container.OCRService.SetTransactionStamper(container.TransactionService)
 	if err := container.initGateModule(); err != nil {
 		return nil, err
 	}
