@@ -1001,6 +1001,48 @@ POST /api/v1/gate/pairing/:code/confirm     — admin confirm + assign gate (use
 
 ---
 
+---
+
+## Logging Conventions
+
+Semua service layer mengikuti konvensi ini:
+
+| Situasi | Level |
+|---------|-------|
+| Operasi write berhasil (create/update/delete/confirm) | `Info` |
+| Operasi read signifikan (auth, fee calc, pairing, capacity) | `Info` |
+| Operasi read biasa (GET/List) | `Debug` |
+| Validasi gagal / not found yang expected | `Warn` |
+| DB error / system error / external service error | `Error` |
+| Retry / fallback / skip | `Warn` |
+
+**Fields wajib per konteks:**
+
+| Konteks | Fields |
+|---------|--------|
+| Entity write | `<entity>_id`, nama entity, `actor_id` (kalau ada) |
+| Entity not found | `<entity>_id` atau identifier yang dipakai |
+| Error | `error`, `<entity>_id` |
+| Auth/session | `user_id`, `ip` |
+| Fee calculation | `zone_id`, `vehicle_type_id`, `total_minutes`, `final_fee`, `holiday_rates_applied` |
+| Capacity event | `zone_id`, `transaction_id`, `event`, `occupied`, `available` |
+
+**Coverage per module:**
+
+| Module | Writes | Reads (Debug) | Edge Cases | Status |
+|--------|--------|---------------|------------|--------|
+| auth | ✅ | ✅ | ✅ | Lengkap |
+| zone | ✅ | ✅ | ✅ | Lengkap |
+| vehicle | ✅ | ✅ | ✅ | Lengkap |
+| rfid | ✅ | ✅ | ✅ | Lengkap |
+| fee | ✅ | ✅ | ✅ | Lengkap |
+| payment | ✅ | ✅ | ✅ | Lengkap |
+| gate | ✅ | ✅ | ✅ | Lengkap |
+| transaction | ✅ | ✅ | ✅ | Lengkap |
+| ocr | ✅ | ✅ | ✅ | Lengkap |
+
+---
+
 ## Logic yang Belum Diimplementasi (planned)
 
 Lihat `agents-prepare.md` untuk detail lengkap. Ringkasan:

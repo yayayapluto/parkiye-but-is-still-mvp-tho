@@ -34,15 +34,33 @@ func NewService(
 }
 
 func (s *service) ListFeeConfigs(ctx context.Context, zoneID *uuid.UUID, vehicleTypeID *uuid.UUID, page, pageSize int) ([]FeeConfig, int64, error) {
-	return s.feeConfigRepo.FindAll(ctx, zoneID, vehicleTypeID, page, pageSize)
+	cfgs, total, err := s.feeConfigRepo.FindAll(ctx, zoneID, vehicleTypeID, page, pageSize)
+	if err != nil {
+		s.log.Error(ctx, "list fee configs failed", "zone_id", zoneID, "vehicle_type_id", vehicleTypeID, "error", err)
+		return nil, 0, err
+	}
+	s.log.Debug(ctx, "fee configs listed", "count", len(cfgs), "total", total)
+	return cfgs, total, nil
 }
 
 func (s *service) GetFeeConfig(ctx context.Context, id uuid.UUID) (*FeeConfig, error) {
-	return s.feeConfigRepo.FindByID(ctx, id)
+	cfg, err := s.feeConfigRepo.FindByID(ctx, id)
+	if err != nil {
+		s.log.Warn(ctx, "get fee config failed: not found", "fee_config_id", id)
+		return nil, err
+	}
+	s.log.Debug(ctx, "fee config fetched", "fee_config_id", id)
+	return cfg, nil
 }
 
 func (s *service) GetActiveFeeConfig(ctx context.Context, zoneID, vehicleTypeID uuid.UUID) (*FeeConfig, error) {
-	return s.feeConfigRepo.FindActiveByZoneAndVehicle(ctx, zoneID, vehicleTypeID)
+	cfg, err := s.feeConfigRepo.FindActiveByZoneAndVehicle(ctx, zoneID, vehicleTypeID)
+	if err != nil {
+		s.log.Warn(ctx, "get active fee config failed: not found", "zone_id", zoneID, "vehicle_type_id", vehicleTypeID)
+		return nil, err
+	}
+	s.log.Debug(ctx, "active fee config fetched", "fee_config_id", cfg.ID, "zone_id", zoneID, "vehicle_type_id", vehicleTypeID)
+	return cfg, nil
 }
 
 func (s *service) CreateFeeConfig(ctx context.Context, req CreateFeeConfigRequest, createdBy uuid.UUID) (*FeeConfig, error) {
@@ -100,11 +118,23 @@ func (s *service) DeactivateFeeConfig(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *service) ListHolidayRates(ctx context.Context, page, pageSize int) ([]HolidayRate, int64, error) {
-	return s.holidayRateRepo.FindAll(ctx, page, pageSize)
+	rates, total, err := s.holidayRateRepo.FindAll(ctx, page, pageSize)
+	if err != nil {
+		s.log.Error(ctx, "list holiday rates failed", "error", err)
+		return nil, 0, err
+	}
+	s.log.Debug(ctx, "holiday rates listed", "count", len(rates), "total", total)
+	return rates, total, nil
 }
 
 func (s *service) GetHolidayRate(ctx context.Context, id uuid.UUID) (*HolidayRate, error) {
-	return s.holidayRateRepo.FindByID(ctx, id)
+	rate, err := s.holidayRateRepo.FindByID(ctx, id)
+	if err != nil {
+		s.log.Warn(ctx, "get holiday rate failed: not found", "holiday_rate_id", id)
+		return nil, err
+	}
+	s.log.Debug(ctx, "holiday rate fetched", "holiday_rate_id", id)
+	return rate, nil
 }
 
 func (s *service) CreateHolidayRate(ctx context.Context, req CreateHolidayRateRequest, createdBy uuid.UUID) (*HolidayRate, error) {
@@ -218,6 +248,17 @@ func (s *service) CalculateFee(ctx context.Context, zoneID, vehicleTypeID uuid.U
 	}
 
 	finalFee := applyHolidayRates(rawFee, holidayRates)
+	s.log.Info(ctx, "fee calculated",
+		"zone_id", zoneID,
+		"vehicle_type_id", vehicleTypeID,
+		"total_minutes", totalMinutes,
+		"billable_minutes", billableMinutes,
+		"base_fee", baseFee,
+		"tier_fee", tierFee,
+		"raw_fee", rawFee,
+		"holiday_rates_applied", len(holidayRates) > 0,
+		"final_fee", finalFee,
+	)
 	return finalFee, nil
 }
 

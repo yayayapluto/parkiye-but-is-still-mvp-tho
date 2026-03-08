@@ -108,6 +108,7 @@ func (s *service) InitiateQRIS(ctx context.Context, req InitiateQRISRequest) (*P
 	}
 	for i := range existing {
 		if existing[i].Method == types.PaymentMethodQRIS && existing[i].Status == types.PaymentStatusPending {
+			s.log.Debug(ctx, "QRIS payment already pending, returning existing", "payment_id", existing[i].ID, "tx_id", req.TransactionID)
 			return &existing[i], nil
 		}
 	}
@@ -240,11 +241,23 @@ func (s *service) markQRISPaid(ctx context.Context, p *Payment, midtransStatus s
 }
 
 func (s *service) GetPayment(ctx context.Context, id uuid.UUID) (*Payment, error) {
-	return s.repo.FindPaymentByID(ctx, id)
+	p, err := s.repo.FindPaymentByID(ctx, id)
+	if err != nil {
+		s.log.Warn(ctx, "get payment failed: not found", "payment_id", id)
+		return nil, err
+	}
+	s.log.Debug(ctx, "payment fetched", "payment_id", id, "tx_id", p.TransactionID, "status", p.Status)
+	return p, nil
 }
 
 func (s *service) ListByTransaction(ctx context.Context, transactionID uuid.UUID) ([]Payment, error) {
-	return s.repo.FindPaymentsByTransactionID(ctx, transactionID)
+	payments, err := s.repo.FindPaymentsByTransactionID(ctx, transactionID)
+	if err != nil {
+		s.log.Error(ctx, "list payments by transaction failed", "tx_id", transactionID, "error", err)
+		return nil, err
+	}
+	s.log.Debug(ctx, "payments listed for transaction", "tx_id", transactionID, "count", len(payments))
+	return payments, nil
 }
 
 func (s *service) RequestRefund(ctx context.Context, req RequestRefundRequest, requestedBy uuid.UUID) (*Refund, error) {
@@ -351,7 +364,13 @@ func (s *service) RejectRefund(ctx context.Context, refundID uuid.UUID, rejected
 }
 
 func (s *service) ListRefunds(ctx context.Context, page, pageSize int) ([]Refund, int64, error) {
-	return s.repo.ListRefunds(ctx, page, pageSize)
+	refunds, total, err := s.repo.ListRefunds(ctx, page, pageSize)
+	if err != nil {
+		s.log.Error(ctx, "list refunds failed", "error", err)
+		return nil, 0, err
+	}
+	s.log.Debug(ctx, "refunds listed", "count", len(refunds), "total", total)
+	return refunds, total, nil
 }
 
 func (s *service) PollPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*Payment, error) {
@@ -361,6 +380,7 @@ func (s *service) PollPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*
 	}
 	// Kalau sudah paid di DB, langsung return — tidak perlu hit Midtrans lagi
 	if p.Status == types.PaymentStatusPaid {
+		s.log.Debug(ctx, "poll payment: already paid in DB, skipping Midtrans check", "payment_id", paymentID)
 		return p, nil
 	}
 	// Kalau bukan QRIS atau tidak punya order_id, tidak bisa poll
@@ -380,9 +400,11 @@ func (s *service) PollPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*
 			s.log.Error(ctx, "poll: failed to mark payment paid", "payment_id", paymentID, "error", err)
 			return p, nil
 		}
+		s.log.Info(ctx, "poll payment: payment settled via Midtrans poll", "payment_id", paymentID, "midtrans_status", status.TransactionStatus)
 		return s.repo.FindPaymentByID(ctx, paymentID)
 	}
 
+	s.log.Debug(ctx, "poll payment: not yet settled", "payment_id", paymentID, "midtrans_status", status.TransactionStatus)
 	return p, nil
 }
 

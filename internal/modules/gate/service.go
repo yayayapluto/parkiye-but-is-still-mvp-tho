@@ -80,33 +80,40 @@ func (s *service) Authenticate(ctx context.Context, gateToken string) (*GateAuth
 func (s *service) ValidateGateToken(ctx context.Context, jwtToken string) (*middleware.GateClaims, error) {
 	t, err := jwt.Parse(jwtToken, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			s.log.Warn(ctx, "validate gate token failed: unexpected signing method")
 			return nil, errors.New(errors.ErrUnauthorized, "unexpected signing method")
 		}
 		return []byte(s.cfg.GateJWTSecret()), nil
 	})
 	if err != nil || !t.Valid {
+		s.log.Warn(ctx, "validate gate token failed: invalid or expired token")
 		return nil, errors.New(errors.ErrUnauthorized, "invalid gate token")
 	}
 
 	claims, ok := t.Claims.(jwt.MapClaims)
 	if !ok {
+		s.log.Warn(ctx, "validate gate token failed: cannot parse claims")
 		return nil, errors.New(errors.ErrUnauthorized, "invalid token claims")
 	}
 
 	if kind, _ := claims["kind"].(string); kind != "gate" {
+		s.log.Warn(ctx, "validate gate token failed: not a gate token", "kind", kind)
 		return nil, errors.New(errors.ErrUnauthorized, "not a gate token")
 	}
 
 	gateID, err := uuid.Parse(claims["gate_id"].(string))
 	if err != nil {
+		s.log.Warn(ctx, "validate gate token failed: invalid gate_id")
 		return nil, errors.New(errors.ErrUnauthorized, "invalid gate_id in token")
 	}
 
 	zoneID, err := uuid.Parse(claims["zone_id"].(string))
 	if err != nil {
+		s.log.Warn(ctx, "validate gate token failed: invalid zone_id")
 		return nil, errors.New(errors.ErrUnauthorized, "invalid zone_id in token")
 	}
 
+	s.log.Debug(ctx, "gate token validated", "gate_id", gateID, "zone_id", zoneID)
 	return &middleware.GateClaims{
 		GateID:   gateID,
 		GateType: claims["gate_type"].(string),
@@ -163,10 +170,12 @@ func (s *service) RequestPairing(ctx context.Context, ip string) (*PairingRespon
 func (s *service) GetPairingInfo(ctx context.Context, code string) (*PairingInfoResponse, error) {
 	p, err := s.pairingRepo.FindByCode(ctx, code)
 	if err != nil {
+		s.log.Warn(ctx, "get pairing info failed: code not found", "code", code)
 		return nil, errors.New(errors.ErrNotFound, "pairing code not found")
 	}
 
 	isExpired := time.Now().After(p.ExpiresAt)
+	s.log.Debug(ctx, "pairing info fetched", "code", code, "status", p.Status, "is_expired", isExpired)
 
 	return &PairingInfoResponse{
 		Code:        p.Code,
@@ -249,14 +258,17 @@ func (s *service) ConfirmPairing(ctx context.Context, code string, gateID uuid.U
 func (s *service) ListenPairing(ctx context.Context, code string) (<-chan string, error) {
 	p, err := s.pairingRepo.FindByCode(ctx, code)
 	if err != nil {
+		s.log.Warn(ctx, "listen pairing failed: code not found", "code", code)
 		return nil, errors.New(errors.ErrNotFound, "pairing code not found")
 	}
 
 	if p.Status == "confirmed" {
+		s.log.Warn(ctx, "listen pairing failed: already confirmed", "code", code)
 		return nil, errors.New(errors.ErrConflict, "pairing code already confirmed")
 	}
 
 	if time.Now().After(p.ExpiresAt) {
+		s.log.Warn(ctx, "listen pairing failed: code expired", "code", code)
 		return nil, errors.New(errors.ErrValidation, "pairing code has expired")
 	}
 
@@ -264,6 +276,7 @@ func (s *service) ListenPairing(ctx context.Context, code string) (<-chan string
 	ch := make(chan string, 1)
 	s.pairingRepo.SetSSEClient(code, ch)
 
+	s.log.Info(ctx, "SSE pairing listener connected", "code", code)
 	return ch, nil
 }
 

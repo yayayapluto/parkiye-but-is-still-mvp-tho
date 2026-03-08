@@ -38,11 +38,23 @@ func NewService(
 }
 
 func (s *service) GetZone(ctx context.Context, id uuid.UUID) (*Zone, error) {
-	return s.zoneRepo.FindByID(ctx, id)
+	zone, err := s.zoneRepo.FindByID(ctx, id)
+	if err != nil {
+		s.log.Warn(ctx, "get zone failed: not found", "zone_id", id)
+		return nil, err
+	}
+	s.log.Debug(ctx, "zone fetched", "zone_id", id)
+	return zone, nil
 }
 
 func (s *service) ListZones(ctx context.Context, onlyActive bool, page, pageSize int) ([]Zone, int64, error) {
-	return s.zoneRepo.FindAll(ctx, onlyActive, page, pageSize)
+	zones, total, err := s.zoneRepo.FindAll(ctx, onlyActive, page, pageSize)
+	if err != nil {
+		s.log.Error(ctx, "list zones failed", "error", err)
+		return nil, 0, err
+	}
+	s.log.Debug(ctx, "zones listed", "count", len(zones), "total", total, "only_active", onlyActive)
+	return zones, total, nil
 }
 
 func (s *service) CreateZone(ctx context.Context, req *CreateZoneRequest, actorID uuid.UUID) (*Zone, error) {
@@ -111,14 +123,27 @@ func (s *service) DeactivateZone(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *service) GetGate(ctx context.Context, id uuid.UUID) (*Gate, error) {
-	return s.gateRepo.FindByID(ctx, id)
+	gate, err := s.gateRepo.FindByID(ctx, id)
+	if err != nil {
+		s.log.Warn(ctx, "get gate failed: not found", "gate_id", id)
+		return nil, err
+	}
+	s.log.Debug(ctx, "gate fetched", "gate_id", id)
+	return gate, nil
 }
 
 func (s *service) ListGates(ctx context.Context, zoneID uuid.UUID, onlyActive bool, page, pageSize int) ([]Gate, int64, error) {
 	if _, err := s.zoneRepo.FindByID(ctx, zoneID); err != nil {
+		s.log.Warn(ctx, "list gates failed: zone not found", "zone_id", zoneID)
 		return nil, 0, errors.New(errors.ErrNotFound, "zone not found")
 	}
-	return s.gateRepo.FindByZoneID(ctx, zoneID, onlyActive, page, pageSize)
+	gates, total, err := s.gateRepo.FindByZoneID(ctx, zoneID, onlyActive, page, pageSize)
+	if err != nil {
+		s.log.Error(ctx, "list gates failed", "zone_id", zoneID, "error", err)
+		return nil, 0, err
+	}
+	s.log.Debug(ctx, "gates listed", "zone_id", zoneID, "count", len(gates), "total", total)
+	return gates, total, nil
 }
 
 func (s *service) CreateGate(ctx context.Context, req *CreateGateRequest, actorID uuid.UUID) (*Gate, error) {
@@ -194,16 +219,19 @@ func (s *service) DeactivateGate(ctx context.Context, id uuid.UUID) error {
 func (s *service) RegenerateGateToken(ctx context.Context, id uuid.UUID) (*Gate, error) {
 	gate, err := s.gateRepo.FindByID(ctx, id)
 	if err != nil {
+		s.log.Warn(ctx, "regenerate gate token failed: gate not found", "gate_id", id)
 		return nil, err
 	}
 
 	token, err := generateGateToken()
 	if err != nil {
+		s.log.Error(ctx, "failed to generate new gate token", "gate_id", id, "error", err)
 		return nil, errors.New(errors.ErrInternal, "failed to generate gate token")
 	}
 
 	gate.GateToken = token
 	if err := s.gateRepo.Update(ctx, gate); err != nil {
+		s.log.Error(ctx, "failed to save regenerated gate token", "gate_id", id, "error", err)
 		return nil, err
 	}
 
@@ -223,14 +251,17 @@ func generateGateToken() (string, error) {
 func (s *service) GetCapacity(ctx context.Context, zoneID uuid.UUID) (*ZoneCapacityResponse, error) {
 	zone, err := s.zoneRepo.FindByID(ctx, zoneID)
 	if err != nil {
+		s.log.Warn(ctx, "get capacity failed: zone not found", "zone_id", zoneID)
 		return nil, err
 	}
 
 	occupied, available, err := GetCurrentOccupancy(ctx, s.db, zoneID, zone.Capacity)
 	if err != nil {
+		s.log.Error(ctx, "get capacity failed: cannot read occupancy", "zone_id", zoneID, "error", err)
 		return nil, err
 	}
 
+	s.log.Debug(ctx, "zone capacity fetched", "zone_id", zoneID, "occupied", occupied, "available", available, "capacity", zone.Capacity)
 	return &ZoneCapacityResponse{
 		ZoneID:         zone.ID,
 		ZoneName:       zone.Name,
@@ -257,12 +288,17 @@ func (s *service) RecordCapacityEvent(ctx context.Context, zoneID, transactionID
 
 	occupied, available := NextOccupancy(latest, zone.Capacity, event)
 
-	return s.capacityRepo.Append(ctx, &ZoneCapacityLog{
+	if err := s.capacityRepo.Append(ctx, &ZoneCapacityLog{
 		ID:             uuid.New(),
 		ZoneID:         zoneID,
 		TransactionID:  transactionID,
 		EventType:      event,
 		OccupiedCount:  occupied,
 		AvailableCount: available,
-	})
+	}); err != nil {
+		s.log.Error(ctx, "record capacity event failed: append log", "zone_id", zoneID, "transaction_id", transactionID, "event", event, "error", err)
+		return err
+	}
+	s.log.Info(ctx, "capacity event recorded", "zone_id", zoneID, "transaction_id", transactionID, "event", event, "occupied", occupied, "available", available)
+	return nil
 }

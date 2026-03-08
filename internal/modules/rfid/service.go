@@ -20,20 +20,39 @@ func NewService(repo RFIDCardRepositoryPort, log logger.Logger) ServicePort {
 }
 
 func (s *service) ListCards(ctx context.Context, onlyActive bool, page, pageSize int) ([]RFIDCard, int64, error) {
-	return s.repo.FindAll(ctx, onlyActive, page, pageSize)
+	cards, total, err := s.repo.FindAll(ctx, onlyActive, page, pageSize)
+	if err != nil {
+		s.log.Error(ctx, "list rfid cards failed", "error", err)
+		return nil, 0, err
+	}
+	s.log.Debug(ctx, "rfid cards listed", "count", len(cards), "total", total, "only_active", onlyActive)
+	return cards, total, nil
 }
 
 func (s *service) GetCard(ctx context.Context, id uuid.UUID) (*RFIDCard, error) {
-	return s.repo.FindByID(ctx, id)
+	card, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		s.log.Warn(ctx, "get rfid card failed: not found", "card_id", id)
+		return nil, err
+	}
+	s.log.Debug(ctx, "rfid card fetched", "card_id", id, "card_uid", card.CardUID)
+	return card, nil
 }
 
 func (s *service) GetCardByUID(ctx context.Context, cardUID string) (*RFIDCard, error) {
-	return s.repo.FindByUID(ctx, cardUID)
+	card, err := s.repo.FindByUID(ctx, cardUID)
+	if err != nil {
+		s.log.Warn(ctx, "get rfid card by uid failed: not found", "card_uid", cardUID)
+		return nil, err
+	}
+	s.log.Debug(ctx, "rfid card fetched by uid", "card_id", card.ID, "card_uid", cardUID)
+	return card, nil
 }
 
 func (s *service) RegisterOrGet(ctx context.Context, cardUID string) (*RFIDCard, error) {
 	existing, err := s.repo.FindByUID(ctx, cardUID)
 	if err == nil {
+		s.log.Debug(ctx, "rfid card already exists, returning existing", "card_id", existing.ID, "card_uid", cardUID)
 		return existing, nil
 	}
 	if !errors.IsCode(err, errors.ErrNotFound) {

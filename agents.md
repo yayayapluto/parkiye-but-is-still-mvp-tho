@@ -486,3 +486,4 @@ Kalau server restart, screen perlu request pairing baru.
 - **CORS** — production gunakan `APP_URL` env. Wildcard `*` hanya untuk non-production.
 - **Gate JWT secret** — gunakan `cfg.GateJWTSecret()` (bukan `cfg.JWT.SecretKey` langsung) untuk gate token. Set `JWT_GATE_SECRET_KEY` di production.
 - **OCR cross-module write** — OCR service tidak boleh menulis langsung ke tabel `transactions` via GORM. Gunakan `txStamper.StampPlateMismatch()` yang di-inject via `SetTransactionStamper`.
+- **Logging wajib di semua service method** — setiap method di service layer harus punya log. Reads → `Debug`, writes berhasil → `Info`, not found/validation fail → `Warn`, system/DB error → `Error`. Lihat Logging Conventions di `agents-logic.md`.

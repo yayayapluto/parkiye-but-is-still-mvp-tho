@@ -21,11 +21,23 @@ func NewService(vtRepo VehicleTypeRepositoryPort, vRepo VehicleRepositoryPort, l
 }
 
 func (s *service) ListVehicleTypes(ctx context.Context) ([]VehicleType, error) {
-	return s.vtRepo.FindAll(ctx)
+	types, err := s.vtRepo.FindAll(ctx)
+	if err != nil {
+		s.log.Error(ctx, "list vehicle types failed", "error", err)
+		return nil, err
+	}
+	s.log.Debug(ctx, "vehicle types listed", "count", len(types))
+	return types, nil
 }
 
 func (s *service) GetVehicleType(ctx context.Context, id uuid.UUID) (*VehicleType, error) {
-	return s.vtRepo.FindByID(ctx, id)
+	vt, err := s.vtRepo.FindByID(ctx, id)
+	if err != nil {
+		s.log.Warn(ctx, "get vehicle type failed: not found", "vehicle_type_id", id)
+		return nil, err
+	}
+	s.log.Debug(ctx, "vehicle type fetched", "vehicle_type_id", id)
+	return vt, nil
 }
 
 func (s *service) CreateVehicleType(ctx context.Context, req *CreateVehicleTypeRequest) (*VehicleType, error) {
@@ -76,18 +88,32 @@ func (s *service) DeleteVehicleType(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *service) ListVehicles(ctx context.Context, typeID *uuid.UUID, page, pageSize int) ([]Vehicle, int64, error) {
-	return s.vRepo.FindAll(ctx, typeID, page, pageSize)
+	vehicles, total, err := s.vRepo.FindAll(ctx, typeID, page, pageSize)
+	if err != nil {
+		s.log.Error(ctx, "list vehicles failed", "vehicle_type_id", typeID, "error", err)
+		return nil, 0, err
+	}
+	s.log.Debug(ctx, "vehicles listed", "count", len(vehicles), "total", total, "vehicle_type_id", typeID)
+	return vehicles, total, nil
 }
 
 func (s *service) GetVehicle(ctx context.Context, id uuid.UUID) (*Vehicle, error) {
-	return s.vRepo.FindByID(ctx, id)
+	v, err := s.vRepo.FindByID(ctx, id)
+	if err != nil {
+		s.log.Warn(ctx, "get vehicle failed: not found", "vehicle_id", id)
+		return nil, err
+	}
+	s.log.Debug(ctx, "vehicle fetched", "vehicle_id", id, "plate", v.PlateNumber)
+	return v, nil
 }
 
 func (s *service) GetVehicleByPlate(ctx context.Context, plate string) (*Vehicle, error) {
 	v, err := s.vRepo.FindByPlate(ctx, plate)
 	if err != nil {
+		s.log.Warn(ctx, "get vehicle by plate failed: not found", "plate", plate)
 		return nil, err
 	}
+	s.log.Debug(ctx, "vehicle fetched by plate", "vehicle_id", v.ID, "plate", plate)
 	return v, nil
 }
 
