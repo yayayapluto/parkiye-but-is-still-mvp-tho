@@ -175,11 +175,12 @@ func (s *service) ValidateToken(ctx context.Context, token string) (*middleware.
 			if rv, rOK := s.userRevokedAt.Load(entry.claims.UserID.String()); rOK {
 				revokedAt := rv.(time.Time)
 				if revokedAt.After(entry.cachedAt) {
-					// Session di-revoke setelah cache dibuat — hapus dan tolak
 					s.sessionCache.Delete(h)
+					s.log.Warn(ctx, "validate token: session revoked (cache hit)", "user_id", entry.claims.UserID)
 					return nil, errors.New(errors.ErrUnauthorized, "session expired or revoked")
 				}
 			}
+			s.log.Debug(ctx, "validate token: cache hit", "user_id", entry.claims.UserID)
 			return entry.claims, nil
 		}
 		// Expired — hapus dari cache dan lanjut ke DB
@@ -189,6 +190,7 @@ func (s *service) ValidateToken(ctx context.Context, token string) (*middleware.
 	// Cache miss — query DB
 	_, err = s.sessionRepo.FindByTokenHash(ctx, h)
 	if err != nil {
+		s.log.Warn(ctx, "validate token: session not found in DB (cache miss)")
 		return nil, errors.New(errors.ErrUnauthorized, "session expired or revoked")
 	}
 
@@ -200,11 +202,18 @@ func (s *service) ValidateToken(ctx context.Context, token string) (*middleware.
 		expiresAt: now.Add(sessionCacheTTL),
 	})
 
+	s.log.Debug(ctx, "validate token: cache miss, loaded from DB", "user_id", claims.UserID)
 	return claims, nil
 }
 
 func (s *service) GetProfile(ctx context.Context, userID uuid.UUID) (*User, error) {
-	return s.userRepo.FindByID(ctx, userID)
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		s.log.Warn(ctx, "get profile: user not found", "user_id", userID)
+		return nil, err
+	}
+	s.log.Debug(ctx, "get profile", "user_id", userID)
+	return user, nil
 }
 
 func (s *service) CreateUser(ctx context.Context, req *CreateUserRequest) (*User, error) {
@@ -333,11 +342,23 @@ func (s *service) DeactivateUser(ctx context.Context, userID uuid.UUID, actorID 
 }
 
 func (s *service) GetAllRoles(ctx context.Context) ([]Role, error) {
-	return s.roleRepo.FindAll(ctx)
+	roles, err := s.roleRepo.FindAll(ctx)
+	if err != nil {
+		s.log.Error(ctx, "get all roles: db error", "error", err)
+		return nil, err
+	}
+	s.log.Debug(ctx, "get all roles", "count", len(roles))
+	return roles, nil
 }
 
 func (s *service) GetAllPermissions(ctx context.Context) ([]Permission, error) {
-	return s.permRepo.FindAll(ctx)
+	perms, err := s.permRepo.FindAll(ctx)
+	if err != nil {
+		s.log.Error(ctx, "get all permissions: db error", "error", err)
+		return nil, err
+	}
+	s.log.Debug(ctx, "get all permissions", "count", len(perms))
+	return perms, nil
 }
 
 func (s *service) AssignPermission(ctx context.Context, roleID, permissionID uuid.UUID, actorID uuid.UUID) error {
@@ -372,9 +393,16 @@ func (s *service) RevokePermission(ctx context.Context, roleID, permissionID uui
 func (s *service) CheckPermission(ctx context.Context, userID uuid.UUID, node string) (bool, error) {
 	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
+		s.log.Warn(ctx, "check permission: user not found", "user_id", userID, "node", node)
 		return false, err
 	}
-	return s.rolePermRepo.HasPermission(ctx, user.RoleID, node)
+	has, err := s.rolePermRepo.HasPermission(ctx, user.RoleID, node)
+	if err != nil {
+		s.log.Error(ctx, "check permission: db error", "user_id", userID, "node", node, "error", err)
+		return false, err
+	}
+	s.log.Debug(ctx, "check permission", "user_id", userID, "node", node, "granted", has)
+	return has, nil
 }
 
 func (s *service) generateJWT(user *User) (string, time.Time, error) {

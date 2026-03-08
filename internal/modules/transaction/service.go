@@ -301,6 +301,7 @@ func (s *service) Cancel(ctx context.Context, id uuid.UUID, reason string, opera
 func (s *service) MarkPaid(ctx context.Context, txID uuid.UUID, triggeredBy types.TriggeredBy, handledByUserID *uuid.UUID) error {
 	existing, err := s.txRepo.FindByID(ctx, txID)
 	if err != nil {
+		s.log.Warn(ctx, "mark paid: transaction not found", "tx_id", txID)
 		return err
 	}
 	if existing.Status != types.TransactionStatusAwaitingPayment {
@@ -325,14 +326,17 @@ func (s *service) MarkPaid(ctx context.Context, txID uuid.UUID, triggeredBy type
 		})
 	})
 	if dbErr != nil {
+		s.log.Error(ctx, "mark paid: transaction rolled back", "tx_id", txID, "error", dbErr)
 		return errors.Wrap(dbErr, errors.ErrDatabaseError, "failed to mark transaction as paid")
 	}
+	s.log.Info(ctx, "transaction marked paid", "tx_id", txID, "triggered_by", triggeredBy)
 	return nil
 }
 
 func (s *service) MarkExited(ctx context.Context, txID uuid.UUID, triggeredBy types.TriggeredBy) error {
 	existing, err := s.txRepo.FindByID(ctx, txID)
 	if err != nil {
+		s.log.Warn(ctx, "mark exited: transaction not found", "tx_id", txID)
 		return err
 	}
 	if existing.Status != types.TransactionStatusPaid {
@@ -356,22 +360,37 @@ func (s *service) MarkExited(ctx context.Context, txID uuid.UUID, triggeredBy ty
 		})
 	})
 	if dbErr != nil {
+		s.log.Error(ctx, "mark exited: transaction rolled back", "tx_id", txID, "error", dbErr)
 		return errors.Wrap(dbErr, errors.ErrDatabaseError, "failed to mark transaction as exited")
 	}
+	s.log.Info(ctx, "transaction marked exited", "tx_id", txID, "triggered_by", triggeredBy)
 	return nil
 }
 
 func (s *service) GetTransaction(ctx context.Context, id uuid.UUID) (*Transaction, error) {
-	return s.txRepo.FindByID(ctx, id)
+	tx, err := s.txRepo.FindByID(ctx, id)
+	if err != nil {
+		s.log.Warn(ctx, "get transaction: not found", "tx_id", id)
+		return nil, err
+	}
+	s.log.Debug(ctx, "get transaction", "tx_id", id, "status", tx.Status)
+	return tx, nil
 }
 
 func (s *service) GetByCode(ctx context.Context, code string) (*Transaction, error) {
-	return s.txRepo.FindByCode(ctx, code)
+	tx, err := s.txRepo.FindByCode(ctx, code)
+	if err != nil {
+		s.log.Warn(ctx, "get transaction by code: not found", "code", code)
+		return nil, err
+	}
+	s.log.Debug(ctx, "get transaction by code", "code", code, "tx_id", tx.ID)
+	return tx, nil
 }
 
 func (s *service) GetOpenByRFIDUID(ctx context.Context, uid string) (*Transaction, error) {
 	card, err := s.rfidSvc.GetCardByUID(ctx, uid)
 	if err != nil {
+		s.log.Warn(ctx, "get open by rfid: card not found", "uid", uid)
 		return nil, errors.New(errors.ErrNotFound, "rfid card not found")
 	}
 	// Cari open dulu, kalau tidak ada cari awaiting_payment
@@ -380,22 +399,32 @@ func (s *service) GetOpenByRFIDUID(ctx context.Context, uid string) (*Transactio
 	if err != nil {
 		tx, err = s.txRepo.FindAwaitingPaymentByRFIDCard(ctx, card.ID)
 		if err != nil {
+			s.log.Warn(ctx, "get open by rfid: no active transaction", "uid", uid, "card_id", card.ID)
 			return nil, errors.New(errors.ErrNotFound, "no active transaction for this rfid card")
 		}
 	}
+	s.log.Debug(ctx, "get open by rfid", "uid", uid, "card_id", card.ID, "tx_id", tx.ID, "status", tx.Status)
 	return tx, nil
 }
 
 func (s *service) LoadOCRSummary(ctx context.Context, txID uuid.UUID) []ocrDomain.OCRResultWithJob {
 	results, err := s.ocrResultRepo.FindSummaryByTransactionID(ctx, txID)
 	if err != nil || len(results) == 0 {
+		s.log.Debug(ctx, "load ocr summary: empty", "tx_id", txID)
 		return nil
 	}
+	s.log.Debug(ctx, "load ocr summary", "tx_id", txID, "count", len(results))
 	return results
 }
 
 func (s *service) ListTransactions(ctx context.Context, filter ListFilter, page, pageSize int) ([]Transaction, int64, error) {
-	return s.txRepo.FindAll(ctx, filter, page, pageSize)
+	txs, total, err := s.txRepo.FindAll(ctx, filter, page, pageSize)
+	if err != nil {
+		s.log.Error(ctx, "list transactions: db error", "error", err)
+		return nil, 0, err
+	}
+	s.log.Debug(ctx, "list transactions", "count", len(txs), "total", total, "page", page)
+	return txs, total, nil
 }
 
 func (s *service) SimulateEntryTime(ctx context.Context, id uuid.UUID, minutesAgo int) (*Transaction, error) {
@@ -421,6 +450,7 @@ func (s *service) SimulateEntryTime(ctx context.Context, id uuid.UUID, minutesAg
 func (s *service) MarkPaidAndExited(ctx context.Context, txID uuid.UUID, triggeredBy types.TriggeredBy, handledByUserID *uuid.UUID) error {
 	existing, err := s.txRepo.FindByID(ctx, txID)
 	if err != nil {
+		s.log.Warn(ctx, "mark paid and exited: transaction not found", "tx_id", txID)
 		return err
 	}
 	if existing.Status != types.TransactionStatusAwaitingPayment {
@@ -465,29 +495,43 @@ func (s *service) MarkPaidAndExited(ctx context.Context, txID uuid.UUID, trigger
 		return nil
 	})
 	if dbErr != nil {
+		s.log.Error(ctx, "mark paid and exited: transaction rolled back", "tx_id", txID, "error", dbErr)
 		return errors.Wrap(dbErr, errors.ErrDatabaseError, "failed to mark transaction paid and exited")
 	}
+	s.log.Info(ctx, "transaction marked paid and exited", "tx_id", txID, "triggered_by", triggeredBy)
 	return nil
 }
 
 func (s *service) GetLogs(ctx context.Context, txID uuid.UUID) ([]TransactionLog, error) {
-	// Ensure transaction exists before returning logs.
 	if _, err := s.txRepo.FindByID(ctx, txID); err != nil {
+		s.log.Warn(ctx, "get logs: transaction not found", "tx_id", txID)
 		return nil, err
 	}
-	return s.logRepo.FindByTransactionID(ctx, txID)
+	logs, err := s.logRepo.FindByTransactionID(ctx, txID)
+	if err != nil {
+		s.log.Error(ctx, "get logs: db error", "tx_id", txID, "error", err)
+		return nil, err
+	}
+	s.log.Debug(ctx, "get logs", "tx_id", txID, "count", len(logs))
+	return logs, nil
 }
 
 func (s *service) StampPlateMismatch(ctx context.Context, txID uuid.UUID, mismatch bool) error {
 	existing, err := s.txRepo.FindByID(ctx, txID)
 	if err != nil {
+		s.log.Warn(ctx, "stamp plate mismatch: transaction not found", "tx_id", txID)
 		return err
 	}
-	// Only stamp on non-terminal statuses — don't overwrite a completed/cancelled transaction.
 	if existing.Status == types.TransactionStatusCancelled || existing.Status == types.TransactionStatusExited {
+		s.log.Debug(ctx, "stamp plate mismatch: skipped (terminal status)", "tx_id", txID, "status", existing.Status)
 		return nil
 	}
-	return s.db.WithContext(ctx).Model(existing).Update("plate_mismatch", mismatch).Error
+	if err := s.db.WithContext(ctx).Model(existing).Update("plate_mismatch", mismatch).Error; err != nil {
+		s.log.Error(ctx, "stamp plate mismatch: db error", "tx_id", txID, "error", err)
+		return err
+	}
+	s.log.Info(ctx, "plate mismatch stamped", "tx_id", txID, "mismatch", mismatch)
+	return nil
 }
 
 func (s *service) validateEntryGate(ctx context.Context, gateID uuid.UUID) (*zoneDomain.Gate, *zoneDomain.Zone, error) {
