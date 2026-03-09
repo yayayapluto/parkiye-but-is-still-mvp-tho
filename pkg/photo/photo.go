@@ -72,6 +72,11 @@ func Save(file *multipart.FileHeader, prefix string, s3cfg config.S3Config) (pub
 // EnsureBucketPolicy sets the bucket to public-read so uploaded files are accessible.
 // Safe to call on every startup — returns nil if policy already exists (204).
 func EnsureBucketPolicy(cfg config.S3Config) error {
+	return EnsureBucketPolicyWith(httpClient, cfg)
+}
+
+// EnsureBucketPolicyWith is the testable version of EnsureBucketPolicy.
+func EnsureBucketPolicyWith(client HTTPDoer, cfg config.S3Config) error {
 	if cfg.Bucket == "" || cfg.Endpoint == "" {
 		return nil
 	}
@@ -82,7 +87,7 @@ func EnsureBucketPolicy(cfg config.S3Config) error {
 	)
 
 	rawURL := fmt.Sprintf("%s/%s/?policy", strings.TrimRight(cfg.Endpoint, "/"), cfg.Bucket)
-	status, body, err := doSignedRequest(cfg, "PUT", rawURL, "application/json", []byte(policy))
+	status, body, err := doSignedRequestWith(client, cfg, "PUT", rawURL, "application/json", []byte(policy))
 	if err != nil {
 		return fmt.Errorf("bucket policy request: %w", err)
 	}
@@ -94,8 +99,14 @@ func EnsureBucketPolicy(cfg config.S3Config) error {
 
 // signedPut is a convenience wrapper around doSignedRequest for simple PUTs without query strings.
 func signedPut(cfg config.S3Config, key string, data []byte, contentType string) error {
+	return SignedPutWith(httpClient, cfg, key, data, contentType)
+}
+
+// SignedPutWith is the testable version of signedPut — accepts an HTTPDoer so tests can
+// substitute a fake server without touching the package-level httpClient.
+func SignedPutWith(client HTTPDoer, cfg config.S3Config, key string, data []byte, contentType string) error {
 	rawURL := fmt.Sprintf("%s/%s/%s", strings.TrimRight(cfg.Endpoint, "/"), cfg.Bucket, key)
-	status, respBody, err := doSignedRequest(cfg, "PUT", rawURL, contentType, data)
+	status, respBody, err := doSignedRequestWith(client, cfg, "PUT", rawURL, contentType, data)
 	if err != nil {
 		return fmt.Errorf("http: %w", err)
 	}
@@ -105,13 +116,48 @@ func signedPut(cfg config.S3Config, key string, data []byte, contentType string)
 	return nil
 }
 
+// HTTPDoer is the minimal interface required to make HTTP requests.
+// The default implementation uses httpClient; tests can substitute a mock or httptest server.
+type HTTPDoer interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+// NewHTTPClientDoer wraps an *http.Client so that all requests are rewritten to
+// targetBaseURL. Used in tests to redirect S3 calls to an httptest.Server.
+func NewHTTPClientDoer(c *http.Client, targetBaseURL string) HTTPDoer {
+	return &rewritingDoer{client: c, base: strings.TrimRight(targetBaseURL, "/")}
+}
+
+type rewritingDoer struct {
+	client *http.Client
+	base   string
+}
+
+func (d *rewritingDoer) Do(req *http.Request) (*http.Response, error) {
+	// Keep path + query, only replace scheme+host with the test server base.
+	req.URL.Scheme = ""
+	req.URL.Host = ""
+	newURL := d.base + req.URL.RequestURI()
+	parsed, err := url.Parse(newURL)
+	if err != nil {
+		return nil, err
+	}
+	req.URL = parsed
+	req.Host = parsed.Host
+	return d.client.Do(req)
+}
+
 // httpClient is a shared HTTP client with a timeout to prevent goroutine leaks
 // when S3 endpoints are slow or unresponsive.
-var httpClient = &http.Client{Timeout: 30 * time.Second}
+var httpClient HTTPDoer = &http.Client{Timeout: 30 * time.Second}
 
 // doSignedRequest performs an AWS Signature V4 signed HTTP request.
 // Handles both plain PUT uploads and requests with query strings (e.g. ?policy).
 func doSignedRequest(cfg config.S3Config, method, rawURL, contentType string, body []byte) (int, string, error) {
+	return doSignedRequestWith(httpClient, cfg, method, rawURL, contentType, body)
+}
+
+func doSignedRequestWith(client HTTPDoer, cfg config.S3Config, method, rawURL, contentType string, body []byte) (int, string, error) {
 	now := time.Now().UTC()
 	amzDate := now.Format("20060102T150405Z")
 	dateStamp := now.Format("20060102")
@@ -211,7 +257,7 @@ func doSignedRequest(cfg config.S3Config, method, rawURL, contentType string, bo
 	req.Header.Set("Authorization", authHeader)
 	req.ContentLength = int64(len(body))
 
-	resp, err := httpClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return 0, "", err
 	}

@@ -1,0 +1,33 @@
+with-expecter: true
+filename: "mock_{{.InterfaceName}}.go"
+dir: "{{.InterfaceDir}}/mocks"
+disable-version-string: true
+resolve-type-alias: false
+issue-845-fix: true
+
+packages:
+  parkieee/internal/modules/fee:
+    interfaces:
+      FeeConfigRepositoryPort:
+      FeeTierRepositoryPort:
+      HolidayRateRepositoryPort:
+  parkieee/internal/modules/zone:
+    interfaces:
+      ZoneRepositoryPort:
+      GateRepositoryPort:
+      CapacityLogRepositoryPort:
+  parkieee/internal/modules/payment:
+    interfaces:
+      RepositoryPort:
+  parkieee/internal/modules/transaction:
+    interfaces:
+      ServicePort:
+  parkieee/internal/modules/auth:
+    interfaces:
+      UserRepositoryPort:
+      RoleRepositoryPort:
+      PermissionRepositoryPort:
+      RolePermissionRepositoryPort:
+      SessionRepositoryPort:
+      LoginLogRepositoryPort:
+      LoginStatsRepositoryPort:

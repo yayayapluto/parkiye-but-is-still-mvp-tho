@@ -820,7 +820,7 @@ func applyExitFields(existing *Transaction, req RecordExitRequest, exitAt time.T
 }
 
 // appendCapacityLog writes a zone_capacity_logs row within the given tx.
-// It computes the new counts from currentOccupied and the event type.
+// Uses zone.NextOccupancy for count calculation to keep logic in one place.
 func appendCapacityLog(
 	ctx context.Context,
 	tx *gorm.DB,
@@ -830,19 +830,8 @@ func appendCapacityLog(
 	currentOccupied int,
 	zoneCapacity int,
 ) error {
-	var occupied int
-	if event == types.ZoneEventEntry {
-		occupied = currentOccupied + 1
-	} else {
-		occupied = currentOccupied - 1
-		if occupied < 0 {
-			occupied = 0
-		}
-	}
-	available := zoneCapacity - occupied
-	if available < 0 {
-		available = 0
-	}
+	current := &zoneDomain.ZoneCapacityLog{OccupiedCount: currentOccupied}
+	occupied, available := zoneDomain.NextOccupancy(current, zoneCapacity, event)
 
 	log := zoneDomain.ZoneCapacityLog{
 		ID:             uuid.New(),

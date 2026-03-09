@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"parkieee/pkg/types"
 )
 
 type ZoneRepositoryPort interface {
@@ -59,4 +60,5 @@ type ServicePort interface {
 
 	// Capacity
 	GetCapacity(ctx context.Context, zoneID uuid.UUID) (*ZoneCapacityResponse, error)
+	RecordCapacityEvent(ctx context.Context, zoneID, transactionID uuid.UUID, event types.ZoneEventType) error
 }
