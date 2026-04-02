@@ -9,6 +9,7 @@ import (
 type LoginRequest struct {
 	Identifier string `json:"identifier" validate:"required"`
 	Password   string `json:"password"   validate:"required,min=8"`
+	Remember   bool   `json:"remember"`
 }
 
 type CreateUserRequest struct {

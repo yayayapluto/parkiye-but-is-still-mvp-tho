@@ -1,4 +1,4 @@
-package auth
+	package auth
 
 import (
 	"context"
@@ -69,7 +69,7 @@ func NewService(
 	}
 }
 
-func (s *service) Login(ctx context.Context, identifier, password, ip, userAgent string) (*LoginResponse, error) {
+func (s *service) Login(ctx context.Context, identifier, password, ip, userAgent string, remember bool) (*LoginResponse, error) {
 	logEntry := &UserLoginLog{
 		IPAddress:   ip,
 		UserAgent:   userAgent,
@@ -117,7 +117,12 @@ func (s *service) Login(ctx context.Context, identifier, password, ip, userAgent
 	// Hapus session expired sebelum buat yang baru — housekeeping ringan
 	_ = s.sessionRepo.DeleteExpired(ctx, time.Now())
 
-	token, expiresAt, err := s.generateJWT(user)
+	ttl := s.cfg.JWT.AccessTokenTTL
+	if remember {
+		ttl = 7 * 24 * time.Hour // 7 hari
+	}
+
+	token, expiresAt, err := s.generateJWT(user, ttl)
 	if err != nil {
 		s.log.Error(ctx, "failed to generate JWT", "error", err, "user_id", user.ID)
 		return nil, errors.New(errors.ErrInternal, "Gagal membuat token")
@@ -205,7 +210,7 @@ func (s *service) Refresh(ctx context.Context, rawRefreshToken, ip, userAgent st
 		return nil, errors.New(errors.ErrUnauthorized, "Akun tidak ditemukan atau tidak aktif")
 	}
 
-	newToken, newExpiresAt, err := s.generateJWT(user)
+	newToken, newExpiresAt, err := s.generateJWT(user, s.cfg.JWT.AccessTokenTTL)
 	if err != nil {
 		s.log.Error(ctx, "refresh: failed to generate access token", "error", err, "user_id", user.ID)
 		return nil, errors.New(errors.ErrInternal, "Gagal membuat token")
@@ -513,8 +518,8 @@ func (s *service) CheckPermission(ctx context.Context, userID uuid.UUID, node st
 	return has, nil
 }
 
-func (s *service) generateJWT(user *User) (string, time.Time, error) {
-	expiresAt := time.Now().Add(s.cfg.JWT.AccessTokenTTL)
+func (s *service) generateJWT(user *User, ttl time.Duration) (string, time.Time, error) {
+	expiresAt := time.Now().Add(ttl)
 
 	perms := make([]string, 0)
 	for _, rp := range user.Role.Permissions {

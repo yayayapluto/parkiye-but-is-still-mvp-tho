@@ -32,7 +32,7 @@ func (h *handler) login(c *fiber.Ctx) error {
 	ip := c.IP()
 	userAgent := c.Get("User-Agent")
 
-	result, err := h.svc.Login(c.Context(), req.Identifier, req.Password, ip, userAgent)
+	result, err := h.svc.Login(c.Context(), req.Identifier, req.Password, ip, userAgent, req.Remember)
 	if err != nil {
 		return err
 	}

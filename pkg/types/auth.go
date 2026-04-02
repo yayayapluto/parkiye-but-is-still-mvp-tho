@@ -7,6 +7,7 @@ const (
 	RoleAdmin    RoleName = "admin"
 	RoleOwner    RoleName = "owner"
 	RoleEngineer RoleName = "engineer"
+	RoleCashier  RoleName = "cashier"
 )
 
 type PermissionNode string

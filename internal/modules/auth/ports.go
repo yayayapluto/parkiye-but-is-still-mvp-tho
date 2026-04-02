@@ -158,7 +158,7 @@ type ServicePort interface {
 	// Login validates credentials, creates a session, and returns a signed JWT.
 	// identifier bisa berupa email (mengandung @) atau username.
 	// Handles lockout checks and logs the attempt regardless of outcome.
-	Login(ctx context.Context, identifier, password, ip, userAgent string) (*LoginResponse, error)
+	Login(ctx context.Context, identifier, password, ip, userAgent string, remember bool) (*LoginResponse, error)
 
 	// Logout revokes the session and refresh token tied to the given access token.
 	Logout(ctx context.Context, token string) error
