@@ -84,6 +84,7 @@ func Seed(db *gorm.DB) error {
 		{"permissions", seedPermissions},
 		{"role_permissions", seedRolePermissions},
 		{"admin user", seedAdminUser},
+		{"operator user", seedOperatorUser},
 		{"users", seedUsers},
 		{"vehicle_types", seedVehicleTypes},
 		{"vehicles", seedVehicles},
@@ -115,6 +116,7 @@ func seedRoles(db *gorm.DB) error {
 		{ID: roleID("admin"), Name: string(types.RoleAdmin), Description: "Administrator — manages users, zones, and fee configs"},
 		{ID: roleID("owner"), Name: string(types.RoleOwner), Description: "Business owner — full read access + holiday rate management"},
 		{ID: roleID("engineer"), Name: string(types.RoleEngineer), Description: "Engineer — audit log access and system configuration"},
+		{ID: roleID("cashier"), Name: string(types.RoleCashier), Description: "Cashier — handles payments at the exit gate"},
 	}
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&roles).Error
 }
@@ -266,6 +268,33 @@ func seedAdminUser(db *gorm.DB) error {
 	return nil
 }
 
+func seedOperatorUser(db *gorm.DB) error {
+	var count int64
+	db.Model(&authDomain.User{}).Where("email = ?", "bakayaro@email.local").Count(&count)
+	if count > 0 {
+		return nil
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte("tripleT123"), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	if err := db.Create(&authDomain.User{
+		ID:           uuid.New(),
+		Name:         "Bakayaro Operator",
+		Username:     "bakayaro",
+		Email:        "bakayaro@email.local",
+		PasswordHash: string(hash),
+		RoleID:       roleID("operator"),
+		IsActive:     true,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}).Error; err != nil {
+		return fmt.Errorf("create operator user: %w", err)
+	}
+	return nil
+}
+
 func seedUsers(db *gorm.DB) error {
 	var existing int64
 	db.Model(&authDomain.User{}).Where("email != ?", "admin@parkieee.local").Count(&existing)
@@ -278,7 +307,7 @@ func seedUsers(db *gorm.DB) error {
 		return err
 	}
 
-	roleNames := []string{"operator", "operator", "operator", "owner", "engineer"}
+	roleNames := []string{"operator", "operator", "operator", "owner", "engineer", "cashier", "cashier"}
 	n := randBetween(25, 80)
 	users := make([]authDomain.User, 0, n)
 	seenEmails := map[string]bool{"admin@parkieee.local": true}
