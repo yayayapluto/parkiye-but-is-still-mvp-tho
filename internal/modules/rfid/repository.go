@@ -2,6 +2,8 @@ package rfid
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -28,21 +30,47 @@ func (r *rfidCardRepo) FindByUID(ctx context.Context, cardUID string) (*RFIDCard
 	return &card, errors.FromDB(err, "rfid card not found")
 }
 
-func (r *rfidCardRepo) FindAll(ctx context.Context, onlyActive bool, page, pageSize int) ([]RFIDCard, int64, error) {
+func (r *rfidCardRepo) FindAll(ctx context.Context, filter ListRFIDFilter, page, pageSize int) ([]RFIDCard, int64, error) {
 	var cards []RFIDCard
 	var total int64
 
 	q := r.db.WithContext(ctx).Model(&RFIDCard{})
-	if onlyActive {
-		q = q.Where("is_active = ?", true)
+	if filter.IsActive != nil {
+		q = q.Where("is_active = ?", *filter.IsActive)
+	}
+
+	if filter.CardUID != "" {
+		q = q.Where("card_uid ILIKE ?", "%"+filter.CardUID+"%")
+	}
+
+	if filter.Search != "" {
+		q = q.Where("card_uid ILIKE ?", "%"+filter.Search+"%")
+	}
+
+	if filter.DateFrom != nil {
+		q = q.Where("created_at >= ?", *filter.DateFrom)
+	}
+
+	if filter.DateTo != nil {
+		q = q.Where("created_at <= ?", *filter.DateTo)
 	}
 
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, errors.FromDB(err, "")
 	}
 
+	sortCol := "created_at"
+	sortOrder := "DESC"
+
+	if filter.SortBy != "" {
+		sortCol = filter.SortBy
+	}
+	if strings.ToLower(filter.SortOrder) == "asc" {
+		sortOrder = "ASC"
+	}
+
 	offset := (page - 1) * pageSize
-	err := q.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&cards).Error
+	err := q.Order(fmt.Sprintf("%s %s", sortCol, sortOrder)).Offset(offset).Limit(pageSize).Find(&cards).Error
 	return cards, total, errors.FromDB(err, "")
 }
 

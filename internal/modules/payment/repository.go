@@ -2,6 +2,7 @@ package payment
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -121,4 +122,38 @@ func (r *repository) UpdateRefund(ctx context.Context, ref *Refund) error {
 		return errors.Wrap(err, errors.ErrDatabaseError, "failed to update refund")
 	}
 	return nil
+}
+
+func (r *repository) StampCashierRequested(ctx context.Context, txID uuid.UUID, requestedAt time.Time) error {
+	// Update transactions table directly to avoid circular dependency
+	err := r.db.WithContext(ctx).Exec("UPDATE transactions SET cashier_requested_at = ? WHERE id = ?", requestedAt, txID).Error
+	if err != nil {
+		return errors.Wrap(err, errors.ErrDatabaseError, "failed to stamp cashier requested at")
+	}
+	return nil
+}
+
+func (r *repository) FindPendingCashierRequests(ctx context.Context, since string) ([]PendingCashierRequest, error) {
+	var results []PendingCashierRequest
+	query := `
+		SELECT 
+			id as transaction_id, 
+			transaction_code, 
+			calculated_fee, 
+			cashier_requested_at 
+		FROM transactions 
+		WHERE cashier_requested_at IS NOT NULL 
+		AND status IN ('open', 'awaiting_payment')
+	`
+	args := []interface{}{}
+	if since != "" {
+		query += " AND cashier_requested_at > ?"
+		args = append(args, since)
+	}
+
+	err := r.db.WithContext(ctx).Raw(query, args...).Scan(&results).Error
+	if err != nil {
+		return nil, errors.Wrap(err, errors.ErrDatabaseError, "failed to find pending cashier requests")
+	}
+	return results, nil
 }

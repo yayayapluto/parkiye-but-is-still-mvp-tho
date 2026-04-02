@@ -29,8 +29,6 @@ import (
 	"parkieee/pkg/types"
 )
 
-// Truncate removes all rows from every table in reverse FK-dependency order,
-// then resets sequences. Safe to call before Seed for a clean slate.
 func Truncate(db *gorm.DB) error {
 	tables := []string{
 		"audit_log_exports",
@@ -67,7 +65,6 @@ func Truncate(db *gorm.DB) error {
 		"roles",
 	}
 
-	// TRUNCATE ... RESTART IDENTITY CASCADE handles FK deps and resets sequences in one shot.
 	for _, t := range tables {
 		if err := db.Exec("TRUNCATE TABLE \"" + t + "\" RESTART IDENTITY CASCADE").Error; err != nil {
 			return fmt.Errorf("truncate %s: %w", t, err)
@@ -76,9 +73,6 @@ func Truncate(db *gorm.DB) error {
 	return nil
 }
 
-// Seed inserts base data required for the app to function, then fills each
-// module with realistic random rows (25–80 per entity where applicable).
-// Idempotent: all inserts use ON CONFLICT DO NOTHING.
 func Seed(db *gorm.DB) error {
 	gofakeit.Seed(time.Now().UnixNano())
 
@@ -100,6 +94,7 @@ func Seed(db *gorm.DB) error {
 		{"ocr_config", seedOCRConfig},
 		{"override_config", seedOverrideConfig},
 		{"transactions", seedTransactions},
+		{"zone_capacity_logs", seedZoneCapacityLogs},
 		{"payments", seedPayments},
 		{"operator_overrides", seedOperatorOverrides},
 		{"ocr_jobs + results", seedOCRJobsAndResults},
@@ -114,8 +109,6 @@ func Seed(db *gorm.DB) error {
 	return nil
 }
 
-// ── auth ─────────────────────────────────────────────────────────────────────
-
 func seedRoles(db *gorm.DB) error {
 	roles := []authDomain.Role{
 		{ID: roleID("operator"), Name: string(types.RoleOperator), Description: "Gate operator — handles entry/exit and overrides"},
@@ -128,24 +121,106 @@ func seedRoles(db *gorm.DB) error {
 
 func seedPermissions(db *gorm.DB) error {
 	perms := []authDomain.Permission{
-		{ID: permID("gate.override"), Node: string(types.PermGateOverride), Description: "Manually open gate or override exit"},
-		{ID: permID("fee.edit"), Node: string(types.PermFeeEdit), Description: "Create and modify fee configurations and tiers"},
-		{ID: permID("report.view"), Node: string(types.PermReportView), Description: "View revenue reports and transaction summaries"},
+		// Gate
+		{ID: permID("gate.override"), Node: string(types.PermGateOverride), Description: "Force open gate or override exit without ticket"},
+		{ID: permID("gate.manage"), Node: string(types.PermGateManage), Description: "Create, edit, deactivate gate; regenerate gate token"},
+		{ID: permID("gate.pair"), Node: string(types.PermGatePair), Description: "Confirm gate pairing and assign cashier to exit gate"},
+		{ID: permID("gate.view"), Node: string(types.PermGateView), Description: "View gate list and active status"},
+		// Zone
+		{ID: permID("zone.manage"), Node: string(types.PermZoneManage), Description: "Create, edit, deactivate zone"},
+		{ID: permID("zone.view"), Node: string(types.PermZoneView), Description: "View zone list and occupancy"},
+		// Fee
+		{ID: permID("fee.edit"), Node: string(types.PermFeeEdit), Description: "Create and modify fee configs, tiers, and holiday rates"},
+		{ID: permID("fee.view"), Node: string(types.PermFeeView), Description: "View fee configs and tariff structure"},
+		// User
 		{ID: permID("user.manage"), Node: string(types.PermUserManage), Description: "Create, deactivate, and assign roles to users"},
-		{ID: permID("zone.manage"), Node: string(types.PermZoneManage), Description: "Create and configure zones and gates"},
-		{ID: permID("rfid.manage"), Node: string(types.PermRFIDManage), Description: "Deactivate RFID cards and manage card registry"},
-		{ID: permID("audit.read"), Node: string(types.PermAuditRead), Description: "Read audit logs and export audit data"},
-		{ID: permID("config.edit"), Node: string(types.PermConfigEdit), Description: "Edit system configs (OCR threshold, override limits)"},
+		{ID: permID("user.view"), Node: string(types.PermUserView), Description: "View user list and profile"},
+		{ID: permID("cashier.assign"), Node: string(types.PermCashierAssign), Description: "Assign or unassign cashier to an exit gate"},
+		// Cashier
+		{ID: permID("cashier.ability"), Node: string(types.PermCashierAbility), Description: "Access cashier station and receive payment requests from kiosk"},
+		{ID: permID("payment.cash"), Node: string(types.PermPaymentCash), Description: "Process and confirm cash payments"},
+		{ID: permID("payment.qris"), Node: string(types.PermPaymentQRIS), Description: "Initiate and handle QRIS payments"},
+		{ID: permID("payment.refund"), Node: string(types.PermPaymentRefund), Description: "Request, approve, or reject payment refunds"},
+		// Transaction
+		{ID: permID("transaction.view"), Node: string(types.PermTransactionView), Description: "View transaction detail and history"},
+		{ID: permID("transaction.cancel"), Node: string(types.PermTransactionCancel), Description: "Cancel an open transaction"},
+		// Override
+		{ID: permID("override.perform"), Node: string(types.PermOverridePerform), Description: "Perform overrides: lost card, no QR, fee waive, fee adjust, manual entry"},
+		{ID: permID("override.config"), Node: string(types.PermOverrideConfig), Description: "Set override daily/weekly limit and escalation config"},
+		// RFID
+		{ID: permID("rfid.manage"), Node: string(types.PermRFIDManage), Description: "Deactivate RFID cards and link/unlink to vehicle"},
+		{ID: permID("rfid.view"), Node: string(types.PermRFIDView), Description: "View RFID card registry"},
+		// Report & system
+		{ID: permID("report.view"), Node: string(types.PermReportView), Description: "View revenue reports and occupancy statistics"},
+		{ID: permID("config.edit"), Node: string(types.PermConfigEdit), Description: "Edit system configs: OCR threshold, override limits"},
+		{ID: permID("audit.read"), Node: string(types.PermAuditRead), Description: "Read and export audit logs"},
+		// Internal service-to-service
+		{ID: permID("internal.access"), Node: string(types.PermInternalAccess), Description: "Internal service token — used by Python object detection to call mark-exited"},
 	}
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&perms).Error
 }
 
 func seedRolePermissions(db *gorm.DB) error {
 	matrix := map[string][]string{
-		"operator": {"gate.override"},
-		"admin":    {"gate.override", "fee.edit", "report.view", "user.manage", "zone.manage", "rfid.manage", "config.edit"},
-		"owner":    {"report.view", "fee.edit", "zone.manage", "config.edit"},
-		"engineer": {"audit.read", "config.edit"},
+		"operator": {
+			"gate.override",
+			"gate.view",
+			"zone.view",
+			"fee.view",
+			"transaction.view",
+			"transaction.cancel",
+			"override.perform",
+			"rfid.view",
+		},
+		"admin": {
+			"gate.override",
+			"gate.manage",
+			"gate.pair",
+			"gate.view",
+			"zone.manage",
+			"zone.view",
+			"fee.edit",
+			"fee.view",
+			"user.manage",
+			"user.view",
+			"cashier.assign",
+			"cashier.ability",
+			"payment.cash",
+			"payment.qris",
+			"payment.refund",
+			"transaction.view",
+			"transaction.cancel",
+			"override.perform",
+			"override.config",
+			"rfid.manage",
+			"rfid.view",
+			"report.view",
+			"config.edit",
+			"audit.read",
+		},
+		"owner": {
+			"gate.view",
+			"zone.view",
+			"zone.manage",
+			"fee.edit",
+			"fee.view",
+			"user.view",
+			"transaction.view",
+			"report.view",
+			"config.edit",
+		},
+		"engineer": {
+			"gate.view",
+			"zone.view",
+			"audit.read",
+			"config.edit",
+		},
+		"cashier": {
+			"cashier.ability",
+			"payment.cash",
+			"payment.qris",
+			"transaction.view",
+		},
 	}
 
 	now := time.Now()
@@ -173,14 +248,22 @@ func seedAdminUser(db *gorm.DB) error {
 	if err != nil {
 		return err
 	}
-	return db.Create(&authDomain.User{
-		ID:           deterministicUUID("seed:admin"),
-		Name:         "System Admin",
+
+	usernameFromEmail := "admin"
+	if err := db.Create(&authDomain.User{
+		ID:           uuid.New(),
+		Name:         "System Administrator",
+		Username:     usernameFromEmail,
 		Email:        "admin@parkieee.local",
 		PasswordHash: string(hash),
 		RoleID:       roleID("admin"),
 		IsActive:     true,
-	}).Error
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}).Error; err != nil {
+		return fmt.Errorf("create admin user: %w", err)
+	}
+	return nil
 }
 
 func seedUsers(db *gorm.DB) error {
@@ -200,12 +283,16 @@ func seedUsers(db *gorm.DB) error {
 	users := make([]authDomain.User, 0, n)
 	seenEmails := map[string]bool{"admin@parkieee.local": true}
 
+	seenUsernames := map[string]bool{}
 	for i := 0; i < n; i++ {
 		email := uniqueEmail(seenEmails)
 		seenEmails[email] = true
+		username := uniqueUsername(seenUsernames)
+		seenUsernames[username] = true
 		users = append(users, authDomain.User{
 			ID:           uuid.New(),
 			Name:         gofakeit.Name(),
+			Username:     username,
 			Email:        email,
 			PasswordHash: string(hash),
 			RoleID:       roleID(roleNames[mathrand.Intn(len(roleNames))]),
@@ -214,8 +301,6 @@ func seedUsers(db *gorm.DB) error {
 	}
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&users).Error
 }
-
-// ── vehicle ───────────────────────────────────────────────────────────────────
 
 func seedVehicleTypes(db *gorm.DB) error {
 	vts := []vehicleDomain.VehicleType{
@@ -233,7 +318,6 @@ func seedVehicles(db *gorm.DB) error {
 		return nil
 	}
 
-	// weighted: 60% motorcycle, 30% car, 10% truck
 	vtypePool := make([]uuid.UUID, 0, 10)
 	for i := 0; i < 6; i++ {
 		vtypePool = append(vtypePool, deterministicUUID("vtype:motorcycle"))
@@ -263,13 +347,10 @@ func seedVehicles(db *gorm.DB) error {
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&vehicles).Error
 }
 
-// ── zone + gate ───────────────────────────────────────────────────────────────
-
 func seedZonesAndGates(db *gorm.DB) error {
 	var existing int64
 	db.Model(&zoneDomain.Zone{}).Count(&existing)
 	if existing > 0 {
-		// Backfill for_vehicle_type_id on zones that were seeded without it.
 		vtMotorcycleFix := deterministicUUID("vtype:motorcycle")
 		vtCarFix := deterministicUUID("vtype:car")
 		db.Model(&zoneDomain.Zone{}).Where("id = ? AND for_vehicle_type_id IS NULL", deterministicUUID("zone:motor")).
@@ -277,12 +358,9 @@ func seedZonesAndGates(db *gorm.DB) error {
 		db.Model(&zoneDomain.Zone{}).Where("id IN ? AND for_vehicle_type_id IS NULL",
 			[]uuid.UUID{deterministicUUID("zone:mobil"), deterministicUUID("zone:vip")}).
 			Update("for_vehicle_type_id", vtCarFix)
-		// Assign motorcycle to remaining null zones as a safe default.
 		db.Model(&zoneDomain.Zone{}).Where("for_vehicle_type_id IS NULL").
 			Update("for_vehicle_type_id", vtMotorcycleFix)
 
-		// Backfill gates for any zone that has none. This handles the case where
-		// zones were seeded in a previous run but gates were skipped or partially inserted.
 		adminIDBackfill := deterministicUUID("seed:admin")
 		var zonesWithoutGates []zoneDomain.Zone
 		db.Raw(`SELECT z.* FROM zones z LEFT JOIN gates g ON g.zone_id = z.id WHERE g.id IS NULL`).Scan(&zonesWithoutGates)
@@ -369,8 +447,6 @@ func seedZonesAndGates(db *gorm.DB) error {
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&gates).Error
 }
 
-// ── rfid ─────────────────────────────────────────────────────────────────────
-
 func seedRFIDCards(db *gorm.DB) error {
 	var existing int64
 	db.Model(&rfidDomain.RFIDCard{}).Count(&existing)
@@ -408,15 +484,10 @@ func seedRFIDCards(db *gorm.DB) error {
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&cards).Error
 }
 
-// ── fee ───────────────────────────────────────────────────────────────────────
-
 func seedFeeConfigsAndTiers(db *gorm.DB) error {
 	adminID := deterministicUUID("seed:admin")
 	now := time.Now()
 
-	// Deterministic fee configs for the 3 fixed zones x 3 vehicle types.
-	// grace_period_minutes=0 and base_fee>0 ensures calculated_fee is never 0
-	// even for very short parking durations (important for payment testing).
 	type tierDef struct{ dur, fee int }
 	type fixedCfg struct {
 		zoneKey string
@@ -467,9 +538,6 @@ func seedFeeConfigsAndTiers(db *gorm.DB) error {
 		return err
 	}
 
-	// Verify which config IDs actually exist in DB before inserting tiers,
-	// because ON CONFLICT DO NOTHING silently skips duplicates and tiers
-	// would violate the FK if their parent config was skipped.
 	cfgIDSet := map[uuid.UUID]bool{}
 	for _, c := range configs {
 		cfgIDSet[c.ID] = true
@@ -497,7 +565,6 @@ func seedFeeConfigsAndTiers(db *gorm.DB) error {
 		}
 	}
 
-	// Random configs for the remaining (non-fixed) zones, skip if already seeded
 	var existingCount int64
 	db.Model(&feeDomain.FeeConfig{}).Count(&existingCount)
 	if existingCount > int64(len(fixed)) {
@@ -638,8 +705,6 @@ func seedOverrideConfig(db *gorm.DB) error {
 	}).Error
 }
 
-// ── transaction ───────────────────────────────────────────────────────────────
-
 func seedTransactions(db *gorm.DB) error {
 	var existing int64
 	db.Model(&txDomain.Transaction{}).Count(&existing)
@@ -663,7 +728,6 @@ func seedTransactions(db *gorm.DB) error {
 		return nil
 	}
 
-	// Build exit gate lookup by zone_id for realistic pairing
 	exitByZone := map[uuid.UUID][]uuid.UUID{}
 	for _, g := range exitGates {
 		exitByZone[g.ZoneID] = append(exitByZone[g.ZoneID], g.ID)
@@ -684,7 +748,15 @@ func seedTransactions(db *gorm.DB) error {
 
 	for i := 0; i < n; i++ {
 		eg := entryGates[mathrand.Intn(len(entryGates))]
-		entryAt := gofakeit.DateRange(time.Now().AddDate(0, -3, 0), time.Now())
+		
+		// 30% chance for today, 70% for past 3 months
+		var entryAt time.Time
+		if mathrand.Float32() < 0.3 {
+			entryAt = gofakeit.DateRange(time.Now().Truncate(24*time.Hour), time.Now())
+		} else {
+			entryAt = gofakeit.DateRange(time.Now().AddDate(0, -3, 0), time.Now().Add(-24*time.Hour))
+		}
+
 		status := statusPool[mathrand.Intn(len(statusPool))]
 		method := entryMethods[mathrand.Intn(len(entryMethods))]
 
@@ -711,7 +783,6 @@ func seedTransactions(db *gorm.DB) error {
 			tx.VehicleID = &vid
 		}
 
-		// Closed statuses get exit data
 		if status == types.TransactionStatusExited ||
 			status == types.TransactionStatusPaid ||
 			status == types.TransactionStatusOverridden {
@@ -743,10 +814,36 @@ func seedTransactions(db *gorm.DB) error {
 	if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&transactions).Error; err != nil {
 		return err
 	}
+
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&logs).Error
 }
 
-// ── payment ───────────────────────────────────────────────────────────────────
+func seedZoneCapacityLogs(db *gorm.DB) error {
+	var zones []zoneDomain.Zone
+	db.Find(&zones)
+
+	for _, z := range zones {
+		var txs []txDomain.Transaction
+		db.Where("zone_id = ? AND status = ?", z.ID, types.TransactionStatusOpen).
+			Order("entry_at ASC").
+			Find(&txs)
+
+		occupied := 0
+		for _, tx := range txs {
+			occupied++
+			db.Create(&zoneDomain.ZoneCapacityLog{
+				ID:             uuid.New(),
+				ZoneID:         z.ID,
+				TransactionID:  tx.ID,
+				EventType:      types.ZoneEventEntry,
+				OccupiedCount:  occupied,
+				AvailableCount: z.Capacity - occupied,
+				RecordedAt:     tx.EntryAt,
+			})
+		}
+	}
+	return nil
+}
 
 func seedPayments(db *gorm.DB) error {
 	var existing int64
@@ -798,8 +895,6 @@ func seedPayments(db *gorm.DB) error {
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&payments).Error
 }
 
-// ── override ──────────────────────────────────────────────────────────────────
-
 func seedOperatorOverrides(db *gorm.DB) error {
 	var existing int64
 	db.Model(&overrideDomain.OperatorOverride{}).Count(&existing)
@@ -847,8 +942,6 @@ func seedOperatorOverrides(db *gorm.DB) error {
 	}
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&overrides).Error
 }
-
-// ── ocr ───────────────────────────────────────────────────────────────────────
 
 func seedOCRJobsAndResults(db *gorm.DB) error {
 	var existing int64
@@ -917,8 +1010,6 @@ func seedOCRJobsAndResults(db *gorm.DB) error {
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&results).Error
 }
 
-// ── audit ─────────────────────────────────────────────────────────────────────
-
 func seedAuditLogs(db *gorm.DB) error {
 	var existing int64
 	db.Model(&auditDomain.AuditLog{}).Count(&existing)
@@ -932,7 +1023,6 @@ func seedAuditLogs(db *gorm.DB) error {
 		return nil
 	}
 
-	// role name lookup
 	var roles []authDomain.Role
 	db.Select("id, name").Find(&roles)
 	roleNameByID := map[uuid.UUID]string{}
@@ -977,8 +1067,6 @@ func seedAuditLogs(db *gorm.DB) error {
 	}
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&logs).Error
 }
-
-// ── helpers ───────────────────────────────────────────────────────────────────
 
 var seedNamespace = uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 
@@ -1043,6 +1131,15 @@ func uniqueCardUID(seen map[string]bool) string {
 	}
 }
 
+func uniqueUsername(seen map[string]bool) string {
+	for {
+		u := strings.ToLower(fmt.Sprintf("%s%d", gofakeit.Username(), gofakeit.IntRange(1, 99)))
+		if len(u) >= 3 && len(u) <= 50 && !seen[u] {
+			return u
+		}
+	}
+}
+
 func uniqueZoneName(seen map[string]bool, words, labels []string) string {
 	for {
 		name := fmt.Sprintf("%s %s", words[mathrand.Intn(len(words))], labels[mathrand.Intn(len(labels))])
@@ -1056,7 +1153,6 @@ func uniqueZoneName(seen map[string]bool, words, labels []string) string {
 	}
 }
 
-// roundUpToNearest rounds n up to the nearest multiple of step (for cash change calc).
 func roundUpToNearest(n, step int) int {
 	if n%step == 0 {
 		return n

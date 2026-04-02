@@ -17,7 +17,7 @@ type VehicleTypeRepositoryPort interface {
 type VehicleRepositoryPort interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*Vehicle, error)
 	FindByPlate(ctx context.Context, plate string) (*Vehicle, error)
-	FindAll(ctx context.Context, typeID *uuid.UUID, page, pageSize int) ([]Vehicle, int64, error)
+	FindAll(ctx context.Context, filter ListVehicleFilter, page, pageSize int) ([]Vehicle, int64, error)
 	Upsert(ctx context.Context, vehicle *Vehicle) (*Vehicle, error)
 	Update(ctx context.Context, vehicle *Vehicle) error
 }
@@ -31,7 +31,7 @@ type ServicePort interface {
 	DeleteVehicleType(ctx context.Context, id uuid.UUID) error
 
 	// Vehicles
-	ListVehicles(ctx context.Context, typeID *uuid.UUID, page, pageSize int) ([]Vehicle, int64, error)
+	ListVehicles(ctx context.Context, filter ListVehicleFilter, page, pageSize int) ([]Vehicle, int64, error)
 	GetVehicle(ctx context.Context, id uuid.UUID) (*Vehicle, error)
 	GetVehicleByPlate(ctx context.Context, plate string) (*Vehicle, error)
 	UpsertVehicle(ctx context.Context, req *UpsertVehicleRequest) (*Vehicle, error)

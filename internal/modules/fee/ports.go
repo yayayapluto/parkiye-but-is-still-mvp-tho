@@ -48,4 +48,9 @@ type ServicePort interface {
 	// CalculateFee is called by the transaction module during exit processing.
 	// It returns the total fee in IDR for the given parking duration.
 	CalculateFee(ctx context.Context, zoneID, vehicleTypeID uuid.UUID, entryTime, exitTime time.Time) (int, error)
+
+	// Enrichment
+	EnrichConfig(ctx context.Context, cfg *FeeConfig, includes map[string]bool) *FeeEnrichment
+	EnrichConfigList(ctx context.Context, configs []FeeConfig, includes map[string]bool) map[uuid.UUID]FeeEnrichment
 }
+

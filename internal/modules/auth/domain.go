@@ -11,6 +11,7 @@ import (
 type User struct {
 	ID           uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	Name         string     `gorm:"type:varchar(100);not null"`
+	Username     string     `gorm:"type:varchar(50);not null;default:''"`
 	Email        string     `gorm:"type:varchar(150);uniqueIndex;not null"`
 	PasswordHash string     `gorm:"type:text;not null"`
 	RoleID       uuid.UUID  `gorm:"type:uuid;not null"`
@@ -95,6 +96,26 @@ type UserLoginLog struct {
 }
 
 func (UserLoginLog) TableName() string { return "user_login_logs" }
+
+// RefreshToken menyimpan satu refresh token per sesi.
+// TokenHash adalah SHA-256 dari raw token — token asli tidak pernah disimpan.
+type RefreshToken struct {
+	ID        uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	UserID    uuid.UUID  `gorm:"type:uuid;not null;index"`
+	SessionID uuid.UUID  `gorm:"type:uuid;not null;index"` // relasi ke user_sessions
+	TokenHash string     `gorm:"type:text;not null;uniqueIndex"`
+	IPAddress string     `gorm:"type:varchar(45)"`
+	UserAgent string     `gorm:"type:text"`
+	CreatedAt time.Time  `gorm:"autoCreateTime"`
+	ExpiresAt time.Time  `gorm:"not null"`
+	RevokedAt *time.Time
+	ReplacedBy *uuid.UUID `gorm:"type:uuid"` // ID dari refresh token baru setelah rotation
+
+	User    *User        `gorm:"foreignKey:UserID"`
+	Session *UserSession `gorm:"foreignKey:SessionID"`
+}
+
+func (RefreshToken) TableName() string { return "refresh_tokens" }
 
 // UserLoginStats holds pre-computed counters for fast lockout checks.
 type UserLoginStats struct {

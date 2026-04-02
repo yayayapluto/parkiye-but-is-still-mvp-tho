@@ -12,6 +12,7 @@ import (
 	ocrDomain "parkieee/internal/modules/ocr"
 	overrideDomain "parkieee/internal/modules/override"
 	paymentDomain "parkieee/internal/modules/payment"
+	notifDomain "parkieee/internal/modules/notification"
 	rfidDomain "parkieee/internal/modules/rfid"
 	txDomain "parkieee/internal/modules/transaction"
 	vehicleDomain "parkieee/internal/modules/vehicle"
@@ -21,8 +22,8 @@ import (
 // Migrate runs GORM AutoMigrate for all tables in FK-dependency order.
 //
 // Order rationale:
-//  1. auth      — roles, permissions, users (users self-ref created_by after roles exist)
-//  2. zone      — zones, gates, gate_devices, zone_capacity_logs
+//  1. auth      — roles, permissions, users
+//  2. zone      — zones, gates, gate_devices, gate_cashier_assignments, zone_capacity_logs
 //  3. vehicle   — vehicle_types, vehicles
 //  4. rfid      — rfid_cards (references vehicles)
 //  5. fee       — fee_configs, fee_tiers, holiday_rates, ocr_configs, override_configs
@@ -35,61 +36,76 @@ func Migrate(db *gorm.DB) error {
 	models := []interface{}{
 		&authDomain.Role{},
 		&authDomain.Permission{},
-		&authDomain.User{},           // depends on roles
-		&authDomain.RolePermission{}, // depends on roles + permissions + users
-		&authDomain.UserSession{},    // depends on users
-		&authDomain.UserLoginLog{},   // depends on users
-		&authDomain.UserLoginStats{}, // depends on users
+		&authDomain.User{},
+		&authDomain.RolePermission{},
+		&authDomain.UserSession{},
+		&authDomain.RefreshToken{},
+		&authDomain.UserLoginLog{},
+		&authDomain.UserLoginStats{},
 
-		&zoneDomain.Zone{},       // depends on users (created_by)
-		&zoneDomain.Gate{},       // depends on zones + users
-		&zoneDomain.GateDevice{}, // depends on gates
+		&zoneDomain.Zone{},
+		&zoneDomain.Gate{},                  // mode column added
+		&zoneDomain.GateCashierAssignment{}, // new — 1 kasir per exit gate
+		&zoneDomain.GateDevice{},
 
 		&vehicleDomain.VehicleType{},
-		&vehicleDomain.Vehicle{}, // depends on vehicle_types
+		&vehicleDomain.Vehicle{},
 
-		&rfidDomain.RFIDCard{}, // depends on vehicles + users
+		&rfidDomain.RFIDCard{},
 
-		&feeDomain.FeeConfig{},      // depends on zones + vehicle_types + users
-		&feeDomain.FeeTier{},        // depends on fee_configs
-		&feeDomain.HolidayRate{},    // depends on zones + vehicle_types + users
-		&feeDomain.OCRConfig{},      // depends on users
-		&feeDomain.OverrideConfig{}, // depends on users
+		&feeDomain.FeeConfig{},
+		&feeDomain.FeeTier{},
+		&feeDomain.HolidayRate{},
+		&feeDomain.OCRConfig{},
+		&feeDomain.OverrideConfig{},
 
-		&txDomain.Transaction{},             // depends on gates, rfid_cards, vehicles, fee_configs, holiday_rates, zones
-		&txDomain.TransactionLog{},          // depends on transactions + users
-		&txDomain.UnclosedTransactionFlag{}, // depends on transactions + users
+		&txDomain.Transaction{},
+		&txDomain.TransactionLog{},
+		&txDomain.UnclosedTransactionFlag{},
 
-		&paymentDomain.Payment{},          // depends on transactions + users
-		&paymentDomain.MidtransCallback{}, // depends on payments
-		&paymentDomain.Refund{},           // depends on payments + transactions + users
+		&paymentDomain.Payment{},
+		&paymentDomain.MidtransCallback{},
+		&paymentDomain.Refund{},
 
-		&overrideDomain.OperatorOverride{}, // depends on transactions + users
+		&overrideDomain.OperatorOverride{},
 
-		&ocrDomain.OCRJob{},       // depends on transactions
-		&ocrDomain.OCRResult{},    // depends on ocr_jobs + vehicles + users
-		&ocrDomain.OCRReviewLog{}, // depends on ocr_results + users
+		&ocrDomain.OCRJob{},
+		&ocrDomain.OCRResult{},
+		&ocrDomain.OCRReviewLog{},
 
-		&auditDomain.AuditLog{},       // depends on users
-		&auditDomain.AuditLogExport{}, // depends on users
+		&auditDomain.AuditLog{},
+		&auditDomain.AuditLogExport{},
 
 		&zoneDomain.ZoneCapacityLog{},
 
-		&gateDomain.GatePairingCode{}, // depends on zones (via gate_id)
+		&gateDomain.GatePairingCode{},
+		&notifDomain.Notification{},
 	}
 
-	if err := db.AutoMigrate(models...); err != nil {
-		return fmt.Errorf("automigrate failed: %w", err)
+	for _, m := range models {
+		if err := db.AutoMigrate(m); err != nil {
+			return fmt.Errorf("automigrate %T failed: %w", m, err)
+		}
 	}
 
 	return applyManualConstraints(db)
 }
 
 // applyManualConstraints adds constraints & indexes that GORM AutoMigrate
-// cannot express via struct tags alone (composite unique, partial indexes,
-// check constraints, etc.).
+// cannot express via struct tags alone.
 func applyManualConstraints(db *gorm.DB) error {
+	// Backfill username dari email untuk rows lama yang belum punya username.
+	// Format: localpart_6charhex agar tetap unik meski localpart sama.
+	if err := db.Exec(`
+		UPDATE users
+		SET username = LOWER(split_part(email, '@', 1)) || '_' || SUBSTR(id::text, 1, 6)
+		WHERE username = ''
+	`).Error; err != nil {
+		return fmt.Errorf("backfill username: %w", err)
+	}
+
 	stmts := []string{
+		`CREATE UNIQUE INDEX IF NOT EXISTS uidx_users_username ON users (username)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS uidx_fee_configs_zone_vtype_active
 			ON fee_configs (zone_id, vehicle_type_id)
 			WHERE is_active = TRUE AND effective_until IS NULL`,
@@ -165,6 +181,19 @@ func applyManualConstraints(db *gorm.DB) error {
 				confidence >= 0 AND confidence <= 1
 			)`,
 
+		// gate mode hanya boleh nilai yang valid
+		`ALTER TABLE gates
+			DROP CONSTRAINT IF EXISTS chk_gates_mode,
+			ADD CONSTRAINT chk_gates_mode CHECK (
+				mode IN ('manless', 'with_cashier')
+			)`,
+
+		// exit-only enforcement is handled in the service layer (AssignCashier)
+		// because PostgreSQL CHECK constraints do not support subqueries
+
+		// with_cashier gate wajib punya assignment, manless tidak boleh punya
+		// (ini enforced di application layer, bukan DB — terlalu kompleks untuk CHECK constraint)
+
 		`CREATE INDEX IF NOT EXISTS idx_transactions_status
 			ON transactions (status)`,
 
@@ -174,6 +203,10 @@ func applyManualConstraints(db *gorm.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_transactions_open_entry_at
 			ON transactions (entry_at)
 			WHERE status = 'open'`,
+
+		`CREATE INDEX IF NOT EXISTS idx_transactions_paid_at
+			ON transactions (updated_at)
+			WHERE status = 'paid'`,
 
 		`CREATE INDEX IF NOT EXISTS idx_ocr_jobs_status
 			ON ocr_jobs (status)
@@ -187,6 +220,11 @@ func applyManualConstraints(db *gorm.DB) error {
 
 		`CREATE UNIQUE INDEX IF NOT EXISTS uidx_gates_token
 			ON gates (gate_token)`,
+
+		`CREATE INDEX IF NOT EXISTS idx_gate_cashier_assignments_user
+			ON gate_cashier_assignments (user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications (user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications (user_id, is_read) WHERE is_read = false`,
 	}
 
 	for _, stmt := range stmts {

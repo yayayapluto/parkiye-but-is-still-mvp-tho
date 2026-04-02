@@ -3,10 +3,14 @@ package bootstrap
 import (
 	"gorm.io/gorm"
 
+	"parkieee/internal/modules/audit"
 	"parkieee/internal/modules/auth"
+	"parkieee/internal/modules/dashboard"
 	"parkieee/internal/modules/fee"
 	"parkieee/internal/modules/gate"
+	"parkieee/internal/modules/notification"
 	"parkieee/internal/modules/ocr"
+	"parkieee/internal/modules/override"
 	"parkieee/internal/modules/payment"
 	"parkieee/internal/modules/rfid"
 	"parkieee/internal/modules/transaction"
@@ -23,20 +27,22 @@ type Container struct {
 	Config    *config.Config
 	Validator *validator.Validator
 
-	AuthUserRepo       auth.UserRepositoryPort
-	AuthRoleRepo       auth.RoleRepositoryPort
-	AuthPermRepo       auth.PermissionRepositoryPort
-	AuthRolePermRepo   auth.RolePermissionRepositoryPort
-	AuthSessionRepo    auth.SessionRepositoryPort
-	AuthLoginLogRepo   auth.LoginLogRepositoryPort
-	AuthLoginStatsRepo auth.LoginStatsRepositoryPort
-	AuthService        auth.ServicePort
+	AuthUserRepo            auth.UserRepositoryPort
+	AuthRoleRepo            auth.RoleRepositoryPort
+	AuthPermRepo            auth.PermissionRepositoryPort
+	AuthRolePermRepo        auth.RolePermissionRepositoryPort
+	AuthSessionRepo         auth.SessionRepositoryPort
+	AuthRefreshTokenRepo    auth.RefreshTokenRepositoryPort
+	AuthLoginLogRepo        auth.LoginLogRepositoryPort
+	AuthLoginStatsRepo      auth.LoginStatsRepositoryPort
+	AuthService             auth.ServicePort
 
-	ZoneRepo        zone.ZoneRepositoryPort
-	GateRepo        zone.GateRepositoryPort
-	GateDeviceRepo  zone.GateDeviceRepositoryPort
-	CapacityLogRepo zone.CapacityLogRepositoryPort
-	ZoneService     zone.ServicePort
+	ZoneRepo                  zone.ZoneRepositoryPort
+	GateRepo                  zone.GateRepositoryPort
+	GateCashierAssignmentRepo zone.GateCashierAssignmentRepositoryPort
+	GateDeviceRepo            zone.GateDeviceRepositoryPort
+	CapacityLogRepo           zone.CapacityLogRepositoryPort
+	ZoneService               zone.ServicePort
 
 	VehicleTypeRepo vehicle.VehicleTypeRepositoryPort
 	VehicleRepo     vehicle.VehicleRepositoryPort
@@ -54,6 +60,9 @@ type Container struct {
 	TransactionLogRepo transaction.TransactionLogRepositoryPort
 	TransactionService transaction.ServicePort
 
+	NotificationRepo    notification.RepositoryPort
+	NotificationService notification.ServicePort
+
 	PaymentRepo    payment.RepositoryPort
 	PaymentService payment.ServicePort
 
@@ -64,6 +73,14 @@ type Container struct {
 
 	GatePairingRepo gate.PairingRepositoryPort
 	GateService     gate.ServicePort
+
+	OverrideRepo    override.RepositoryPort
+	OverrideService override.ServicePort
+
+	DashboardService dashboard.ServicePort
+
+	AuditLogRepo audit.AuditLogRepositoryPort
+	AuditService audit.ServicePort
 }
 
 func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
@@ -97,6 +114,9 @@ func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
 	if err := container.initOCRModule(); err != nil {
 		return nil, err
 	}
+	if err := container.initNotificationModule(); err != nil {
+		return nil, err
+	}
 	if err := container.initTransactionModule(); err != nil {
 		return nil, err
 	}
@@ -104,9 +124,18 @@ func NewContainer(cfg *config.Config, log logger.Logger) (*Container, error) {
 		return nil, err
 	}
 
-	// Wire OCR → Transaction stamper post-init to avoid circular dependency.
 	container.OCRService.SetTransactionStamper(container.TransactionService)
+
 	if err := container.initGateModule(); err != nil {
+		return nil, err
+	}
+	if err := container.initOverrideModule(); err != nil {
+		return nil, err
+	}
+	if err := container.initDashboardModule(); err != nil {
+		return nil, err
+	}
+	if err := container.initAuditModule(); err != nil {
 		return nil, err
 	}
 
@@ -119,6 +148,7 @@ func (c *Container) initAuthModule() error {
 	c.AuthPermRepo = auth.NewPermissionRepository(c.DB)
 	c.AuthRolePermRepo = auth.NewRolePermissionRepository(c.DB)
 	c.AuthSessionRepo = auth.NewSessionRepository(c.DB)
+	c.AuthRefreshTokenRepo = auth.NewRefreshTokenRepository(c.DB)
 	c.AuthLoginLogRepo = auth.NewLoginLogRepository(c.DB)
 	c.AuthLoginStatsRepo = auth.NewLoginStatsRepository(c.DB)
 	c.AuthService = auth.NewService(
@@ -127,6 +157,7 @@ func (c *Container) initAuthModule() error {
 		c.AuthPermRepo,
 		c.AuthRolePermRepo,
 		c.AuthSessionRepo,
+		c.AuthRefreshTokenRepo,
 		c.AuthLoginLogRepo,
 		c.AuthLoginStatsRepo,
 		c.Config,
@@ -138,11 +169,13 @@ func (c *Container) initAuthModule() error {
 func (c *Container) initZoneModule() error {
 	c.ZoneRepo = zone.NewZoneRepository(c.DB)
 	c.GateRepo = zone.NewGateRepository(c.DB)
+	c.GateCashierAssignmentRepo = zone.NewGateCashierAssignmentRepository(c.DB)
 	c.GateDeviceRepo = zone.NewGateDeviceRepository(c.DB)
 	c.CapacityLogRepo = zone.NewCapacityLogRepository(c.DB)
 	c.ZoneService = zone.NewService(
 		c.ZoneRepo,
 		c.GateRepo,
+		c.GateCashierAssignmentRepo,
 		c.CapacityLogRepo,
 		c.DB,
 		c.Log,
@@ -159,7 +192,7 @@ func (c *Container) initVehicleModule() error {
 
 func (c *Container) initRFIDModule() error {
 	c.RFIDCardRepo = rfid.NewRFIDCardRepository(c.DB)
-	c.RFIDService = rfid.NewService(c.RFIDCardRepo, c.Log)
+	c.RFIDService = rfid.NewService(c.RFIDCardRepo, c.VehicleService, c.Log)
 	return nil
 }
 
@@ -167,7 +200,14 @@ func (c *Container) initFeeModule() error {
 	c.FeeConfigRepo = fee.NewFeeConfigRepository(c.DB)
 	c.FeeTierRepo = fee.NewFeeTierRepository(c.DB)
 	c.HolidayRateRepo = fee.NewHolidayRateRepository(c.DB)
-	c.FeeService = fee.NewService(c.FeeConfigRepo, c.FeeTierRepo, c.HolidayRateRepo, c.Log)
+	c.FeeService = fee.NewService(
+		c.FeeConfigRepo,
+		c.FeeTierRepo,
+		c.HolidayRateRepo,
+		c.ZoneService,
+		c.VehicleService,
+		c.Log,
+	)
 	return nil
 }
 
@@ -192,6 +232,12 @@ func (c *Container) initOCRModule() error {
 	return nil
 }
 
+func (c *Container) initNotificationModule() error {
+	c.NotificationRepo = notification.NewRepository(c.DB)
+	c.NotificationService = notification.NewService(c.NotificationRepo, c.Log)
+	return nil
+}
+
 func (c *Container) initTransactionModule() error {
 	c.TransactionRepo = transaction.NewTransactionRepository(c.DB)
 	c.TransactionLogRepo = transaction.NewTransactionLogRepository(c.DB)
@@ -207,6 +253,7 @@ func (c *Container) initTransactionModule() error {
 		c.VehicleService,
 		c.OCRService,
 		c.OCRResultRepo,
+		c.NotificationService,
 		c.Log,
 		c.Config.BaseURL(),
 		c.Config.App.PlaceName,
@@ -220,8 +267,10 @@ func (c *Container) initPaymentModule() error {
 	c.PaymentService = payment.NewService(
 		c.PaymentRepo,
 		c.TransactionService,
+		c.GateCashierAssignmentRepo,
 		c.Config.Midtrans,
 		c.Log,
+		c.NotificationService,
 	)
 	return nil
 }
@@ -231,9 +280,27 @@ func (c *Container) initGateModule() error {
 	c.GateService = gate.NewService(
 		c.GateRepo,
 		c.GatePairingRepo,
+		c.GateCashierAssignmentRepo,
 		c.Config,
 		c.Log,
 	)
+	return nil
+}
+
+func (c *Container) initOverrideModule() error {
+	c.OverrideRepo = override.NewRepository(c.DB)
+	c.OverrideService = override.NewService(c.OverrideRepo)
+	return nil
+}
+
+func (c *Container) initDashboardModule() error {
+	c.DashboardService = dashboard.NewService(c.DB)
+	return nil
+}
+
+func (c *Container) initAuditModule() error {
+	c.AuditLogRepo = audit.NewAuditLogRepository(c.DB)
+	c.AuditService = audit.NewService(c.AuditLogRepo)
 	return nil
 }
 

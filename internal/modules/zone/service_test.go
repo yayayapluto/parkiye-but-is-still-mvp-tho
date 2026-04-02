@@ -31,7 +31,8 @@ var _ logger.Logger = noopLogger{}
 
 func newService(t *testing.T, zoneRepo zone.ZoneRepositoryPort, capRepo zone.CapacityLogRepositoryPort) zone.ServicePort {
 	gateRepo := zonemocks.NewMockGateRepositoryPort(t)
-	return zone.NewService(zoneRepo, gateRepo, capRepo, nil, noopLogger{})
+	assignmentRepo := zonemocks.NewMockGateCashierAssignmentRepositoryPort(t)
+	return zone.NewService(zoneRepo, gateRepo, assignmentRepo, capRepo, nil, noopLogger{})
 }
 
 func TestNextOccupancy(t *testing.T) {
@@ -124,7 +125,6 @@ func TestRecordCapacityEvent_NoExistingLog_TreatedAsEmpty(t *testing.T) {
 		LatestByZoneID(context.Background(), zoneID).
 		Return(nil, errors.New(errors.ErrNotFound, "capacity log not found"))
 
-	// Expect Append with occupied=1, available=19 (entry from zero)
 	capRepo.EXPECT().
 		Append(context.Background(), mock.MatchedBy(func(log *zone.ZoneCapacityLog) bool {
 			return log.ZoneID == zoneID &&

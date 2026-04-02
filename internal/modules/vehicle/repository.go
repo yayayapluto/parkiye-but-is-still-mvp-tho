@@ -2,6 +2,7 @@ package vehicle
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -81,21 +82,52 @@ func (r *vehicleRepo) FindByPlate(ctx context.Context, plate string) (*Vehicle, 
 	return &v, nil
 }
 
-func (r *vehicleRepo) FindAll(ctx context.Context, typeID *uuid.UUID, page, pageSize int) ([]Vehicle, int64, error) {
+func (r *vehicleRepo) FindAll(ctx context.Context, filter ListVehicleFilter, page, pageSize int) ([]Vehicle, int64, error) {
 	var vehicles []Vehicle
 	var total int64
 
 	q := r.db.WithContext(ctx).Model(&Vehicle{})
-	if typeID != nil {
-		q = q.Where("vehicle_type_id = ?", *typeID)
+
+	if filter.VehicleTypeID != nil {
+		q = q.Where("vehicle_type_id = ?", *filter.VehicleTypeID)
+	}
+
+	if filter.PlateNumber != "" {
+		q = q.Where("plate_number ILIKE ?", "%"+filter.PlateNumber+"%")
+	}
+
+	if filter.Source != nil {
+		q = q.Where("source = ?", *filter.Source)
+	}
+
+	if filter.Search != "" {
+		q = q.Where("plate_number ILIKE ? OR notes ILIKE ?", "%"+filter.Search+"%", "%"+filter.Search+"%")
+	}
+
+	if filter.DateFrom != nil {
+		q = q.Where("created_at >= ?", *filter.DateFrom)
+	}
+
+	if filter.DateTo != nil {
+		q = q.Where("created_at <= ?", *filter.DateTo)
 	}
 
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, errors.FromDB(err, "failed to count vehicles")
 	}
 
+	sortCol := "created_at"
+	sortOrder := "desc"
+
+	if filter.SortBy != "" {
+		sortCol = filter.SortBy
+	}
+	if strings.ToLower(filter.SortOrder) == "asc" {
+		sortOrder = "asc"
+	}
+
 	offset := (page - 1) * pageSize
-	if err := q.Preload("VehicleType").Order("created_at desc").Offset(offset).Limit(pageSize).Find(&vehicles).Error; err != nil {
+	if err := q.Preload("VehicleType").Order(fmt.Sprintf("%s %s", sortCol, sortOrder)).Offset(offset).Limit(pageSize).Find(&vehicles).Error; err != nil {
 		return nil, 0, errors.FromDB(err, "failed to list vehicles")
 	}
 	return vehicles, total, nil

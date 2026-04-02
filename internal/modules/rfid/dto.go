@@ -14,6 +14,19 @@ type LinkVehicleRequest struct {
 	VehicleID uuid.UUID `json:"vehicle_id" validate:"required"`
 }
 
+type LinkedVehicle struct {
+	ID          uuid.UUID `json:"id"`
+	PlateNumber string    `json:"plate_number"`
+	VehicleType struct {
+		ID   uuid.UUID `json:"id"`
+		Name string    `json:"name"`
+	} `json:"vehicle_type"`
+}
+
+type RFIDCardEnrichment struct {
+	Vehicle *LinkedVehicle
+}
+
 type RFIDCardResponse struct {
 	ID            uuid.UUID  `json:"id"`
 	CardUID       string     `json:"card_uid"`
@@ -22,10 +35,13 @@ type RFIDCardResponse struct {
 	CreatedAt     time.Time  `json:"created_at"`
 	DeactivatedAt *time.Time `json:"deactivated_at"`
 	DeactivatedBy *uuid.UUID `json:"deactivated_by"`
+
+	// Enriched fields
+	Vehicle *LinkedVehicle `json:"vehicle,omitempty"`
 }
 
-func toResponse(c *RFIDCard) RFIDCardResponse {
-	return RFIDCardResponse{
+func toResponse(c *RFIDCard, enr *RFIDCardEnrichment) RFIDCardResponse {
+	res := RFIDCardResponse{
 		ID:            c.ID,
 		CardUID:       c.CardUID,
 		VehicleID:     c.VehicleID,
@@ -34,4 +50,21 @@ func toResponse(c *RFIDCard) RFIDCardResponse {
 		DeactivatedAt: c.DeactivatedAt,
 		DeactivatedBy: c.DeactivatedBy,
 	}
+
+	if enr != nil {
+		res.Vehicle = enr.Vehicle
+	}
+
+	return res
 }
+
+type ListRFIDFilter struct {
+	CardUID   string
+	IsActive  *bool
+	Search    string
+	DateFrom  *time.Time
+	DateTo    *time.Time
+	SortBy    string
+	SortOrder string
+}
+

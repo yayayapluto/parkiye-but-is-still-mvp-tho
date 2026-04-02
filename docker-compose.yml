@@ -34,6 +34,7 @@ services:
       APP_NAME: ${APP_NAME:-parkieee}
       APP_DEBUG: ${APP_DEBUG:-false}
       APP_URL: ${APP_URL:-}
+      ALLOW_ORIGINS: ${ALLOW_ORIGINS:-*}
       PLACE_NAME: ${PLACE_NAME:-Parkir}
       QR_SECRET: ${QR_SECRET}
       SERVER_HOST: 0.0.0.0

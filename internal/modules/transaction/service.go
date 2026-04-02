@@ -3,9 +3,11 @@ package transaction
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	feeDomain "parkieee/internal/modules/fee"
@@ -13,6 +15,7 @@ import (
 	rfidDomain "parkieee/internal/modules/rfid"
 	vehicleDomain "parkieee/internal/modules/vehicle"
 	zoneDomain "parkieee/internal/modules/zone"
+	notifDomain "parkieee/internal/modules/notification"
 	"parkieee/pkg/errors"
 	"parkieee/pkg/logger"
 	"parkieee/pkg/qr"
@@ -38,6 +41,11 @@ type service struct {
 	vehicleSvc    vehicleDomain.ServicePort
 	ocrSvc        ocrDomain.ServicePort
 	ocrResultRepo ocrDomain.OCRResultRepositoryPort
+
+	simMu sync.RWMutex
+	simCh []chan SimEvent
+
+	notifSvc notifDomain.ServicePort
 }
 
 func NewService(
@@ -52,6 +60,7 @@ func NewService(
 	vehicleSvc vehicleDomain.ServicePort,
 	ocrSvc ocrDomain.ServicePort,
 	ocrResultRepo ocrDomain.OCRResultRepositoryPort,
+	notifSvc notifDomain.ServicePort,
 	log logger.Logger,
 	baseURL string,
 	placeName string,
@@ -156,7 +165,23 @@ func (s *service) RecordEntry(ctx context.Context, req RecordEntryRequest, opera
 		go s.ocrSvc.DispatchOCRJob(context.Background(), created.ID, req.EntryPhotoPath, gate.ZoneID, types.OCRPhotoTypeEntry)
 	}
 
-	return s.txRepo.FindByID(ctx, created.ID)
+	// full, err := s.txRepo.FindByID(ctx, created.ID)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	go s.NotifySim(SimEvent{EventType: "entry", Tx: *created})
+
+	// Notify operator about new entry
+	go func() {
+		_ = s.notifSvc.NotifyRole(context.Background(), "operator", notifDomain.Notification{
+			Type:  "transaction",
+			Title: "Kendaraan Masuk",
+			Body:  fmt.Sprintf("Kendaraan masuk di pintu %s (Zona: %s)", created.EntryGateID, created.ZoneID), // Plate not yet available at entry
+			Metadata: datatypes.JSON([]byte(fmt.Sprintf(`{"transaction_id":"%s","zone_id":"%s"}`, created.ID, created.ZoneID))),
+		})
+	}()
+
+	return created, nil
 }
 
 func (s *service) RecordExit(ctx context.Context, id uuid.UUID, req RecordExitRequest, operatorID uuid.UUID) (*Transaction, error) {
@@ -166,7 +191,7 @@ func (s *service) RecordExit(ctx context.Context, id uuid.UUID, req RecordExitRe
 	}
 	if existing.Status != types.TransactionStatusOpen {
 		return nil, errors.New(errors.ErrValidation, fmt.Sprintf(
-			"transaction is not open (current status: %s)", existing.Status,
+			"Transaksi tidak dalam status terbuka (status saat ini: %s)", existing.Status,
 		))
 	}
 
@@ -226,7 +251,27 @@ func (s *service) RecordExit(ctx context.Context, id uuid.UUID, req RecordExitRe
 		go s.ocrSvc.DispatchOCRJob(context.Background(), existing.ID, req.ExitPhotoPath, existing.ZoneID, types.OCRPhotoTypeExit)
 	}
 
-	return s.txRepo.FindByID(ctx, id)
+	full, err := s.txRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	go s.NotifySim(SimEvent{EventType: "exit", Tx: *full})
+
+	// Notify cashier about vehicle awaiting payment
+	go func() {
+		feeStr := "0"
+		if full.CalculatedFee != nil {
+			feeStr = fmt.Sprintf("%d", *full.CalculatedFee)
+		}
+		_ = s.notifSvc.NotifyRole(context.Background(), "cashier", notifDomain.Notification{
+			Type:  "transaction",
+			Title: "Kendaraan Keluar",
+			Body:  fmt.Sprintf("Kendaraan keluar. Biaya: Rp%s. Silakan proses pembayaran.", feeStr),
+			Metadata: datatypes.JSON([]byte(fmt.Sprintf(`{"transaction_id":"%s"}`, full.ID))),
+		})
+	}()
+
+	return full, nil
 }
 
 func (s *service) Cancel(ctx context.Context, id uuid.UUID, reason string, operatorID uuid.UUID) (*Transaction, error) {
@@ -238,7 +283,7 @@ func (s *service) Cancel(ctx context.Context, id uuid.UUID, reason string, opera
 	// Only open transactions can be cancelled; other statuses are terminal or already paid.
 	if existing.Status != types.TransactionStatusOpen {
 		return nil, errors.New(errors.ErrValidation, fmt.Sprintf(
-			"only open transactions can be cancelled (current status: %s)", existing.Status,
+			"Hanya transaksi terbuka yang dapat dibatalkan (status saat ini: %s)", existing.Status,
 		))
 	}
 
@@ -306,7 +351,7 @@ func (s *service) MarkPaid(ctx context.Context, txID uuid.UUID, triggeredBy type
 	}
 	if existing.Status != types.TransactionStatusAwaitingPayment {
 		return errors.New(errors.ErrValidation, fmt.Sprintf(
-			"transaction is not awaiting payment (current status: %s)", existing.Status,
+			"Transaksi tidak dalam status menunggu pembayaran (status saat ini: %s)", existing.Status,
 		))
 	}
 
@@ -327,7 +372,7 @@ func (s *service) MarkPaid(ctx context.Context, txID uuid.UUID, triggeredBy type
 	})
 	if dbErr != nil {
 		s.log.Error(ctx, "mark paid: transaction rolled back", "tx_id", txID, "error", dbErr)
-		return errors.Wrap(dbErr, errors.ErrDatabaseError, "failed to mark transaction as paid")
+		return errors.Wrap(dbErr, errors.ErrDatabaseError, "Gagal menandai transaksi sebagai dibayar")
 	}
 	s.log.Info(ctx, "transaction marked paid", "tx_id", txID, "triggered_by", triggeredBy)
 	return nil
@@ -341,7 +386,7 @@ func (s *service) MarkExited(ctx context.Context, txID uuid.UUID, triggeredBy ty
 	}
 	if existing.Status != types.TransactionStatusPaid {
 		return errors.New(errors.ErrValidation, fmt.Sprintf(
-			"transaction is not paid (current status: %s)", existing.Status,
+			"Transaksi belum dibayar (status saat ini: %s)", existing.Status,
 		))
 	}
 
@@ -391,7 +436,7 @@ func (s *service) GetOpenByRFIDUID(ctx context.Context, uid string) (*Transactio
 	card, err := s.rfidSvc.GetCardByUID(ctx, uid)
 	if err != nil {
 		s.log.Warn(ctx, "get open by rfid: card not found", "uid", uid)
-		return nil, errors.New(errors.ErrNotFound, "rfid card not found")
+		return nil, errors.New(errors.ErrNotFound, "Kartu RFID tidak ditemukan")
 	}
 	// Cari open dulu, kalau tidak ada cari awaiting_payment
 	// (kendaraan tempel kartu ulang setelah exit tercatat)
@@ -400,7 +445,7 @@ func (s *service) GetOpenByRFIDUID(ctx context.Context, uid string) (*Transactio
 		tx, err = s.txRepo.FindAwaitingPaymentByRFIDCard(ctx, card.ID)
 		if err != nil {
 			s.log.Warn(ctx, "get open by rfid: no active transaction", "uid", uid, "card_id", card.ID)
-			return nil, errors.New(errors.ErrNotFound, "no active transaction for this rfid card")
+			return nil, errors.New(errors.ErrNotFound, "Tidak ada transaksi aktif untuk kartu RFID ini")
 		}
 	}
 	s.log.Debug(ctx, "get open by rfid", "uid", uid, "card_id", card.ID, "tx_id", tx.ID, "status", tx.Status)
@@ -433,7 +478,7 @@ func (s *service) SimulateEntryTime(ctx context.Context, id uuid.UUID, minutesAg
 		return nil, err
 	}
 	if existing.Status != types.TransactionStatusOpen {
-		return nil, errors.New(errors.ErrValidation, "only open transactions can be simulated")
+		return nil, errors.New(errors.ErrValidation, "Hanya transaksi terbuka yang dapat disimulasikan")
 	}
 	newEntryAt := time.Now().Add(-time.Duration(minutesAgo) * time.Minute)
 	existing.EntryAt = newEntryAt
@@ -441,7 +486,7 @@ func (s *service) SimulateEntryTime(ctx context.Context, id uuid.UUID, minutesAg
 		return s.txRepo.Update(ctx, tx, existing)
 	})
 	if dbErr != nil {
-		return nil, errors.Wrap(dbErr, errors.ErrDatabaseError, "failed to simulate entry time")
+		return nil, errors.Wrap(dbErr, errors.ErrDatabaseError, "Gagal melakukan simulasi waktu masuk")
 	}
 	s.log.Info(ctx, "[SIM] entry_at backdated", "tx_id", id, "minutes_ago", minutesAgo, "new_entry_at", newEntryAt)
 	return s.txRepo.FindByID(ctx, id)
@@ -455,7 +500,7 @@ func (s *service) MarkPaidAndExited(ctx context.Context, txID uuid.UUID, trigger
 	}
 	if existing.Status != types.TransactionStatusAwaitingPayment {
 		return errors.New(errors.ErrValidation, fmt.Sprintf(
-			"transaction is not awaiting payment (current status: %s)", existing.Status,
+			"Transaksi tidak dalam status menunggu pembayaran (status saat ini: %s)", existing.Status,
 		))
 	}
 
@@ -540,10 +585,10 @@ func (s *service) validateEntryGate(ctx context.Context, gateID uuid.UUID) (*zon
 		return nil, nil, err
 	}
 	if gate.GateType != types.GateTypeEntry {
-		return nil, nil, errors.New(errors.ErrValidation, "gate is not an entry gate")
+		return nil, nil, errors.New(errors.ErrValidation, "Gate bukan gate masuk")
 	}
 	if !gate.IsActive {
-		return nil, nil, errors.New(errors.ErrValidation, "entry gate is inactive")
+		return nil, nil, errors.New(errors.ErrValidation, "Gate masuk tidak aktif")
 	}
 
 	zone, err := s.zoneRepo.FindByID(ctx, gate.ZoneID)
@@ -551,7 +596,7 @@ func (s *service) validateEntryGate(ctx context.Context, gateID uuid.UUID) (*zon
 		return nil, nil, err
 	}
 	if !zone.IsActive {
-		return nil, nil, errors.New(errors.ErrValidation, "zone is inactive")
+		return nil, nil, errors.New(errors.ErrValidation, "Zona tidak aktif")
 	}
 
 	return gate, zone, nil
@@ -560,16 +605,16 @@ func (s *service) validateEntryGate(ctx context.Context, gateID uuid.UUID) (*zon
 func (s *service) validateExitGate(ctx context.Context, gateID uuid.UUID, expectedZoneID uuid.UUID) (*zoneDomain.Gate, error) {
 	gate, err := s.zoneGateRepo.FindByID(ctx, gateID)
 	if err != nil {
-		return nil, errors.New(errors.ErrNotFound, "exit gate not found")
+		return nil, errors.New(errors.ErrNotFound, "Gate keluar tidak ditemukan")
 	}
 	if gate.GateType != types.GateTypeExit {
-		return nil, errors.New(errors.ErrValidation, "gate is not an exit gate")
+		return nil, errors.New(errors.ErrValidation, "Gate bukan gate keluar")
 	}
 	if !gate.IsActive {
-		return nil, errors.New(errors.ErrValidation, "exit gate is inactive")
+		return nil, errors.New(errors.ErrValidation, "Gate keluar tidak aktif")
 	}
 	if gate.ZoneID != expectedZoneID {
-		return nil, errors.New(errors.ErrValidation, "exit gate does not belong to the same zone as the entry gate")
+		return nil, errors.New(errors.ErrValidation, "Gate keluar tidak berada di zona yang sama dengan gate masuk")
 	}
 	return gate, nil
 }
@@ -582,14 +627,14 @@ func (s *service) resolveRFIDForEntry(ctx context.Context, req RecordEntryReques
 	}
 
 	if req.RFIDCardUID == "" {
-		return nil, errors.New(errors.ErrValidation, "rfid_card_uid is required for rfid entry method")
+		return nil, errors.New(errors.ErrValidation, "UID kartu RFID wajib diisi untuk metode masuk RFID")
 	}
 	card, err := s.rfidSvc.RegisterOrGet(ctx, req.RFIDCardUID)
 	if err != nil {
-		return nil, errors.New(errors.ErrInternal, "failed to register rfid card")
+		return nil, errors.New(errors.ErrInternal, "Gagal mendaftarkan kartu RFID")
 	}
 	if !card.IsActive {
-		return nil, errors.New(errors.ErrValidation, "rfid card is inactive")
+		return nil, errors.New(errors.ErrValidation, "Kartu RFID tidak aktif")
 	}
 
 	if existing, err := s.txRepo.FindOpenByRFIDCard(ctx, card.ID); err == nil && existing != nil {
@@ -600,7 +645,19 @@ func (s *service) resolveRFIDForEntry(ctx context.Context, req RecordEntryReques
 			"existing_tx_code", existing.TransactionCode,
 		)
 		return nil, errors.New(errors.ErrConflict, fmt.Sprintf(
-			"rfid card already has an open transaction: %s", existing.TransactionCode,
+			"Kartu RFID memiliki transaksi aktif (terbuka): %s", existing.TransactionCode,
+		))
+	}
+	if existing, err := s.txRepo.FindAwaitingPaymentByRFIDCard(ctx, card.ID); err == nil && existing != nil {
+		s.log.Info(ctx, "entry rejected: rfid card has active transaction",
+			"card_id", card.ID,
+			"card_uid", req.RFIDCardUID,
+			"existing_tx_id", existing.ID,
+			"existing_tx_code", existing.TransactionCode,
+			"status", "awaiting_payment",
+		)
+		return nil, errors.New(errors.ErrConflict, fmt.Sprintf(
+			"Kartu RFID memiliki transaksi aktif (menunggu pembayaran): %s", existing.TransactionCode,
 		))
 	}
 
@@ -613,14 +670,14 @@ func (s *service) validateRFIDForExit(ctx context.Context, req RecordExitRequest
 		return nil
 	}
 	if req.RFIDCardUID == "" {
-		return errors.New(errors.ErrValidation, "rfid_card_uid is required for rfid exit method")
+		return errors.New(errors.ErrValidation, "UID kartu RFID wajib diisi untuk metode keluar RFID")
 	}
 	card, err := s.rfidSvc.GetCardByUID(ctx, req.RFIDCardUID)
 	if err != nil {
-		return errors.New(errors.ErrNotFound, "rfid card not found")
+		return errors.New(errors.ErrNotFound, "Kartu RFID tidak ditemukan")
 	}
 	if !card.IsActive {
-		return errors.New(errors.ErrValidation, "rfid card is inactive")
+		return errors.New(errors.ErrValidation, "Kartu RFID tidak aktif")
 	}
 	if existing.RFIDCardID == nil || *existing.RFIDCardID != card.ID {
 		s.log.Info(ctx, "exit rejected: rfid card mismatch",
@@ -629,7 +686,7 @@ func (s *service) validateRFIDForExit(ctx context.Context, req RecordExitRequest
 			"presented_card_id", card.ID,
 			"presented_card_uid", req.RFIDCardUID,
 		)
-		return errors.New(errors.ErrValidation, "rfid card does not match the card used at entry")
+		return errors.New(errors.ErrValidation, "Kartu RFID tidak cocok dengan kartu yang digunakan saat masuk")
 	}
 	return nil
 }
@@ -656,7 +713,7 @@ func (s *service) resolveVehicleTypeForFee(ctx context.Context, existing *Transa
 		return *zone.ForVehicleTypeID, nil
 	}
 	return uuid.Nil, errors.New(errors.ErrValidation,
-		"vehicle_type_id is required: no vehicle linked, no vehicle_type_id in request, and zone has no default vehicle type")
+		"ID jenis kendaraan diperlukan: tidak ada kendaraan terhubung, tidak ada vehicle_type_id dalam permintaan, dan zona tidak memiliki jenis kendaraan default")
 }
 
 func (s *service) checkZoneCapacity(ctx context.Context, gate *zoneDomain.Gate, zone *zoneDomain.Zone) (*zoneDomain.ZoneCapacityResponse, error) {
@@ -672,7 +729,7 @@ func (s *service) checkZoneCapacity(ctx context.Context, gate *zoneDomain.Gate, 
 			"occupied", capacity.OccupiedCount,
 		)
 		return nil, errors.New(errors.ErrConflict, fmt.Sprintf(
-			"zone '%s' is at full capacity (%d/%d)", zone.Name, capacity.OccupiedCount, capacity.Capacity,
+			"Zona '%s' sudah penuh (%d/%d)", zone.Name, capacity.OccupiedCount, capacity.Capacity,
 		))
 	}
 	return capacity, nil
@@ -700,7 +757,7 @@ func (s *service) calculateExitFee(ctx context.Context, existing *Transaction, v
 			"exit_at", exitAt,
 			"error", err,
 		)
-		return 0, errors.New(errors.ErrInternal, "failed to calculate fee: "+err.Error())
+		return 0, errors.New(errors.ErrInternal, "Gagal menghitung tarif: "+err.Error())
 	}
 	return fee, nil
 }
@@ -843,4 +900,185 @@ func appendCapacityLog(
 		RecordedAt:     time.Now(),
 	}
 	return tx.WithContext(ctx).Create(&log).Error
+}
+func (s *service) NotifySim(event SimEvent) {
+	s.simMu.RLock()
+	chans := make([]chan SimEvent, len(s.simCh))
+	copy(chans, s.simCh)
+	s.simMu.RUnlock()
+	for _, ch := range chans {
+		select {
+		case ch <- event:
+		default:
+		}
+	}
+}
+
+func (s *service) ListenSim() (<-chan SimEvent, func()) {
+	ch := make(chan SimEvent, 16)
+	s.simMu.Lock()
+	s.simCh = append(s.simCh, ch)
+	s.simMu.Unlock()
+	cleanup := func() {
+		s.simMu.Lock()
+		defer s.simMu.Unlock()
+		for i, c := range s.simCh {
+			if c == ch {
+				s.simCh = append(s.simCh[:i], s.simCh[i+1:]...)
+				break
+			}
+		}
+		close(ch)
+	}
+	return ch, cleanup
+}
+
+func (s *service) EnrichTransaction(ctx context.Context, tx *Transaction, includes map[string]bool) *TransactionEnrichment {
+	if includes == nil || len(includes) == 0 {
+		return nil
+	}
+	enr := &TransactionEnrichment{}
+
+	if includes["zone"] {
+		zone, err := s.zoneSvc.GetZone(ctx, tx.ZoneID)
+		if err == nil {
+			enr.Zone = &ZoneSummary{ID: zone.ID, Name: zone.Name, Capacity: zone.Capacity}
+		}
+	}
+
+	if includes["entry_gate"] {
+		gate, err := s.zoneGateRepo.FindByID(ctx, tx.EntryGateID)
+		if err == nil {
+			enr.EntryGate = &GateSummary{ID: gate.ID, Name: gate.Name, GateType: gate.GateType, Mode: gate.Mode}
+		}
+	}
+
+	if includes["exit_gate"] && tx.ExitGateID != nil {
+		gate, err := s.zoneGateRepo.FindByID(ctx, *tx.ExitGateID)
+		if err == nil {
+			enr.ExitGate = &GateSummary{ID: gate.ID, Name: gate.Name, GateType: gate.GateType, Mode: gate.Mode}
+		}
+	}
+
+	if includes["vehicle"] && tx.VehicleID != nil {
+		v, err := s.vehicleSvc.GetVehicle(ctx, *tx.VehicleID)
+		if err == nil {
+			vt, _ := s.vehicleSvc.GetVehicleType(ctx, v.VehicleTypeID)
+			enr.Vehicle = &VehicleSummary{
+				ID:          v.ID,
+				PlateNumber: v.PlateNumber,
+			}
+			if vt != nil {
+				enr.Vehicle.VehicleType.ID = vt.ID
+				enr.Vehicle.VehicleType.Name = vt.Name
+			}
+		}
+	}
+
+	if includes["rfid_card"] && tx.RFIDCardID != nil {
+		card, err := s.rfidSvc.GetCard(ctx, *tx.RFIDCardID)
+		if err == nil {
+			enr.RFIDCard = &RFIDSummary{ID: card.ID, UID: card.CardUID, IsActive: card.IsActive}
+		}
+	}
+
+	return enr
+}
+
+func (s *service) EnrichTransactionList(ctx context.Context, txs []Transaction, includes map[string]bool) map[uuid.UUID]TransactionEnrichment {
+	if includes == nil || len(includes) == 0 {
+		return nil
+	}
+
+	res := make(map[uuid.UUID]TransactionEnrichment)
+
+	zoneIDs := make(map[uuid.UUID]bool)
+	gateIDs := make(map[uuid.UUID]bool)
+	vehicleIDs := make(map[uuid.UUID]bool)
+	cardIDs := make(map[uuid.UUID]bool)
+
+	for _, t := range txs {
+		if includes["zone"] {
+			zoneIDs[t.ZoneID] = true
+		}
+		if includes["entry_gate"] {
+			gateIDs[t.EntryGateID] = true
+		}
+		if includes["exit_gate"] && t.ExitGateID != nil {
+			gateIDs[*t.ExitGateID] = true
+		}
+		if includes["vehicle"] && t.VehicleID != nil {
+			vehicleIDs[*t.VehicleID] = true
+		}
+		if includes["rfid_card"] && t.RFIDCardID != nil {
+			cardIDs[*t.RFIDCardID] = true
+		}
+	}
+
+	// Fetch unique zones
+	zones := make(map[uuid.UUID]*ZoneSummary)
+	for id := range zoneIDs {
+		z, err := s.zoneSvc.GetZone(ctx, id)
+		if err == nil {
+			zones[id] = &ZoneSummary{ID: z.ID, Name: z.Name, Capacity: z.Capacity}
+		}
+	}
+
+	// Fetch unique gates
+	gates := make(map[uuid.UUID]*GateSummary)
+	for id := range gateIDs {
+		g, err := s.zoneGateRepo.FindByID(ctx, id)
+		if err == nil {
+			gates[id] = &GateSummary{ID: g.ID, Name: g.Name, GateType: g.GateType, Mode: g.Mode}
+		}
+	}
+
+	// Fetch unique vehicles
+	vehicles := make(map[uuid.UUID]*VehicleSummary)
+	for id := range vehicleIDs {
+		v, err := s.vehicleSvc.GetVehicle(ctx, id)
+		if err == nil {
+			vt, _ := s.vehicleSvc.GetVehicleType(ctx, v.VehicleTypeID)
+			vs := &VehicleSummary{
+				ID:          v.ID,
+				PlateNumber: v.PlateNumber,
+			}
+			if vt != nil {
+				vs.VehicleType.ID = vt.ID
+				vs.VehicleType.Name = vt.Name
+			}
+			vehicles[id] = vs
+		}
+	}
+
+	// Fetch unique cards
+	cards := make(map[uuid.UUID]*RFIDSummary)
+	for id := range cardIDs {
+		c, err := s.rfidSvc.GetCard(ctx, id)
+		if err == nil {
+			cards[id] = &RFIDSummary{ID: c.ID, UID: c.CardUID, IsActive: c.IsActive}
+		}
+	}
+
+	for _, t := range txs {
+		enr := TransactionEnrichment{}
+		if includes["zone"] {
+			enr.Zone = zones[t.ZoneID]
+		}
+		if includes["entry_gate"] {
+			enr.EntryGate = gates[t.EntryGateID]
+		}
+		if includes["exit_gate"] && t.ExitGateID != nil {
+			enr.ExitGate = gates[*t.ExitGateID]
+		}
+		if includes["vehicle"] && t.VehicleID != nil {
+			enr.Vehicle = vehicles[*t.VehicleID]
+		}
+		if includes["rfid_card"] && t.RFIDCardID != nil {
+			enr.RFIDCard = cards[*t.RFIDCardID]
+		}
+		res[t.ID] = enr
+	}
+
+	return res
 }

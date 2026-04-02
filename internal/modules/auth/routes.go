@@ -11,6 +11,7 @@ func RegisterRoutes(router fiber.Router, svc ServicePort, v *validator.Validator
 
 	auth := router.Group("/auth")
 	auth.Post("/login", adapter.h.login)
+	auth.Post("/refresh", adapter.h.refresh)
 
 	protected := auth.Group("")
 	protected.Use(middleware.Auth(svc))
@@ -20,6 +21,8 @@ func RegisterRoutes(router fiber.Router, svc ServicePort, v *validator.Validator
 
 	users := protected.Group("/users")
 	users.Use(middleware.RequireRole("admin", "owner"))
+	users.Get("", adapter.h.listUsers)
+	users.Get("/:id", adapter.h.getUser)
 	users.Post("", adapter.h.createUser)
 	users.Put("/:id", adapter.h.updateUser)
 	users.Delete("/:id", adapter.h.deactivateUser)

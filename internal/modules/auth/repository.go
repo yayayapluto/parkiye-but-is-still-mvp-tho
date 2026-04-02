@@ -43,6 +43,39 @@ func (r *userRepository) FindByEmail(ctx context.Context, email string) (*User, 
 	return &user, nil
 }
 
+func (r *userRepository) FindByUsername(ctx context.Context, username string) (*User, error) {
+	var user User
+	err := r.db.WithContext(ctx).
+		Preload("Role.Permissions.Permission").
+		Where("deleted_at IS NULL").
+		First(&user, "username = ?", username).Error
+	if err != nil {
+		return nil, errors.FromDB(err, "user not found")
+	}
+	return &user, nil
+}
+
+func (r *userRepository) List(ctx context.Context, roleID *uuid.UUID, activeOnly *bool, page, pageSize int) ([]User, int64, error) {
+	var users []User
+	var total int64
+
+	q := r.db.WithContext(ctx).Model(&User{}).Where("deleted_at IS NULL")
+	if roleID != nil {
+		q = q.Where("role_id = ?", *roleID)
+	}
+	if activeOnly != nil {
+		q = q.Where("is_active = ?", *activeOnly)
+	}
+
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, errors.FromDB(err, "")
+	}
+
+	offset := (page - 1) * pageSize
+	err := q.Preload("Role").Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&users).Error
+	return users, total, errors.FromDB(err, "")
+}
+
 func (r *userRepository) Create(ctx context.Context, user *User) error {
 	return errors.FromDB(r.db.WithContext(ctx).Create(user).Error, "")
 }
@@ -251,6 +284,79 @@ func (r *sessionRepository) DeleteExpired(ctx context.Context, before time.Time)
 		r.db.WithContext(ctx).
 			Where("expires_at < ?", before).
 			Delete(&UserSession{}).Error,
+		"",
+	)
+}
+
+type refreshTokenRepository struct {
+	db *gorm.DB
+}
+
+func NewRefreshTokenRepository(db *gorm.DB) RefreshTokenRepositoryPort {
+	return &refreshTokenRepository{db: db}
+}
+
+func (r *refreshTokenRepository) Create(ctx context.Context, rt *RefreshToken) error {
+	return errors.FromDB(r.db.WithContext(ctx).Create(rt).Error, "")
+}
+
+func (r *refreshTokenRepository) FindByTokenHash(ctx context.Context, tokenHash string) (*RefreshToken, error) {
+	var rt RefreshToken
+	err := r.db.WithContext(ctx).
+		Where("token_hash = ? AND revoked_at IS NULL AND expires_at > ?", tokenHash, time.Now()).
+		First(&rt).Error
+	if err != nil {
+		return nil, errors.FromDB(err, "refresh token not found or expired")
+	}
+	return &rt, nil
+}
+
+func (r *refreshTokenRepository) Revoke(ctx context.Context, id uuid.UUID, replacedBy *uuid.UUID) error {
+	now := time.Now()
+	upd := map[string]any{"revoked_at": now}
+	if replacedBy != nil {
+		upd["replaced_by"] = replacedBy
+	}
+	result := r.db.WithContext(ctx).
+		Model(&RefreshToken{}).
+		Where("id = ? AND revoked_at IS NULL", id).
+		Updates(upd)
+	if result.Error != nil {
+		return errors.FromDB(result.Error, "")
+	}
+	if result.RowsAffected == 0 {
+		return errors.New(errors.ErrNotFound, "refresh token not found")
+	}
+	return nil
+}
+
+func (r *refreshTokenRepository) RevokeAllByUserID(ctx context.Context, userID uuid.UUID) error {
+	now := time.Now()
+	return errors.FromDB(
+		r.db.WithContext(ctx).
+			Model(&RefreshToken{}).
+			Where("user_id = ? AND revoked_at IS NULL", userID).
+			Update("revoked_at", now).Error,
+		"",
+	)
+}
+
+func (r *refreshTokenRepository) RevokeBySessionID(ctx context.Context, sessionID uuid.UUID) error {
+	now := time.Now()
+	return errors.FromDB(
+		r.db.WithContext(ctx).
+			Model(&RefreshToken{}).
+			Where("session_id = ? AND revoked_at IS NULL", sessionID).
+			Update("revoked_at", now).Error,
+		"",
+	)
+}
+
+func (r *refreshTokenRepository) DeleteExpired(ctx context.Context, before time.Time) error {
+	return errors.FromDB(
+		r.db.WithContext(ctx).
+			Where("expires_at < ?", before).
+			Delete(&RefreshToken{}).Error,
 		"",
 	)
 }

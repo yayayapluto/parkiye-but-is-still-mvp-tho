@@ -4,6 +4,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"parkieee/pkg/include"
 	"parkieee/pkg/middleware"
 	"parkieee/pkg/response"
 	"parkieee/pkg/validator"
@@ -25,7 +26,7 @@ func (h *handler) listFeeConfigs(c *fiber.Ctx) error {
 	if raw := c.Query("zone_id"); raw != "" {
 		id, err := uuid.Parse(raw)
 		if err != nil {
-			return response.BadRequest(c, "invalid zone_id", nil)
+			return response.BadRequest(c, "ID zona tidak valid", nil)
 		}
 		zoneID = &id
 	}
@@ -34,7 +35,7 @@ func (h *handler) listFeeConfigs(c *fiber.Ctx) error {
 	if raw := c.Query("vehicle_type_id"); raw != "" {
 		id, err := uuid.Parse(raw)
 		if err != nil {
-			return response.BadRequest(c, "invalid vehicle_type_id", nil)
+			return response.BadRequest(c, "ID jenis kendaraan tidak valid", nil)
 		}
 		vehicleTypeID = &id
 	}
@@ -44,9 +45,17 @@ func (h *handler) listFeeConfigs(c *fiber.Ctx) error {
 		return err
 	}
 
+	includes := include.ParseInclude(c)
+	enrMap := h.svc.EnrichConfigList(c.Context(), configs, includes)
+
 	res := make([]FeeConfigResponse, 0, len(configs))
 	for i := range configs {
-		res = append(res, toFeeConfigResponse(&configs[i]))
+		var enr *FeeEnrichment
+		if enrMap != nil {
+			e := enrMap[configs[i].ID]
+			enr = &e
+		}
+		res = append(res, toFeeConfigResponse(&configs[i], enr))
 	}
 
 	queryParams := map[string]string{}
@@ -69,22 +78,24 @@ func (h *handler) listFeeConfigs(c *fiber.Ctx) error {
 func (h *handler) getFeeConfig(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		return response.BadRequest(c, "invalid fee config id", nil)
+		return response.BadRequest(c, "ID konfigurasi tarif tidak valid", nil)
 	}
 	cfg, err := h.svc.GetFeeConfig(c.Context(), id)
 	if err != nil {
 		return err
 	}
-	return response.Success(c, "ok", toFeeConfigResponse(cfg))
+	includes := include.ParseInclude(c)
+	enr := h.svc.EnrichConfig(c.Context(), cfg, includes)
+	return response.Success(c, "ok", toFeeConfigResponse(cfg, enr))
 }
 
 func (h *handler) createFeeConfig(c *fiber.Ctx) error {
 	var req CreateFeeConfigRequest
 	if err := c.BodyParser(&req); err != nil {
-		return response.BadRequest(c, "invalid request body", nil)
+		return response.BadRequest(c, "Format data tidak valid", nil)
 	}
 	if errs := h.v.Validate(req); errs != nil {
-		return response.BadRequest(c, "validation failed", errs)
+		return response.BadRequest(c, "Validasi gagal", errs)
 	}
 
 	createdBy := middleware.GetUserID(c)
@@ -92,13 +103,13 @@ func (h *handler) createFeeConfig(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return response.Created(c, "fee config created", toFeeConfigResponse(cfg))
+	return response.Created(c, "fee config created", toFeeConfigResponse(cfg, nil))
 }
 
 func (h *handler) deactivateFeeConfig(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		return response.BadRequest(c, "invalid fee config id", nil)
+		return response.BadRequest(c, "ID konfigurasi tarif tidak valid", nil)
 	}
 	if err := h.svc.DeactivateFeeConfig(c.Context(), id); err != nil {
 		return err
@@ -130,7 +141,7 @@ func (h *handler) listHolidayRates(c *fiber.Ctx) error {
 func (h *handler) getHolidayRate(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		return response.BadRequest(c, "invalid holiday rate id", nil)
+		return response.BadRequest(c, "ID tarif libur tidak valid", nil)
 	}
 	rate, err := h.svc.GetHolidayRate(c.Context(), id)
 	if err != nil {
@@ -142,10 +153,10 @@ func (h *handler) getHolidayRate(c *fiber.Ctx) error {
 func (h *handler) createHolidayRate(c *fiber.Ctx) error {
 	var req CreateHolidayRateRequest
 	if err := c.BodyParser(&req); err != nil {
-		return response.BadRequest(c, "invalid request body", nil)
+		return response.BadRequest(c, "Format data tidak valid", nil)
 	}
 	if errs := h.v.Validate(req); errs != nil {
-		return response.BadRequest(c, "validation failed", errs)
+		return response.BadRequest(c, "Validasi gagal", errs)
 	}
 
 	createdBy := middleware.GetUserID(c)
@@ -159,15 +170,15 @@ func (h *handler) createHolidayRate(c *fiber.Ctx) error {
 func (h *handler) updateHolidayRate(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		return response.BadRequest(c, "invalid holiday rate id", nil)
+		return response.BadRequest(c, "ID tarif libur tidak valid", nil)
 	}
 
 	var req UpdateHolidayRateRequest
 	if err := c.BodyParser(&req); err != nil {
-		return response.BadRequest(c, "invalid request body", nil)
+		return response.BadRequest(c, "Format data tidak valid", nil)
 	}
 	if errs := h.v.Validate(req); errs != nil {
-		return response.BadRequest(c, "validation failed", errs)
+		return response.BadRequest(c, "Validasi gagal", errs)
 	}
 
 	rate, err := h.svc.UpdateHolidayRate(c.Context(), id, req)
@@ -180,7 +191,7 @@ func (h *handler) updateHolidayRate(c *fiber.Ctx) error {
 func (h *handler) deleteHolidayRate(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		return response.BadRequest(c, "invalid holiday rate id", nil)
+		return response.BadRequest(c, "ID tarif libur tidak valid", nil)
 	}
 	if err := h.svc.DeleteHolidayRate(c.Context(), id); err != nil {
 		return err

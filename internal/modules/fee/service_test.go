@@ -43,7 +43,7 @@ func newService(
 ) fee.ServicePort {
 	// FeeTierRepositoryPort is not called by CalculateFee
 	tierRepo := feemocks.NewMockFeeTierRepositoryPort(t)
-	return fee.NewService(cfgRepo, tierRepo, holidayRepo, noopLogger{})
+	return fee.NewService(cfgRepo, tierRepo, holidayRepo, nil, nil, noopLogger{})
 }
 
 func TestCalculateTierFee(t *testing.T) {

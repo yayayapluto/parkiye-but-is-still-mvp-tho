@@ -70,3 +70,14 @@ func toVehicleResponse(v *Vehicle) VehicleResponse {
 		UpdatedAt:   v.UpdatedAt,
 	}
 }
+
+type ListVehicleFilter struct {
+	PlateNumber   string
+	VehicleTypeID *uuid.UUID
+	Source        *types.VehicleSource
+	Search        string
+	DateFrom      *time.Time
+	DateTo        *time.Time
+	SortBy        string
+	SortOrder     string
+}

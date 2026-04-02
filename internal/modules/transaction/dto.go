@@ -48,13 +48,62 @@ type OCRPhotoSummary struct {
 	IsVerified       bool            `json:"is_verified"`
 }
 
+type ZoneSummary struct {
+	ID       uuid.UUID `json:"id"`
+	Name     string    `json:"name"`
+	Capacity int       `json:"capacity"`
+}
+
+type GateSummary struct {
+	ID       uuid.UUID      `json:"id"`
+	Name     string         `json:"name"`
+	GateType types.GateType `json:"gate_type"`
+	Mode     types.GateMode `json:"mode"`
+}
+
+type VehicleSummary struct {
+	ID          uuid.UUID `json:"id"`
+	PlateNumber string    `json:"plate_number"`
+	VehicleType struct {
+		ID   uuid.UUID `json:"id"`
+		Name string    `json:"name"`
+	} `json:"vehicle_type"`
+}
+
+type RFIDSummary struct {
+	ID       uuid.UUID `json:"id"`
+	UID      string    `json:"uid"`
+	IsActive bool      `json:"is_active"`
+}
+
+type SimEventType string
+
+const (
+	SimEventEntryRecord SimEventType = "entry_record"
+	SimEventExitRecord  SimEventType = "exit_record"
+	SimEventError       SimEventType = "error"
+)
+
+type SimEvent struct {
+	EventType string      `json:"event_type"`
+	Tx        Transaction `json:"tx"`
+}
+
+type TransactionEnrichment struct {
+	Zone      *ZoneSummary
+	EntryGate *GateSummary
+	ExitGate  *GateSummary
+	Vehicle   *VehicleSummary
+	RFIDCard  *RFIDSummary
+}
+
 type TransactionResponse struct {
 	ID               uuid.UUID               `json:"id"`
 	TransactionCode  string                  `json:"transaction_code"`
 	EntryGateID      uuid.UUID               `json:"entry_gate_id"`
 	EntryMethod      types.EntryMethod       `json:"entry_method"`
 	RFIDCardID       *uuid.UUID              `json:"rfid_card_id"`
-	EntryQRCode      *string                 `json:"entry_qr_code"`
+	EntryQRCodeCode  *string                 `json:"entry_qr_code"`
 	EntryQRCodeImage *string                 `json:"entry_qr_code_image"`
 	EntryAt          time.Time               `json:"entry_at"`
 	EntryPhotoURL    *string                 `json:"entry_photo_url"`
@@ -74,6 +123,13 @@ type TransactionResponse struct {
 	CreatedAt        time.Time               `json:"created_at"`
 	UpdatedAt        time.Time               `json:"updated_at"`
 	OCR              []OCRPhotoSummary       `json:"ocr,omitempty"`
+
+	// Enriched fields
+	Zone      *ZoneSummary    `json:"zone,omitempty"`
+	EntryGate *GateSummary    `json:"entry_gate,omitempty"`
+	ExitGate  *GateSummary    `json:"exit_gate,omitempty"`
+	Vehicle   *VehicleSummary `json:"vehicle,omitempty"`
+	RFIDCard  *RFIDSummary    `json:"rfid_card,omitempty"`
 }
 
 type TransactionLogResponse struct {
@@ -88,7 +144,7 @@ type TransactionLogResponse struct {
 	CreatedAt         time.Time              `json:"created_at"`
 }
 
-func toResponse(t *Transaction, ocrResults []ocrDomain.OCRResultWithJob) TransactionResponse {
+func toResponse(t *Transaction, ocrResults []ocrDomain.OCRResultWithJob, enr *TransactionEnrichment) TransactionResponse {
 	var ocrSummary []OCRPhotoSummary
 	for _, r := range ocrResults {
 		ocrSummary = append(ocrSummary, OCRPhotoSummary{
@@ -102,13 +158,13 @@ func toResponse(t *Transaction, ocrResults []ocrDomain.OCRResultWithJob) Transac
 			IsVerified:       r.IsVerified,
 		})
 	}
-	return TransactionResponse{
+	res := TransactionResponse{
 		ID:               t.ID,
 		TransactionCode:  t.TransactionCode,
 		EntryGateID:      t.EntryGateID,
 		EntryMethod:      t.EntryMethod,
 		RFIDCardID:       t.RFIDCardID,
-		EntryQRCode:      t.EntryQRCode,
+		EntryQRCodeCode:  t.EntryQRCode,
 		EntryQRCodeImage: t.EntryQRCodeImage,
 		EntryAt:          t.EntryAt,
 		EntryPhotoURL:    t.EntryPhotoURL,
@@ -129,6 +185,16 @@ func toResponse(t *Transaction, ocrResults []ocrDomain.OCRResultWithJob) Transac
 		UpdatedAt:        t.UpdatedAt,
 		OCR:              ocrSummary,
 	}
+
+	if enr != nil {
+		res.Zone = enr.Zone
+		res.EntryGate = enr.EntryGate
+		res.ExitGate = enr.ExitGate
+		res.Vehicle = enr.Vehicle
+		res.RFIDCard = enr.RFIDCard
+	}
+
+	return res
 }
 
 func toLogResponse(l *TransactionLog) TransactionLogResponse {
@@ -144,3 +210,4 @@ func toLogResponse(l *TransactionLog) TransactionLogResponse {
 		CreatedAt:         l.CreatedAt,
 	}
 }
+

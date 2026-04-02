@@ -2,8 +2,10 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,17 +29,18 @@ type cachedSession struct {
 }
 
 type service struct {
-	userRepo       UserRepositoryPort
-	roleRepo       RoleRepositoryPort
-	permRepo       PermissionRepositoryPort
-	rolePermRepo   RolePermissionRepositoryPort
-	sessionRepo    SessionRepositoryPort
-	loginLogRepo   LoginLogRepositoryPort
-	loginStatsRepo LoginStatsRepositoryPort
-	cfg            *config.Config
-	log            logger.Logger
-	sessionCache   sync.Map // key: tokenHash(string) → cachedSession
-	userRevokedAt  sync.Map // key: userID(string) → time.Time — kapan semua session user di-revoke
+	userRepo         UserRepositoryPort
+	roleRepo         RoleRepositoryPort
+	permRepo         PermissionRepositoryPort
+	rolePermRepo     RolePermissionRepositoryPort
+	sessionRepo      SessionRepositoryPort
+	refreshTokenRepo RefreshTokenRepositoryPort
+	loginLogRepo     LoginLogRepositoryPort
+	loginStatsRepo   LoginStatsRepositoryPort
+	cfg              *config.Config
+	log              logger.Logger
+	sessionCache     sync.Map // key: tokenHash(string) → cachedSession
+	userRevokedAt    sync.Map // key: userID(string) → time.Time — kapan semua session user di-revoke
 }
 
 func NewService(
@@ -46,25 +49,27 @@ func NewService(
 	permRepo PermissionRepositoryPort,
 	rolePermRepo RolePermissionRepositoryPort,
 	sessionRepo SessionRepositoryPort,
+	refreshTokenRepo RefreshTokenRepositoryPort,
 	loginLogRepo LoginLogRepositoryPort,
 	loginStatsRepo LoginStatsRepositoryPort,
 	cfg *config.Config,
 	log logger.Logger,
 ) ServicePort {
 	return &service{
-		userRepo:       userRepo,
-		roleRepo:       roleRepo,
-		permRepo:       permRepo,
-		rolePermRepo:   rolePermRepo,
-		sessionRepo:    sessionRepo,
-		loginLogRepo:   loginLogRepo,
-		loginStatsRepo: loginStatsRepo,
-		cfg:            cfg,
-		log:            log,
+		userRepo:         userRepo,
+		roleRepo:         roleRepo,
+		permRepo:         permRepo,
+		rolePermRepo:     rolePermRepo,
+		sessionRepo:      sessionRepo,
+		refreshTokenRepo: refreshTokenRepo,
+		loginLogRepo:     loginLogRepo,
+		loginStatsRepo:   loginStatsRepo,
+		cfg:              cfg,
+		log:              log,
 	}
 }
 
-func (s *service) Login(ctx context.Context, email, password, ip, userAgent string) (*LoginResponse, error) {
+func (s *service) Login(ctx context.Context, identifier, password, ip, userAgent string) (*LoginResponse, error) {
 	logEntry := &UserLoginLog{
 		IPAddress:   ip,
 		UserAgent:   userAgent,
@@ -79,22 +84,29 @@ func (s *service) Login(ctx context.Context, email, password, ip, userAgent stri
 		return nil, err
 	}
 
-	user, err := s.userRepo.FindByEmail(ctx, email)
+	// Deteksi apakah identifier adalah email (mengandung @) atau username
+	var user *User
+	var err error
+	if strings.Contains(identifier, "@") {
+		user, err = s.userRepo.FindByEmail(ctx, identifier)
+	} else {
+		user, err = s.userRepo.FindByUsername(ctx, identifier)
+	}
 	if err != nil {
 		// Jangan expose "user not found" ke client — selalu kasih pesan generic
-		return fail(types.FailureUserNotFound, errors.New(errors.ErrInvalidCredentials, "invalid email or password"))
+		return fail(types.FailureUserNotFound, errors.New(errors.ErrInvalidCredentials, "Email/username atau kata sandi salah"))
 	}
 
 	logEntry.UserID = &user.ID
 
 	if !user.IsActive || user.DeletedAt != nil {
-		return fail(types.FailureAccountInactive, errors.New(errors.ErrUnauthorized, "account is inactive"))
+		return fail(types.FailureAccountInactive, errors.New(errors.ErrUnauthorized, "Akun tidak aktif"))
 	}
 
 	// Cek lockout sebelum verifikasi password
 	stats, err := s.loginStatsRepo.FindByUserID(ctx, user.ID)
 	if err == nil && stats.IsLocked {
-		return fail(types.FailureAccountLocked, errors.New(errors.ErrAccountLocked, "account is locked, contact administrator"))
+		return fail(types.FailureAccountLocked, errors.New(errors.ErrAccountLocked, "Akun terkunci, hubungi administrator"))
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
@@ -108,7 +120,7 @@ func (s *service) Login(ctx context.Context, email, password, ip, userAgent stri
 	token, expiresAt, err := s.generateJWT(user)
 	if err != nil {
 		s.log.Error(ctx, "failed to generate JWT", "error", err, "user_id", user.ID)
-		return nil, errors.New(errors.ErrInternal, "failed to generate token")
+		return nil, errors.New(errors.ErrInternal, "Gagal membuat token")
 	}
 
 	session := &UserSession{
@@ -123,13 +135,31 @@ func (s *service) Login(ctx context.Context, email, password, ip, userAgent stri
 		return nil, err
 	}
 
+	rawRefresh, refreshExpiresAt, err := s.generateRefreshToken()
+	if err != nil {
+		s.log.Error(ctx, "failed to generate refresh token", "error", err, "user_id", user.ID)
+		return nil, errors.New(errors.ErrInternal, "Gagal membuat refresh token")
+	}
+	rt := &RefreshToken{
+		ID:        uuid.New(),
+		UserID:    user.ID,
+		SessionID: session.ID,
+		TokenHash: hashToken(rawRefresh),
+		IPAddress: ip,
+		UserAgent: userAgent,
+		ExpiresAt: refreshExpiresAt,
+	}
+	if err := s.refreshTokenRepo.Create(ctx, rt); err != nil {
+		return nil, err
+	}
+
 	logEntry.Success = true
 	_ = s.loginLogRepo.Append(ctx, logEntry)
 
 	s.resetLoginStats(ctx, user.ID)
 	s.log.Info(ctx, "user logged in", "user_id", user.ID, "email", user.Email, "ip", ip)
 
-	return &LoginResponse{Token: token, ExpiresAt: expiresAt, User: toUserResponse(user)}, nil
+	return &LoginResponse{Token: token, ExpiresAt: expiresAt, RefreshToken: rawRefresh, RefreshExpiresAt: refreshExpiresAt, User: toUserResponse(user)}, nil
 }
 
 func (s *service) Logout(ctx context.Context, token string) error {
@@ -144,7 +174,10 @@ func (s *service) Logout(ctx context.Context, token string) error {
 		return err
 	}
 
-	// Invalidate cache entry supaya token langsung ditolak
+	// Revoke refresh token yang terkait sesi ini sekaligus
+	_ = s.refreshTokenRepo.RevokeBySessionID(ctx, session.ID)
+
+	// Invalidate cache entry supaya access token langsung ditolak
 	s.sessionCache.Delete(hashToken(token))
 
 	log := &UserLoginLog{
@@ -159,10 +192,73 @@ func (s *service) Logout(ctx context.Context, token string) error {
 	return nil
 }
 
+func (s *service) Refresh(ctx context.Context, rawRefreshToken, ip, userAgent string) (*LoginResponse, error) {
+	rt, err := s.refreshTokenRepo.FindByTokenHash(ctx, hashToken(rawRefreshToken))
+	if err != nil {
+		s.log.Warn(ctx, "refresh failed: token not found or expired")
+		return nil, errors.New(errors.ErrUnauthorized, "Refresh token tidak valid atau sudah kedaluwarsa")
+	}
+
+	user, err := s.userRepo.FindByID(ctx, rt.UserID)
+	if err != nil || !user.IsActive || user.DeletedAt != nil {
+		s.log.Warn(ctx, "refresh failed: user not found or inactive", "user_id", rt.UserID)
+		return nil, errors.New(errors.ErrUnauthorized, "Akun tidak ditemukan atau tidak aktif")
+	}
+
+	newToken, newExpiresAt, err := s.generateJWT(user)
+	if err != nil {
+		s.log.Error(ctx, "refresh: failed to generate access token", "error", err, "user_id", user.ID)
+		return nil, errors.New(errors.ErrInternal, "Gagal membuat token")
+	}
+
+	newRawRefresh, newRefreshExpiresAt, err := s.generateRefreshToken()
+	if err != nil {
+		s.log.Error(ctx, "refresh: failed to generate refresh token", "error", err, "user_id", user.ID)
+		return nil, errors.New(errors.ErrInternal, "Gagal membuat refresh token")
+	}
+
+	newSession := &UserSession{
+		ID:        uuid.New(),
+		UserID:    user.ID,
+		TokenHash: hashToken(newToken),
+		IPAddress: ip,
+		UserAgent: userAgent,
+		ExpiresAt: newExpiresAt,
+	}
+	if err := s.sessionRepo.Create(ctx, newSession); err != nil {
+		return nil, err
+	}
+
+	newRT := &RefreshToken{
+		ID:        uuid.New(),
+		UserID:    user.ID,
+		SessionID: newSession.ID,
+		TokenHash: hashToken(newRawRefresh),
+		IPAddress: ip,
+		UserAgent: userAgent,
+		ExpiresAt: newRefreshExpiresAt,
+	}
+	if err := s.refreshTokenRepo.Create(ctx, newRT); err != nil {
+		return nil, err
+	}
+
+	// Revoke token lama dan catat ID penggantinya (refresh token rotation)
+	if err := s.refreshTokenRepo.Revoke(ctx, rt.ID, &newRT.ID); err != nil {
+		s.log.Error(ctx, "refresh: failed to revoke old token", "error", err, "rt_id", rt.ID)
+		return nil, errors.New(errors.ErrInternal, "Gagal merotasi refresh token")
+	}
+	// Revoke sesi lama juga
+	_ = s.sessionRepo.Revoke(ctx, rt.SessionID)
+	s.sessionCache.Delete(hashToken(rawRefreshToken))
+
+	s.log.Info(ctx, "token refreshed", "user_id", user.ID)
+	return &LoginResponse{Token: newToken, ExpiresAt: newExpiresAt, RefreshToken: newRawRefresh, RefreshExpiresAt: newRefreshExpiresAt, User: toUserResponse(user)}, nil
+}
+
 func (s *service) ValidateToken(ctx context.Context, token string) (*middleware.TokenClaims, error) {
 	claims, err := s.parseJWT(token)
 	if err != nil {
-		return nil, errors.New(errors.ErrUnauthorized, "invalid or expired token")
+		return nil, errors.New(errors.ErrUnauthorized, "Token tidak valid atau sudah kedaluwarsa")
 	}
 
 	h := hashToken(token)
@@ -177,7 +273,7 @@ func (s *service) ValidateToken(ctx context.Context, token string) (*middleware.
 				if revokedAt.After(entry.cachedAt) {
 					s.sessionCache.Delete(h)
 					s.log.Warn(ctx, "validate token: session revoked (cache hit)", "user_id", entry.claims.UserID)
-					return nil, errors.New(errors.ErrUnauthorized, "session expired or revoked")
+					return nil, errors.New(errors.ErrUnauthorized, "Sesi telah berakhir atau dicabut")
 				}
 			}
 			s.log.Debug(ctx, "validate token: cache hit", "user_id", entry.claims.UserID)
@@ -191,7 +287,7 @@ func (s *service) ValidateToken(ctx context.Context, token string) (*middleware.
 	_, err = s.sessionRepo.FindByTokenHash(ctx, h)
 	if err != nil {
 		s.log.Warn(ctx, "validate token: session not found in DB (cache miss)")
-		return nil, errors.New(errors.ErrUnauthorized, "session expired or revoked")
+		return nil, errors.New(errors.ErrUnauthorized, "Sesi telah berakhir atau dicabut")
 	}
 
 	// Simpan ke cache
@@ -204,6 +300,14 @@ func (s *service) ValidateToken(ctx context.Context, token string) (*middleware.
 
 	s.log.Debug(ctx, "validate token: cache miss, loaded from DB", "user_id", claims.UserID)
 	return claims, nil
+}
+
+func (s *service) ListUsers(ctx context.Context, roleID *uuid.UUID, activeOnly *bool, page, pageSize int) ([]User, int64, error) {
+	return s.userRepo.List(ctx, roleID, activeOnly, page, pageSize)
+}
+
+func (s *service) GetUser(ctx context.Context, userID uuid.UUID) (*User, error) {
+	return s.userRepo.FindByID(ctx, userID)
 }
 
 func (s *service) GetProfile(ctx context.Context, userID uuid.UUID) (*User, error) {
@@ -223,18 +327,19 @@ func (s *service) CreateUser(ctx context.Context, req *CreateUserRequest) (*User
 
 	if _, err := s.roleRepo.FindByID(ctx, req.RoleID); err != nil {
 		s.log.Warn(ctx, "create user failed: role not found", "role_id", req.RoleID)
-		return nil, errors.New(errors.ErrNotFound, "role not found")
+		return nil, errors.New(errors.ErrNotFound, "Role tidak ditemukan")
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		s.log.Error(ctx, "failed to hash password for new user", "email", req.Email, "error", err)
-		return nil, errors.New(errors.ErrInternal, "failed to hash password")
+		return nil, errors.New(errors.ErrInternal, "Gagal membuat hash kata sandi")
 	}
 
 	user := &User{
 		ID:           uuid.New(),
 		Name:         req.Name,
+		Username:     req.Username,
 		Email:        req.Email,
 		PasswordHash: string(hash),
 		RoleID:       req.RoleID,
@@ -260,12 +365,15 @@ func (s *service) UpdateUser(ctx context.Context, userID uuid.UUID, req *UpdateU
 	if req.Name != nil {
 		user.Name = *req.Name
 	}
+	if req.Username != nil {
+		user.Username = *req.Username
+	}
 	if req.Email != nil {
 		user.Email = *req.Email
 	}
 	if req.RoleID != nil {
 		if _, err := s.roleRepo.FindByID(ctx, *req.RoleID); err != nil {
-			return nil, errors.New(errors.ErrNotFound, "role not found")
+			return nil, errors.New(errors.ErrNotFound, "Role tidak ditemukan")
 		}
 		user.RoleID = *req.RoleID
 	}
@@ -291,7 +399,7 @@ func (s *service) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassw
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(oldPassword)); err != nil {
 		s.log.Warn(ctx, "change password failed: wrong current password", "user_id", userID)
-		return errors.New(errors.ErrInvalidCredentials, "current password is incorrect")
+		return errors.New(errors.ErrInvalidCredentials, "Kata sandi saat ini tidak benar")
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
@@ -320,7 +428,7 @@ func (s *service) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassw
 func (s *service) DeactivateUser(ctx context.Context, userID uuid.UUID, actorID uuid.UUID) error {
 	if userID == actorID {
 		s.log.Warn(ctx, "deactivate user rejected: cannot self-deactivate", "user_id", userID, "actor_id", actorID)
-		return errors.New(errors.ErrForbidden, "cannot deactivate your own account")
+		return errors.New(errors.ErrForbidden, "Tidak dapat menonaktifkan akun Anda sendiri")
 	}
 
 	if _, err := s.userRepo.FindByID(ctx, userID); err != nil {
@@ -368,7 +476,7 @@ func (s *service) AssignPermission(ctx context.Context, roleID, permissionID uui
 	}
 	if _, err := s.permRepo.FindByID(ctx, permissionID); err != nil {
 		s.log.Warn(ctx, "assign permission failed: permission not found", "permission_id", permissionID)
-		return errors.New(errors.ErrNotFound, "permission not found")
+		return errors.New(errors.ErrNotFound, "Izin tidak ditemukan")
 	}
 
 	if err := s.rolePermRepo.Assign(ctx, roleID, permissionID, actorID); err != nil {
@@ -432,26 +540,26 @@ func (s *service) generateJWT(user *User) (string, time.Time, error) {
 func (s *service) parseJWT(tokenStr string) (*middleware.TokenClaims, error) {
 	t, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New(errors.ErrUnauthorized, "unexpected signing method")
+			return nil, errors.New(errors.ErrUnauthorized, "Token tidak valid")
 		}
 		return []byte(s.cfg.JWT.SecretKey), nil
 	})
 	if err != nil || !t.Valid {
-		return nil, errors.New(errors.ErrUnauthorized, "invalid token")
+		return nil, errors.New(errors.ErrUnauthorized, "Token tidak valid")
 	}
 
 	claims, ok := t.Claims.(jwt.MapClaims)
 	if !ok {
-		return nil, errors.New(errors.ErrUnauthorized, "invalid token claims")
+		return nil, errors.New(errors.ErrUnauthorized, "Token tidak valid")
 	}
 
 	subStr, _ := claims["sub"].(string)
 	if subStr == "" {
-		return nil, errors.New(errors.ErrUnauthorized, "invalid token subject")
+		return nil, errors.New(errors.ErrUnauthorized, "Token tidak valid")
 	}
 	userID, err := uuid.Parse(subStr)
 	if err != nil {
-		return nil, errors.New(errors.ErrUnauthorized, "invalid token subject")
+		return nil, errors.New(errors.ErrUnauthorized, "Token tidak valid")
 	}
 
 	perms, _ := claims["permissions"].([]interface{})
@@ -465,7 +573,7 @@ func (s *service) parseJWT(tokenStr string) (*middleware.TokenClaims, error) {
 	email, _ := claims["email"].(string)
 	role, _ := claims["role"].(string)
 	if email == "" || role == "" {
-		return nil, errors.New(errors.ErrUnauthorized, "invalid token claims: missing email or role")
+		return nil, errors.New(errors.ErrUnauthorized, "Token tidak valid")
 	}
 
 	return &middleware.TokenClaims{
@@ -479,7 +587,7 @@ func (s *service) parseJWT(tokenStr string) (*middleware.TokenClaims, error) {
 // validatePasswordComplexity memastikan password minimal 8 karakter, ada huruf dan angka.
 func validatePasswordComplexity(password string) error {
 	if len(password) < 8 {
-		return errors.New(errors.ErrValidation, "password must be at least 8 characters")
+		return errors.New(errors.ErrValidation, "Kata sandi minimal 8 karakter")
 	}
 	hasLetter, hasDigit := false, false
 	for _, c := range password {
@@ -494,15 +602,24 @@ func validatePasswordComplexity(password string) error {
 		}
 	}
 	if !hasLetter {
-		return errors.New(errors.ErrValidation, "password must contain at least one letter")
+		return errors.New(errors.ErrValidation, "Kata sandi harus mengandung minimal satu huruf")
 	}
-	return errors.New(errors.ErrValidation, "password must contain at least one number")
+	return errors.New(errors.ErrValidation, "Kata sandi harus mengandung minimal satu angka")
 }
 
 // hashToken SHA-256 token sebelum disimpan ke DB — token asli tidak pernah disimpan.
 func hashToken(token string) string {
 	h := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(h[:])
+}
+
+// generateRefreshToken membuat 32-byte random token yang dikodekan hex.
+func (s *service) generateRefreshToken() (string, time.Time, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", time.Time{}, err
+	}
+	return hex.EncodeToString(b), time.Now().Add(s.cfg.JWT.RefreshTokenTTL), nil
 }
 
 // recordFailedAttempt update stats dan lock akun kalau sudah 5x gagal berturut-turut.

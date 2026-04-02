@@ -33,21 +33,85 @@ func (f TokenValidatorFunc) ValidateToken(ctx context.Context, token string) (*T
 	return f(ctx, token)
 }
 
+// AuthSSE adalah Auth yang juga menerima token via ?token= query param.
+// Dipakai untuk SSE endpoint karena EventSource browser tidak support custom header.
+func AuthSSE(svc TokenValidator) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		token := c.Query("token")
+		if token == "" {
+			authHeader := c.Get("Authorization")
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				token = parts[1]
+			}
+		}
+		if token == "" {
+			return response.Unauthorized(c, "Token tidak ditemukan")
+		}
+		claims, err := svc.ValidateToken(c.Context(), token)
+		if err != nil {
+			return response.Unauthorized(c, "Token tidak valid atau sudah kedaluwarsa")
+		}
+		c.Locals("user_id", claims.UserID)
+		c.Locals("user_role", claims.Role)
+		c.Locals("permissions", claims.Permissions)
+		c.Locals("user_email", claims.Email)
+		c.Locals("claims", claims)
+		return c.Next()
+	}
+}
+
+// GateAuthSSE adalah GateAuth yang juga menerima token via ?token= query param.
+func GateAuthSSE(svc GateTokenValidator) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		token := c.Query("token")
+		if token == "" {
+			authHeader := c.Get("Authorization")
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				token = parts[1]
+			}
+		}
+		if token == "" {
+			return response.Unauthorized(c, "Token tidak ditemukan")
+		}
+		claims, err := svc.ValidateGateToken(c.Context(), token)
+		if err != nil {
+			return response.Unauthorized(c, "Token gate tidak valid atau sudah kedaluwarsa")
+		}
+		c.Locals("gate_id", claims.GateID)
+		c.Locals("gate_type", claims.GateType)
+		c.Locals("zone_id", claims.ZoneID)
+		c.Locals("gate_name", claims.GateName)
+		c.Locals("gate_claims", claims)
+		return c.Next()
+	}
+}
 func Auth(svc TokenValidator) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		// Preflight OPTIONS harus lolos tanpa auth supaya CORS header bisa dikirim
+		if c.Method() == fiber.MethodOptions {
+			return c.Next()
+		}
+
+		token := ""
 		authHeader := c.Get("Authorization")
-		if authHeader == "" {
-			return response.Unauthorized(c, "missing authorization header")
+		if authHeader != "" {
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				token = parts[1]
+			}
+		}
+		if token == "" {
+			token = c.Cookies("access_token")
+		}
+		if token == "" {
+			return response.Unauthorized(c, "Header otorisasi tidak ditemukan")
 		}
 
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			return response.Unauthorized(c, "invalid authorization header format")
-		}
-
-		claims, err := svc.ValidateToken(c.Context(), parts[1])
+		claims, err := svc.ValidateToken(c.Context(), token)
 		if err != nil {
-			return response.Unauthorized(c, "invalid or expired token")
+			return response.Unauthorized(c, "Token tidak valid atau sudah kedaluwarsa")
 		}
 
 		c.Locals("user_id", claims.UserID)
@@ -88,14 +152,14 @@ func RequirePermission(permission string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		perms, ok := c.Locals("permissions").([]string)
 		if !ok {
-			return response.Forbidden(c, "access denied: no permissions found")
+			return response.Forbidden(c, "Akses ditolak: izin tidak ditemukan")
 		}
 		for _, p := range perms {
 			if p == permission {
 				return c.Next()
 			}
 		}
-		return response.Forbidden(c, "insufficient permissions: required '"+permission+"'")
+		return response.Forbidden(c, "Izin tidak mencukupi: membutuhkan '"+permission+"'")
 	}
 }
 
@@ -103,14 +167,14 @@ func RequireRole(roles ...string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		userRole, ok := c.Locals("user_role").(string)
 		if !ok {
-			return response.Forbidden(c, "access denied: no role found")
+			return response.Forbidden(c, "Akses ditolak: role tidak ditemukan")
 		}
 		for _, role := range roles {
 			if userRole == role {
 				return c.Next()
 			}
 		}
-		return response.Forbidden(c, "access denied: requires one of roles "+strings.Join(roles, ", "))
+		return response.Forbidden(c, "Akses ditolak: membutuhkan salah satu role: "+strings.Join(roles, ", "))
 	}
 }
 
@@ -153,19 +217,24 @@ type GateTokenValidator interface {
 // GateAuth middleware untuk endpoint yang hanya boleh diakses dari screen gate.
 func GateAuth(svc GateTokenValidator) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		// Preflight OPTIONS harus lolos tanpa auth supaya CORS header bisa dikirim
+		if c.Method() == fiber.MethodOptions {
+			return c.Next()
+		}
+
 		authHeader := c.Get("Authorization")
 		if authHeader == "" {
-			return response.Unauthorized(c, "missing authorization header")
+			return response.Unauthorized(c, "Header otorisasi tidak ditemukan")
 		}
 
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			return response.Unauthorized(c, "invalid authorization header format")
+			return response.Unauthorized(c, "Format header otorisasi tidak valid")
 		}
 
 		claims, err := svc.ValidateGateToken(c.Context(), parts[1])
 		if err != nil {
-			return response.Unauthorized(c, "invalid or expired gate token")
+			return response.Unauthorized(c, "Token gate tidak valid atau sudah kedaluwarsa")
 		}
 
 		c.Locals("gate_id", claims.GateID)

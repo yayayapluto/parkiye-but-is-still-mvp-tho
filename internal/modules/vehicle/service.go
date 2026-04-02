@@ -87,13 +87,13 @@ func (s *service) DeleteVehicleType(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *service) ListVehicles(ctx context.Context, typeID *uuid.UUID, page, pageSize int) ([]Vehicle, int64, error) {
-	vehicles, total, err := s.vRepo.FindAll(ctx, typeID, page, pageSize)
+func (s *service) ListVehicles(ctx context.Context, filter ListVehicleFilter, page, pageSize int) ([]Vehicle, int64, error) {
+	vehicles, total, err := s.vRepo.FindAll(ctx, filter, page, pageSize)
 	if err != nil {
-		s.log.Error(ctx, "list vehicles failed", "vehicle_type_id", typeID, "error", err)
+		s.log.Error(ctx, "list vehicles failed", "filter", filter, "error", err)
 		return nil, 0, err
 	}
-	s.log.Debug(ctx, "vehicles listed", "count", len(vehicles), "total", total, "vehicle_type_id", typeID)
+	s.log.Debug(ctx, "vehicles listed", "count", len(vehicles), "total", total, "filter", filter)
 	return vehicles, total, nil
 }
 
@@ -120,7 +120,7 @@ func (s *service) GetVehicleByPlate(ctx context.Context, plate string) (*Vehicle
 func (s *service) UpsertVehicle(ctx context.Context, req *UpsertVehicleRequest) (*Vehicle, error) {
 	if _, err := s.vtRepo.FindByID(ctx, req.VehicleTypeID); err != nil {
 		s.log.Warn(ctx, "upsert vehicle failed: vehicle type not found", "vehicle_type_id", req.VehicleTypeID)
-		return nil, errors.New(errors.ErrNotFound, "vehicle type not found")
+		return nil, errors.New(errors.ErrNotFound, "Jenis kendaraan tidak ditemukan")
 	}
 
 	v := &Vehicle{
@@ -149,7 +149,7 @@ func (s *service) UpdateVehicle(ctx context.Context, id uuid.UUID, req *UpdateVe
 	if req.VehicleTypeID != nil {
 		if _, err := s.vtRepo.FindByID(ctx, *req.VehicleTypeID); err != nil {
 			s.log.Warn(ctx, "update vehicle failed: vehicle type not found", "vehicle_type_id", req.VehicleTypeID)
-			return nil, errors.New(errors.ErrNotFound, "vehicle type not found")
+			return nil, errors.New(errors.ErrNotFound, "Jenis kendaraan tidak ditemukan")
 		}
 		v.VehicleTypeID = *req.VehicleTypeID
 	}

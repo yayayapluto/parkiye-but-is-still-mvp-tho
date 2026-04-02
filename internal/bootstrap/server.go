@@ -2,6 +2,9 @@ package bootstrap
 
 import (
 	"errors"
+	"log"
+	"net/http"
+
 	"github.com/gofiber/contrib/otelfiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -11,12 +14,14 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/monitor"
 	recover2 "github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
-	"log"
-	"net/http"
+
 	"parkieee/internal/modules/auth"
+	"parkieee/internal/modules/dashboard"
 	"parkieee/internal/modules/fee"
 	"parkieee/internal/modules/gate"
 	"parkieee/internal/modules/kiosk"
+	"parkieee/internal/modules/notification"
+	"parkieee/internal/modules/override"
 	"parkieee/internal/modules/payment"
 	"parkieee/internal/modules/rfid"
 	"parkieee/internal/modules/transaction"
@@ -37,18 +42,21 @@ func NewServer(container *Container) *fiber.App {
 		StrictRouting:     false,
 	})
 
+	app.Use(func(c *fiber.Ctx) error {
+		log.Printf("[REQ] %s %s | Origin: %s", c.Method(), c.Path(), c.Get("Origin"))
+		return c.Next()
+	})
+
+	app.Use(cors.New(cors.Config{
+		AllowOrigins:     container.Config.App.AllowOrigins,
+		AllowMethods:     "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Request-ID, Cache-Control, X-Requested-With",
+		ExposeHeaders:    "Content-Length",
+		AllowCredentials: container.Config.App.AllowOrigins != "*",
+	}))
+
 	app.Use(recover2.New())
 	app.Use(requestid.New())
-	corsOrigins := "*"
-	if container.Config.IsProduction() && container.Config.App.URL != "" {
-		corsOrigins = container.Config.App.URL
-	}
-	app.Use(cors.New(cors.Config{
-		AllowOrigins:     corsOrigins,
-		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS,PATCH",
-		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
-		AllowCredentials: false,
-	}))
 
 	initObservability(app, container)
 	app.Use(otelfiber.Middleware())
@@ -56,9 +64,7 @@ func NewServer(container *Container) *fiber.App {
 
 	if container.Config.IsProduction() {
 		app.Use(etag.New())
-		app.Use(limiter.New(limiter.Config{
-			Max: 100,
-		}))
+		app.Use(limiter.New(limiter.Config{Max: 100}))
 	}
 
 	app.Use("/storage", filesystem.New(filesystem.Config{
@@ -81,9 +87,13 @@ func NewServer(container *Container) *fiber.App {
 	fee.RegisterRoutes(api, container.FeeService, container.AuthService, container.Validator)
 	transaction.RegisterRoutes(api, container.TransactionService, container.AuthService, container.GateService, container.Validator,
 		container.Config.S3, *container.Config)
-	payment.RegisterRoutes(api, container.PaymentService, container.AuthService, container.GateService, container.Validator)
+	payment.RegisterRoutes(api, container.PaymentService, container.AuthService, container.GateService,
+		container.GateCashierAssignmentRepo, container.Validator, container.Config.Midtrans.Env == "sandbox")
 	gate.RegisterRoutes(api, container.GateService, container.AuthService, container.Validator)
 	kiosk.RegisterRoutes(api, container.FeeService, container.VehicleService, container.ZoneService, container.GateService)
+	override.RegisterRoutes(api, container.OverrideService, container.AuthService, container.Validator)
+	dashboard.RegisterRoutes(api, container.DashboardService, container.AuthService)
+	notification.NewModule(container.DB, container.Log).RegisterRoutes(api, container.AuthService)
 
 	return app
 }

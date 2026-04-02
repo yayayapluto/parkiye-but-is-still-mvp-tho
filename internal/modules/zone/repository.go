@@ -101,6 +101,31 @@ func (r *gateRepository) FindByZoneID(ctx context.Context, zoneID uuid.UUID, onl
 	return gates, total, errors.FromDB(err, "")
 }
 
+func (r *gateRepository) FindAll(ctx context.Context, zoneID *uuid.UUID, gateType *string, onlyActive bool, page, pageSize int) ([]Gate, int64, error) {
+	var gates []Gate
+	var total int64
+
+	q := r.db.WithContext(ctx).Model(&Gate{})
+
+	if zoneID != nil {
+		q = q.Where("zone_id = ?", *zoneID)
+	}
+	if gateType != nil {
+		q = q.Where("gate_type = ?", *gateType)
+	}
+	if onlyActive {
+		q = q.Where("is_active = ?", true)
+	}
+
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, errors.FromDB(err, "")
+	}
+
+	offset := (page - 1) * pageSize
+	err := q.Preload("Zone").Order("name ASC").Offset(offset).Limit(pageSize).Find(&gates).Error
+	return gates, total, errors.FromDB(err, "")
+}
+
 func (r *gateRepository) FindByToken(ctx context.Context, token string) (*Gate, error) {
 	var gate Gate
 	err := r.db.WithContext(ctx).Preload("Zone").First(&gate, "gate_token = ? AND is_active = true", token).Error
@@ -126,6 +151,20 @@ func (r *gateRepository) UpdateTokenLastUsed(ctx context.Context, id uuid.UUID) 
 	)
 }
 
+func (r *gateRepository) UpdateMode(ctx context.Context, id uuid.UUID, mode types.GateMode) error {
+	result := r.db.WithContext(ctx).
+		Model(&Gate{}).
+		Where("id = ?", id).
+		Update("mode", mode)
+	if result.Error != nil {
+		return errors.FromDB(result.Error, "")
+	}
+	if result.RowsAffected == 0 {
+		return errors.New(errors.ErrNotFound, "gate not found")
+	}
+	return nil
+}
+
 func (r *gateRepository) Deactivate(ctx context.Context, id uuid.UUID) error {
 	result := r.db.WithContext(ctx).
 		Model(&Gate{}).
@@ -136,6 +175,55 @@ func (r *gateRepository) Deactivate(ctx context.Context, id uuid.UUID) error {
 	}
 	if result.RowsAffected == 0 {
 		return errors.New(errors.ErrNotFound, "gate not found")
+	}
+	return nil
+}
+
+type gateCashierAssignmentRepository struct {
+	db *gorm.DB
+}
+
+func NewGateCashierAssignmentRepository(db *gorm.DB) GateCashierAssignmentRepositoryPort {
+	return &gateCashierAssignmentRepository{db: db}
+}
+
+func (r *gateCashierAssignmentRepository) Upsert(ctx context.Context, a *GateCashierAssignment) error {
+	return errors.FromDB(
+		r.db.WithContext(ctx).
+			Clauses(clause.OnConflict{
+				Columns: []clause.Column{{Name: "gate_id"}},
+				DoUpdates: clause.AssignmentColumns([]string{
+					"user_id",
+					"assigned_by",
+					"assigned_at",
+				}),
+			}).
+			Create(a).Error,
+		"",
+	)
+}
+
+func (r *gateCashierAssignmentRepository) FindByGateID(ctx context.Context, gateID uuid.UUID) (*GateCashierAssignment, error) {
+	var a GateCashierAssignment
+	err := r.db.WithContext(ctx).First(&a, "gate_id = ?", gateID).Error
+	return &a, errors.FromDB(err, "cashier assignment not found")
+}
+
+func (r *gateCashierAssignmentRepository) FindByUserID(ctx context.Context, userID uuid.UUID) (*GateCashierAssignment, error) {
+	var a GateCashierAssignment
+	err := r.db.WithContext(ctx).First(&a, "user_id = ?", userID).Error
+	return &a, errors.FromDB(err, "cashier assignment not found")
+}
+
+func (r *gateCashierAssignmentRepository) DeleteByGateID(ctx context.Context, gateID uuid.UUID) error {
+	result := r.db.WithContext(ctx).
+		Where("gate_id = ?", gateID).
+		Delete(&GateCashierAssignment{})
+	if result.Error != nil {
+		return errors.FromDB(result.Error, "")
+	}
+	if result.RowsAffected == 0 {
+		return errors.New(errors.ErrNotFound, "cashier assignment not found")
 	}
 	return nil
 }
@@ -164,7 +252,6 @@ func (r *gateDeviceRepository) FindByGateID(ctx context.Context, gateID uuid.UUI
 }
 
 func (r *gateDeviceRepository) Upsert(ctx context.Context, device *GateDevice) error {
-	// Conflict on PK: update mutable fields saja, bukan gate_id atau device_type.
 	return errors.FromDB(
 		r.db.WithContext(ctx).
 			Clauses(clause.OnConflict{
@@ -216,8 +303,61 @@ func (r *capacityLogRepository) LatestByZoneID(ctx context.Context, zoneID uuid.
 	return &log, nil
 }
 
-// GetCurrentOccupancy returns occupied and available counts for a zone.
-// Falls back to (0, capacity) when no log exists yet.
+// AllCapacities returns the latest capacity snapshot for every active zone in a
+// single aggregated query. Zones with no log entry yet return occupied=0,
+// available=capacity derived from the zones table.
+//
+// Strategy: LEFT JOIN zones ON latest log per zone (DISTINCT ON zone_id),
+// fall back to capacity from zones table when no log exists.
+func (r *capacityLogRepository) AllCapacities(ctx context.Context) ([]ZoneCapacityResponse, error) {
+	type row struct {
+		ZoneID         uuid.UUID `gorm:"column:zone_id"`
+		ZoneName       string    `gorm:"column:zone_name"`
+		Capacity       int       `gorm:"column:capacity"`
+		OccupiedCount  int       `gorm:"column:occupied_count"`
+		AvailableCount int       `gorm:"column:available_count"`
+	}
+
+	var rows []row
+
+	// DISTINCT ON is PostgreSQL-specific — fine since the project uses Postgres.
+	// For zones with no log, COALESCE falls back to 0 / capacity.
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT
+			z.id          AS zone_id,
+			z.name        AS zone_name,
+			z.capacity    AS capacity,
+			COALESCE(latest.occupied_count,  0)          AS occupied_count,
+			COALESCE(latest.available_count, z.capacity) AS available_count
+		FROM zones z
+		LEFT JOIN LATERAL (
+			SELECT occupied_count, available_count
+			FROM zone_capacity_logs
+			WHERE zone_id = z.id
+			ORDER BY recorded_at DESC
+			LIMIT 1
+		) latest ON true
+		WHERE z.is_active = true
+		ORDER BY z.name ASC
+	`).Scan(&rows).Error
+
+	if err != nil {
+		return nil, errors.FromDB(err, "")
+	}
+
+	result := make([]ZoneCapacityResponse, 0, len(rows))
+	for _, r := range rows {
+		result = append(result, ZoneCapacityResponse{
+			ZoneID:         r.ZoneID,
+			ZoneName:       r.ZoneName,
+			Capacity:       r.Capacity,
+			OccupiedCount:  r.OccupiedCount,
+			AvailableCount: r.AvailableCount,
+		})
+	}
+	return result, nil
+}
+
 func GetCurrentOccupancy(ctx context.Context, db *gorm.DB, zoneID uuid.UUID, capacity int) (occupied int, available int, err error) {
 	repo := &capacityLogRepository{db: db}
 	log, err := repo.LatestByZoneID(ctx, zoneID)
@@ -230,7 +370,6 @@ func GetCurrentOccupancy(ctx context.Context, db *gorm.DB, zoneID uuid.UUID, cap
 	return log.OccupiedCount, log.AvailableCount, nil
 }
 
-// NextOccupancy computes the new counts after an entry or exit event.
 func NextOccupancy(current *ZoneCapacityLog, capacity int, event types.ZoneEventType) (occupied int, available int) {
 	var base int
 	if current != nil {

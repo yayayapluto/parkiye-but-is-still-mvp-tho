@@ -7,8 +7,6 @@ import (
 	"parkieee/pkg/types"
 )
 
-// ── Token-first flow ──────────────────────────────────────────────────────────
-
 type GateAuthRequest struct {
 	GateToken string `json:"gate_token" validate:"required"`
 }
@@ -23,25 +21,22 @@ type GateInfo struct {
 	ID       uuid.UUID      `json:"id"`
 	Name     string         `json:"name"`
 	GateType types.GateType `json:"gate_type"`
+	Mode     types.GateMode `json:"mode"`
 	ZoneID   uuid.UUID      `json:"zone_id"`
 	ZoneName string         `json:"zone_name"`
 }
 
-// ── QR Pairing flow ───────────────────────────────────────────────────────────
-
-// PairingResponse dikembalikan ke screen setelah request pairing code.
 type PairingResponse struct {
-	Code      string    `json:"code"`       // 6 alphanumeric, e.g. "A3K9XZ"
-	QRContent string    `json:"qr_content"` // JSON string yang di-encode ke QR
-	QRBase64  string    `json:"qr_base64"`  // base64 dari qr_content — frontend pakai ini untuk generate QR
+	Code      string    `json:"code"`
+	QRContent string    `json:"qr_content"`
+	QRBase64  string    `json:"qr_base64"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-// PairingInfoResponse dikembalikan ke admin setelah scan QR.
 type PairingInfoResponse struct {
 	Code        string     `json:"code"`
-	Status      string     `json:"status"`     // "pending" | "confirmed"
-	IsExpired   bool       `json:"is_expired"` // true kalau expires_at < now
+	Status      string     `json:"status"`
+	IsExpired   bool       `json:"is_expired"`
 	ExpiresAt   time.Time  `json:"expires_at"`
 	CreatedAt   time.Time  `json:"created_at"`
 	IPAddress   string     `json:"ip_address"`
@@ -51,12 +46,12 @@ type PairingInfoResponse struct {
 }
 
 // ConfirmPairingRequest adalah body request admin untuk confirm pairing.
+// CashierUserID wajib diisi kalau gate bertipe exit dan mode with_cashier.
 type ConfirmPairingRequest struct {
-	GateID uuid.UUID `json:"gate_id" validate:"required"`
+	GateID        uuid.UUID  `json:"gate_id"          validate:"required"`
+	CashierUserID *uuid.UUID `json:"cashier_user_id"  validate:"omitempty"`
 }
 
-// PairingConfirmResponse dikembalikan ke admin setelah confirm.
-// JWT yang sama juga di-push ke screen via SSE.
 type PairingConfirmResponse struct {
 	GateJWT   string    `json:"gate_jwt"`
 	ExpiresAt time.Time `json:"expires_at"`

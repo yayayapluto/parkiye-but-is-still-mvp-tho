@@ -36,6 +36,20 @@ type RequestRefundRequest struct {
 	Reason       string    `json:"reason" validate:"required,min=10"`
 }
 
+type TransactionSummary struct {
+	ID              uuid.UUID               `json:"id"`
+	TransactionCode string                  `json:"transaction_code"`
+	Status          types.TransactionStatus `json:"status"`
+	CalculatedFee   *int                    `json:"calculated_fee"`
+	ZoneID          uuid.UUID               `json:"zone_id"`
+	EntryAt         time.Time               `json:"entry_at"`
+	ExitAt          *time.Time              `json:"exit_at"`
+}
+
+type PaymentEnrichment struct {
+	Transaction *TransactionSummary
+}
+
 type PaymentResponse struct {
 	ID                    uuid.UUID           `json:"id"`
 	TransactionID         uuid.UUID           `json:"transaction_id"`
@@ -54,6 +68,9 @@ type PaymentResponse struct {
 	PaidAt                *time.Time          `json:"paid_at,omitempty"`
 	CreatedAt             time.Time           `json:"created_at"`
 	UpdatedAt             time.Time           `json:"updated_at"`
+
+	// Enriched fields
+	Transaction *TransactionSummary `json:"transaction,omitempty"`
 }
 
 type RefundResponse struct {
@@ -71,8 +88,8 @@ type RefundResponse struct {
 	UpdatedAt        time.Time          `json:"updated_at"`
 }
 
-func toPaymentResponse(p *Payment) PaymentResponse {
-	return PaymentResponse{
+func toPaymentResponse(p *Payment, enr *PaymentEnrichment) PaymentResponse {
+	res := PaymentResponse{
 		ID:                    p.ID,
 		TransactionID:         p.TransactionID,
 		Method:                p.Method,
@@ -91,6 +108,12 @@ func toPaymentResponse(p *Payment) PaymentResponse {
 		CreatedAt:             p.CreatedAt,
 		UpdatedAt:             p.UpdatedAt,
 	}
+
+	if enr != nil {
+		res.Transaction = enr.Transaction
+	}
+
+	return res
 }
 
 func toRefundResponse(r *Refund) RefundResponse {
@@ -109,3 +132,4 @@ func toRefundResponse(r *Refund) RefundResponse {
 		UpdatedAt:        r.UpdatedAt,
 	}
 }
+

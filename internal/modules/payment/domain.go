@@ -8,8 +8,6 @@ import (
 	"parkieee/pkg/types"
 )
 
-// Payment records a single payment attempt against a transaction.
-// Multiple payments per transaction are allowed (e.g. QRIS expired → retry).
 type Payment struct {
 	ID                    uuid.UUID           `gorm:"column:id;type:uuid;primaryKey;default:gen_random_uuid()"`
 	TransactionID         uuid.UUID           `gorm:"column:transaction_id;type:uuid;not null;index"`
@@ -32,8 +30,6 @@ type Payment struct {
 
 func (Payment) TableName() string { return "payments" }
 
-// MidtransCallback logs every Midtrans webhook hit, including duplicates and invalid signatures.
-// Always written before any processing — used for audit and replay.
 type MidtransCallback struct {
 	ID              uuid.UUID      `gorm:"column:id;type:uuid;primaryKey;default:gen_random_uuid()"`
 	PaymentID       *uuid.UUID     `gorm:"column:payment_id;type:uuid;index"`
@@ -48,7 +44,6 @@ type MidtransCallback struct {
 
 func (MidtransCallback) TableName() string { return "midtrans_callbacks" }
 
-// Refund records a refund request against a completed payment.
 type Refund struct {
 	ID               uuid.UUID          `gorm:"column:id;type:uuid;primaryKey;default:gen_random_uuid()"`
 	PaymentID        uuid.UUID          `gorm:"column:payment_id;type:uuid;not null;index"`
@@ -65,3 +60,47 @@ type Refund struct {
 }
 
 func (Refund) TableName() string { return "refunds" }
+
+type PendingCashierRequest struct {
+	TransactionID      string `json:"transaction_id"`
+	TransactionCode    string `json:"transaction_code"`
+	CalculatedFee      int    `json:"calculated_fee"`
+	CashierRequestedAt string `json:"cashier_requested_at"`
+}
+
+type CashierEventType string
+
+const (
+	CashierEventCash     CashierEventType = "cash"
+	CashierEventQRISFail CashierEventType = "qris_fail"
+)
+
+// CashierEvent dikirim kiosk ke kasir via SSE.
+// GateID dipakai untuk routing ke kasir yang di-assign ke gate tersebut.
+type CashierEvent struct {
+	Type          CashierEventType `json:"type"`
+	TransactionID string           `json:"transaction_id"`
+	Amount        int              `json:"amount"`
+	GateID        string           `json:"gate_id"`
+	GateName      string           `json:"gate_name"`
+	ZoneName      string           `json:"zone_name"`
+}
+
+type KioskEventType string
+
+const (
+	KioskEventDone   KioskEventType = "done"
+	KioskEventCancel KioskEventType = "cancel"
+)
+
+type KioskEvent struct {
+	Type          KioskEventType `json:"type"`
+	TransactionID string         `json:"transaction_id"`
+}
+
+// CashierStatusResponse dikembalikan ke kiosk saat poll status kasir.
+type CashierStatusResponse struct {
+	Online   bool       `json:"online"`
+	UserID   *uuid.UUID `json:"user_id"`
+	UserName *string    `json:"user_name"`
+}

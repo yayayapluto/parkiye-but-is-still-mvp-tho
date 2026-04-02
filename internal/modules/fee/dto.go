@@ -65,6 +65,21 @@ type FeeTierResponse struct {
 	IsLastTier      bool      `json:"is_last_tier"`
 }
 
+type ZoneSummary struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+type VehicleTypeSummary struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+type FeeEnrichment struct {
+	Zone        *ZoneSummary
+	VehicleType *VehicleTypeSummary
+}
+
 type FeeConfigResponse struct {
 	ID                 uuid.UUID         `json:"id"`
 	ZoneID             uuid.UUID         `json:"zone_id"`
@@ -77,6 +92,10 @@ type FeeConfigResponse struct {
 	CreatedBy          *uuid.UUID        `json:"created_by"`
 	CreatedAt          time.Time         `json:"created_at"`
 	Tiers              []FeeTierResponse `json:"tiers"`
+
+	// Enriched fields
+	Zone        *ZoneSummary        `json:"zone,omitempty"`
+	VehicleType *VehicleTypeSummary `json:"vehicle_type,omitempty"`
 }
 
 type HolidayRateResponse struct {
@@ -93,7 +112,7 @@ type HolidayRateResponse struct {
 	CreatedAt              time.Time             `json:"created_at"`
 }
 
-func toFeeConfigResponse(cfg *FeeConfig) FeeConfigResponse {
+func toFeeConfigResponse(cfg *FeeConfig, enr *FeeEnrichment) FeeConfigResponse {
 	tiers := make([]FeeTierResponse, len(cfg.Tiers))
 	for i, t := range cfg.Tiers {
 		tiers[i] = FeeTierResponse{
@@ -104,7 +123,7 @@ func toFeeConfigResponse(cfg *FeeConfig) FeeConfigResponse {
 			IsLastTier:      t.IsLastTier,
 		}
 	}
-	return FeeConfigResponse{
+	res := FeeConfigResponse{
 		ID:                 cfg.ID,
 		ZoneID:             cfg.ZoneID,
 		VehicleTypeID:      cfg.VehicleTypeID,
@@ -117,7 +136,15 @@ func toFeeConfigResponse(cfg *FeeConfig) FeeConfigResponse {
 		CreatedAt:          cfg.CreatedAt,
 		Tiers:              tiers,
 	}
+
+	if enr != nil {
+		res.Zone = enr.Zone
+		res.VehicleType = enr.VehicleType
+	}
+
+	return res
 }
+
 
 func toHolidayRateResponse(r *HolidayRate) HolidayRateResponse {
 	return HolidayRateResponse{

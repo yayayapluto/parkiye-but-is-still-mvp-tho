@@ -7,6 +7,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 
+	"parkieee/internal/modules/vehicle"
+	"parkieee/internal/modules/zone"
 	"parkieee/pkg/errors"
 	"parkieee/pkg/logger"
 	"parkieee/pkg/types"
@@ -16,6 +18,8 @@ type service struct {
 	feeConfigRepo   FeeConfigRepositoryPort
 	feeTierRepo     FeeTierRepositoryPort
 	holidayRateRepo HolidayRateRepositoryPort
+	zoneSvc         zone.ServicePort
+	vehicleSvc      vehicle.ServicePort
 	log             logger.Logger
 }
 
@@ -23,12 +27,16 @@ func NewService(
 	feeConfigRepo FeeConfigRepositoryPort,
 	feeTierRepo FeeTierRepositoryPort,
 	holidayRateRepo HolidayRateRepositoryPort,
+	zoneSvc zone.ServicePort,
+	vehicleSvc vehicle.ServicePort,
 	log logger.Logger,
 ) ServicePort {
 	return &service{
 		feeConfigRepo:   feeConfigRepo,
 		feeTierRepo:     feeTierRepo,
 		holidayRateRepo: holidayRateRepo,
+		zoneSvc:         zoneSvc,
+		vehicleSvc:      vehicleSvc,
 		log:             log,
 	}
 }
@@ -299,14 +307,14 @@ func (s *service) validateTiers(tiers []CreateFeeTierRequest) error {
 			lastTierCount++
 		}
 		if t.DurationMinutes <= 0 {
-			return errors.New(errors.ErrValidation, "tier duration_minutes must be greater than 0")
+			return errors.New(errors.ErrValidation, "Durasi tier harus lebih dari 0 menit")
 		}
 		if t.FeeAmount < 0 {
-			return errors.New(errors.ErrValidation, "tier fee_amount must be 0 or greater")
+			return errors.New(errors.ErrValidation, "Jumlah biaya tier harus 0 atau lebih")
 		}
 	}
 	if lastTierCount > 1 {
-		return errors.New(errors.ErrValidation, "only one tier can be marked as is_last_tier")
+		return errors.New(errors.ErrValidation, "Hanya satu tier yang dapat ditandai sebagai tier terakhir")
 	}
 	return nil
 }
@@ -315,20 +323,95 @@ func validateHolidayRateFields(rateType types.HolidayRateType, multiplier *decim
 	switch rateType {
 	case types.HolidayRateMultiplier:
 		if multiplier == nil {
-			return errors.New(errors.ErrValidation, "multiplier is required when rate_type is 'multiplier'")
+			return errors.New(errors.ErrValidation, "Multiplier wajib diisi jika rate_type adalah 'multiplier'")
 		}
 		if multiplier.LessThanOrEqual(decimal.Zero) {
-			return errors.New(errors.ErrValidation, "multiplier must be greater than 0")
+			return errors.New(errors.ErrValidation, "Multiplier harus lebih besar dari 0")
 		}
 	case types.HolidayRateOverride:
 		if overrideFee == nil {
-			return errors.New(errors.ErrValidation, "override_fee is required when rate_type is 'override'")
+			return errors.New(errors.ErrValidation, "Override fee wajib diisi jika rate_type adalah 'override'")
 		}
 		if *overrideFee < 0 {
-			return errors.New(errors.ErrValidation, "override_fee must be 0 or greater")
+			return errors.New(errors.ErrValidation, "Override fee harus 0 atau lebih")
 		}
 	default:
-		return errors.New(errors.ErrValidation, "rate_type must be 'multiplier' or 'override'")
+		return errors.New(errors.ErrValidation, "Tipe rate harus 'multiplier' atau 'override'")
 	}
 	return nil
 }
+
+func (s *service) EnrichConfig(ctx context.Context, cfg *FeeConfig, includes map[string]bool) *FeeEnrichment {
+	if includes == nil {
+		return nil
+	}
+
+	enr := &FeeEnrichment{}
+	if includes["zone"] {
+		z, err := s.zoneSvc.GetZone(ctx, cfg.ZoneID)
+		if err == nil {
+			enr.Zone = &ZoneSummary{ID: z.ID, Name: z.Name}
+		}
+	}
+	if includes["vehicle_type"] {
+		vt, err := s.vehicleSvc.GetVehicleType(ctx, cfg.VehicleTypeID)
+		if err == nil {
+			enr.VehicleType = &VehicleTypeSummary{ID: vt.ID, Name: vt.Name}
+		}
+	}
+
+	if enr.Zone == nil && enr.VehicleType == nil {
+		return nil
+	}
+	return enr
+}
+
+func (s *service) EnrichConfigList(ctx context.Context, configs []FeeConfig, includes map[string]bool) map[uuid.UUID]FeeEnrichment {
+	if includes == nil || (!includes["zone"] && !includes["vehicle_type"]) {
+		return nil
+	}
+
+	res := make(map[uuid.UUID]FeeEnrichment)
+	zoneIDs := make(map[uuid.UUID]bool)
+	vtIDs := make(map[uuid.UUID]bool)
+	for _, c := range configs {
+		zoneIDs[c.ZoneID] = true
+		vtIDs[c.VehicleTypeID] = true
+	}
+
+	zoneMap := make(map[uuid.UUID]*ZoneSummary)
+	if includes["zone"] {
+		for zid := range zoneIDs {
+			z, err := s.zoneSvc.GetZone(ctx, zid)
+			if err == nil {
+				zoneMap[zid] = &ZoneSummary{ID: z.ID, Name: z.Name}
+			}
+		}
+	}
+
+	vtMap := make(map[uuid.UUID]*VehicleTypeSummary)
+	if includes["vehicle_type"] {
+		for vid := range vtIDs {
+			vt, err := s.vehicleSvc.GetVehicleType(ctx, vid)
+			if err == nil {
+				vtMap[vid] = &VehicleTypeSummary{ID: vt.ID, Name: vt.Name}
+			}
+		}
+	}
+
+	for _, c := range configs {
+		e := FeeEnrichment{}
+		if z, ok := zoneMap[c.ZoneID]; ok {
+			e.Zone = z
+		}
+		if vt, ok := vtMap[c.VehicleTypeID]; ok {
+			e.VehicleType = vt
+		}
+		if e.Zone != nil || e.VehicleType != nil {
+			res[c.ID] = e
+		}
+	}
+
+	return res
+}
+

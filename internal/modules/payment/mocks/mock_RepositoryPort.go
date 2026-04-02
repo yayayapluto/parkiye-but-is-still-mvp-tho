@@ -5,6 +5,7 @@ package payment
 import (
 	context "context"
 	payment "parkieee/internal/modules/payment"
+	"time"
 
 	mock "github.com/stretchr/testify/mock"
 
@@ -27,105 +28,47 @@ func (_m *MockRepositoryPort) EXPECT() *MockRepositoryPort_Expecter {
 // CreatePayment provides a mock function with given fields: ctx, p
 func (_m *MockRepositoryPort) CreatePayment(ctx context.Context, p *payment.Payment) error {
 	ret := _m.Called(ctx, p)
-
 	if len(ret) == 0 {
 		panic("no return value specified for CreatePayment")
 	}
-
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, *payment.Payment) error); ok {
 		r0 = rf(ctx, p)
 	} else {
 		r0 = ret.Error(0)
 	}
-
 	return r0
 }
 
-// MockRepositoryPort_CreatePayment_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreatePayment'
-type MockRepositoryPort_CreatePayment_Call struct {
-	*mock.Call
-}
-
-// CreatePayment is a helper method to define mock.On call
-//   - ctx context.Context
-//   - p *payment.Payment
-func (_e *MockRepositoryPort_Expecter) CreatePayment(ctx interface{}, p interface{}) *MockRepositoryPort_CreatePayment_Call {
-	return &MockRepositoryPort_CreatePayment_Call{Call: _e.mock.On("CreatePayment", ctx, p)}
-}
-
-func (_c *MockRepositoryPort_CreatePayment_Call) Run(run func(ctx context.Context, p *payment.Payment)) *MockRepositoryPort_CreatePayment_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(*payment.Payment))
-	})
-	return _c
-}
-
-func (_c *MockRepositoryPort_CreatePayment_Call) Return(_a0 error) *MockRepositoryPort_CreatePayment_Call {
-	_c.Call.Return(_a0)
-	return _c
-}
-
-func (_c *MockRepositoryPort_CreatePayment_Call) RunAndReturn(run func(context.Context, *payment.Payment) error) *MockRepositoryPort_CreatePayment_Call {
-	_c.Call.Return(run)
-	return _c
+func (_e *MockRepositoryPort_Expecter) CreatePayment(ctx interface{}, p interface{}) *mock.Call {
+	return _e.mock.On("CreatePayment", ctx, p)
 }
 
 // CreateRefund provides a mock function with given fields: ctx, r
 func (_m *MockRepositoryPort) CreateRefund(ctx context.Context, r *payment.Refund) error {
 	ret := _m.Called(ctx, r)
-
 	if len(ret) == 0 {
 		panic("no return value specified for CreateRefund")
 	}
-
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, *payment.Refund) error); ok {
 		r0 = rf(ctx, r)
 	} else {
 		r0 = ret.Error(0)
 	}
-
 	return r0
 }
 
-// MockRepositoryPort_CreateRefund_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateRefund'
-type MockRepositoryPort_CreateRefund_Call struct {
-	*mock.Call
-}
-
-// CreateRefund is a helper method to define mock.On call
-//   - ctx context.Context
-//   - r *payment.Refund
-func (_e *MockRepositoryPort_Expecter) CreateRefund(ctx interface{}, r interface{}) *MockRepositoryPort_CreateRefund_Call {
-	return &MockRepositoryPort_CreateRefund_Call{Call: _e.mock.On("CreateRefund", ctx, r)}
-}
-
-func (_c *MockRepositoryPort_CreateRefund_Call) Run(run func(ctx context.Context, r *payment.Refund)) *MockRepositoryPort_CreateRefund_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(*payment.Refund))
-	})
-	return _c
-}
-
-func (_c *MockRepositoryPort_CreateRefund_Call) Return(_a0 error) *MockRepositoryPort_CreateRefund_Call {
-	_c.Call.Return(_a0)
-	return _c
-}
-
-func (_c *MockRepositoryPort_CreateRefund_Call) RunAndReturn(run func(context.Context, *payment.Refund) error) *MockRepositoryPort_CreateRefund_Call {
-	_c.Call.Return(run)
-	return _c
+func (_e *MockRepositoryPort_Expecter) CreateRefund(ctx interface{}, r interface{}) *mock.Call {
+	return _e.mock.On("CreateRefund", ctx, r)
 }
 
 // FindPaymentByID provides a mock function with given fields: ctx, id
 func (_m *MockRepositoryPort) FindPaymentByID(ctx context.Context, id uuid.UUID) (*payment.Payment, error) {
 	ret := _m.Called(ctx, id)
-
 	if len(ret) == 0 {
 		panic("no return value specified for FindPaymentByID")
 	}
-
 	var r0 *payment.Payment
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID) (*payment.Payment, error)); ok {
@@ -138,53 +81,24 @@ func (_m *MockRepositoryPort) FindPaymentByID(ctx context.Context, id uuid.UUID)
 			r0 = ret.Get(0).(*payment.Payment)
 		}
 	}
-
 	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID) error); ok {
 		r1 = rf(ctx, id)
 	} else {
 		r1 = ret.Error(1)
 	}
-
 	return r0, r1
 }
 
-// MockRepositoryPort_FindPaymentByID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindPaymentByID'
-type MockRepositoryPort_FindPaymentByID_Call struct {
-	*mock.Call
-}
-
-// FindPaymentByID is a helper method to define mock.On call
-//   - ctx context.Context
-//   - id uuid.UUID
-func (_e *MockRepositoryPort_Expecter) FindPaymentByID(ctx interface{}, id interface{}) *MockRepositoryPort_FindPaymentByID_Call {
-	return &MockRepositoryPort_FindPaymentByID_Call{Call: _e.mock.On("FindPaymentByID", ctx, id)}
-}
-
-func (_c *MockRepositoryPort_FindPaymentByID_Call) Run(run func(ctx context.Context, id uuid.UUID)) *MockRepositoryPort_FindPaymentByID_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(uuid.UUID))
-	})
-	return _c
-}
-
-func (_c *MockRepositoryPort_FindPaymentByID_Call) Return(_a0 *payment.Payment, _a1 error) *MockRepositoryPort_FindPaymentByID_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *MockRepositoryPort_FindPaymentByID_Call) RunAndReturn(run func(context.Context, uuid.UUID) (*payment.Payment, error)) *MockRepositoryPort_FindPaymentByID_Call {
-	_c.Call.Return(run)
-	return _c
+func (_e *MockRepositoryPort_Expecter) FindPaymentByID(ctx interface{}, id interface{}) *mock.Call {
+	return _e.mock.On("FindPaymentByID", ctx, id)
 }
 
 // FindPaymentByMidtransOrderID provides a mock function with given fields: ctx, orderID
 func (_m *MockRepositoryPort) FindPaymentByMidtransOrderID(ctx context.Context, orderID string) (*payment.Payment, error) {
 	ret := _m.Called(ctx, orderID)
-
 	if len(ret) == 0 {
 		panic("no return value specified for FindPaymentByMidtransOrderID")
 	}
-
 	var r0 *payment.Payment
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context, string) (*payment.Payment, error)); ok {
@@ -197,53 +111,24 @@ func (_m *MockRepositoryPort) FindPaymentByMidtransOrderID(ctx context.Context, 
 			r0 = ret.Get(0).(*payment.Payment)
 		}
 	}
-
 	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
 		r1 = rf(ctx, orderID)
 	} else {
 		r1 = ret.Error(1)
 	}
-
 	return r0, r1
 }
 
-// MockRepositoryPort_FindPaymentByMidtransOrderID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindPaymentByMidtransOrderID'
-type MockRepositoryPort_FindPaymentByMidtransOrderID_Call struct {
-	*mock.Call
-}
-
-// FindPaymentByMidtransOrderID is a helper method to define mock.On call
-//   - ctx context.Context
-//   - orderID string
-func (_e *MockRepositoryPort_Expecter) FindPaymentByMidtransOrderID(ctx interface{}, orderID interface{}) *MockRepositoryPort_FindPaymentByMidtransOrderID_Call {
-	return &MockRepositoryPort_FindPaymentByMidtransOrderID_Call{Call: _e.mock.On("FindPaymentByMidtransOrderID", ctx, orderID)}
-}
-
-func (_c *MockRepositoryPort_FindPaymentByMidtransOrderID_Call) Run(run func(ctx context.Context, orderID string)) *MockRepositoryPort_FindPaymentByMidtransOrderID_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string))
-	})
-	return _c
-}
-
-func (_c *MockRepositoryPort_FindPaymentByMidtransOrderID_Call) Return(_a0 *payment.Payment, _a1 error) *MockRepositoryPort_FindPaymentByMidtransOrderID_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *MockRepositoryPort_FindPaymentByMidtransOrderID_Call) RunAndReturn(run func(context.Context, string) (*payment.Payment, error)) *MockRepositoryPort_FindPaymentByMidtransOrderID_Call {
-	_c.Call.Return(run)
-	return _c
+func (_e *MockRepositoryPort_Expecter) FindPaymentByMidtransOrderID(ctx interface{}, orderID interface{}) *mock.Call {
+	return _e.mock.On("FindPaymentByMidtransOrderID", ctx, orderID)
 }
 
 // FindPaymentsByTransactionID provides a mock function with given fields: ctx, txID
 func (_m *MockRepositoryPort) FindPaymentsByTransactionID(ctx context.Context, txID uuid.UUID) ([]payment.Payment, error) {
 	ret := _m.Called(ctx, txID)
-
 	if len(ret) == 0 {
 		panic("no return value specified for FindPaymentsByTransactionID")
 	}
-
 	var r0 []payment.Payment
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID) ([]payment.Payment, error)); ok {
@@ -256,53 +141,24 @@ func (_m *MockRepositoryPort) FindPaymentsByTransactionID(ctx context.Context, t
 			r0 = ret.Get(0).([]payment.Payment)
 		}
 	}
-
 	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID) error); ok {
 		r1 = rf(ctx, txID)
 	} else {
 		r1 = ret.Error(1)
 	}
-
 	return r0, r1
 }
 
-// MockRepositoryPort_FindPaymentsByTransactionID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindPaymentsByTransactionID'
-type MockRepositoryPort_FindPaymentsByTransactionID_Call struct {
-	*mock.Call
-}
-
-// FindPaymentsByTransactionID is a helper method to define mock.On call
-//   - ctx context.Context
-//   - txID uuid.UUID
-func (_e *MockRepositoryPort_Expecter) FindPaymentsByTransactionID(ctx interface{}, txID interface{}) *MockRepositoryPort_FindPaymentsByTransactionID_Call {
-	return &MockRepositoryPort_FindPaymentsByTransactionID_Call{Call: _e.mock.On("FindPaymentsByTransactionID", ctx, txID)}
-}
-
-func (_c *MockRepositoryPort_FindPaymentsByTransactionID_Call) Run(run func(ctx context.Context, txID uuid.UUID)) *MockRepositoryPort_FindPaymentsByTransactionID_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(uuid.UUID))
-	})
-	return _c
-}
-
-func (_c *MockRepositoryPort_FindPaymentsByTransactionID_Call) Return(_a0 []payment.Payment, _a1 error) *MockRepositoryPort_FindPaymentsByTransactionID_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *MockRepositoryPort_FindPaymentsByTransactionID_Call) RunAndReturn(run func(context.Context, uuid.UUID) ([]payment.Payment, error)) *MockRepositoryPort_FindPaymentsByTransactionID_Call {
-	_c.Call.Return(run)
-	return _c
+func (_e *MockRepositoryPort_Expecter) FindPaymentsByTransactionID(ctx interface{}, txID interface{}) *mock.Call {
+	return _e.mock.On("FindPaymentsByTransactionID", ctx, txID)
 }
 
 // FindRefundByID provides a mock function with given fields: ctx, id
 func (_m *MockRepositoryPort) FindRefundByID(ctx context.Context, id uuid.UUID) (*payment.Refund, error) {
 	ret := _m.Called(ctx, id)
-
 	if len(ret) == 0 {
 		panic("no return value specified for FindRefundByID")
 	}
-
 	var r0 *payment.Refund
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID) (*payment.Refund, error)); ok {
@@ -315,53 +171,24 @@ func (_m *MockRepositoryPort) FindRefundByID(ctx context.Context, id uuid.UUID) 
 			r0 = ret.Get(0).(*payment.Refund)
 		}
 	}
-
 	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID) error); ok {
 		r1 = rf(ctx, id)
 	} else {
 		r1 = ret.Error(1)
 	}
-
 	return r0, r1
 }
 
-// MockRepositoryPort_FindRefundByID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindRefundByID'
-type MockRepositoryPort_FindRefundByID_Call struct {
-	*mock.Call
-}
-
-// FindRefundByID is a helper method to define mock.On call
-//   - ctx context.Context
-//   - id uuid.UUID
-func (_e *MockRepositoryPort_Expecter) FindRefundByID(ctx interface{}, id interface{}) *MockRepositoryPort_FindRefundByID_Call {
-	return &MockRepositoryPort_FindRefundByID_Call{Call: _e.mock.On("FindRefundByID", ctx, id)}
-}
-
-func (_c *MockRepositoryPort_FindRefundByID_Call) Run(run func(ctx context.Context, id uuid.UUID)) *MockRepositoryPort_FindRefundByID_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(uuid.UUID))
-	})
-	return _c
-}
-
-func (_c *MockRepositoryPort_FindRefundByID_Call) Return(_a0 *payment.Refund, _a1 error) *MockRepositoryPort_FindRefundByID_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *MockRepositoryPort_FindRefundByID_Call) RunAndReturn(run func(context.Context, uuid.UUID) (*payment.Refund, error)) *MockRepositoryPort_FindRefundByID_Call {
-	_c.Call.Return(run)
-	return _c
+func (_e *MockRepositoryPort_Expecter) FindRefundByID(ctx interface{}, id interface{}) *mock.Call {
+	return _e.mock.On("FindRefundByID", ctx, id)
 }
 
 // FindRefundByPaymentID provides a mock function with given fields: ctx, paymentID
 func (_m *MockRepositoryPort) FindRefundByPaymentID(ctx context.Context, paymentID uuid.UUID) ([]payment.Refund, error) {
 	ret := _m.Called(ctx, paymentID)
-
 	if len(ret) == 0 {
 		panic("no return value specified for FindRefundByPaymentID")
 	}
-
 	var r0 []payment.Refund
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID) ([]payment.Refund, error)); ok {
@@ -374,53 +201,24 @@ func (_m *MockRepositoryPort) FindRefundByPaymentID(ctx context.Context, payment
 			r0 = ret.Get(0).([]payment.Refund)
 		}
 	}
-
 	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID) error); ok {
 		r1 = rf(ctx, paymentID)
 	} else {
 		r1 = ret.Error(1)
 	}
-
 	return r0, r1
 }
 
-// MockRepositoryPort_FindRefundByPaymentID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindRefundByPaymentID'
-type MockRepositoryPort_FindRefundByPaymentID_Call struct {
-	*mock.Call
-}
-
-// FindRefundByPaymentID is a helper method to define mock.On call
-//   - ctx context.Context
-//   - paymentID uuid.UUID
-func (_e *MockRepositoryPort_Expecter) FindRefundByPaymentID(ctx interface{}, paymentID interface{}) *MockRepositoryPort_FindRefundByPaymentID_Call {
-	return &MockRepositoryPort_FindRefundByPaymentID_Call{Call: _e.mock.On("FindRefundByPaymentID", ctx, paymentID)}
-}
-
-func (_c *MockRepositoryPort_FindRefundByPaymentID_Call) Run(run func(ctx context.Context, paymentID uuid.UUID)) *MockRepositoryPort_FindRefundByPaymentID_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(uuid.UUID))
-	})
-	return _c
-}
-
-func (_c *MockRepositoryPort_FindRefundByPaymentID_Call) Return(_a0 []payment.Refund, _a1 error) *MockRepositoryPort_FindRefundByPaymentID_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *MockRepositoryPort_FindRefundByPaymentID_Call) RunAndReturn(run func(context.Context, uuid.UUID) ([]payment.Refund, error)) *MockRepositoryPort_FindRefundByPaymentID_Call {
-	_c.Call.Return(run)
-	return _c
+func (_e *MockRepositoryPort_Expecter) FindRefundByPaymentID(ctx interface{}, paymentID interface{}) *mock.Call {
+	return _e.mock.On("FindRefundByPaymentID", ctx, paymentID)
 }
 
 // ListRefunds provides a mock function with given fields: ctx, page, pageSize
 func (_m *MockRepositoryPort) ListRefunds(ctx context.Context, page int, pageSize int) ([]payment.Refund, int64, error) {
 	ret := _m.Called(ctx, page, pageSize)
-
 	if len(ret) == 0 {
 		panic("no return value specified for ListRefunds")
 	}
-
 	var r0 []payment.Refund
 	var r1 int64
 	var r2 error
@@ -434,250 +232,155 @@ func (_m *MockRepositoryPort) ListRefunds(ctx context.Context, page int, pageSiz
 			r0 = ret.Get(0).([]payment.Refund)
 		}
 	}
-
 	if rf, ok := ret.Get(1).(func(context.Context, int, int) int64); ok {
 		r1 = rf(ctx, page, pageSize)
 	} else {
 		r1 = ret.Get(1).(int64)
 	}
-
 	if rf, ok := ret.Get(2).(func(context.Context, int, int) error); ok {
 		r2 = rf(ctx, page, pageSize)
 	} else {
 		r2 = ret.Error(2)
 	}
-
 	return r0, r1, r2
 }
 
-// MockRepositoryPort_ListRefunds_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListRefunds'
-type MockRepositoryPort_ListRefunds_Call struct {
-	*mock.Call
-}
-
-// ListRefunds is a helper method to define mock.On call
-//   - ctx context.Context
-//   - page int
-//   - pageSize int
-func (_e *MockRepositoryPort_Expecter) ListRefunds(ctx interface{}, page interface{}, pageSize interface{}) *MockRepositoryPort_ListRefunds_Call {
-	return &MockRepositoryPort_ListRefunds_Call{Call: _e.mock.On("ListRefunds", ctx, page, pageSize)}
-}
-
-func (_c *MockRepositoryPort_ListRefunds_Call) Run(run func(ctx context.Context, page int, pageSize int)) *MockRepositoryPort_ListRefunds_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(int), args[2].(int))
-	})
-	return _c
-}
-
-func (_c *MockRepositoryPort_ListRefunds_Call) Return(_a0 []payment.Refund, _a1 int64, _a2 error) *MockRepositoryPort_ListRefunds_Call {
-	_c.Call.Return(_a0, _a1, _a2)
-	return _c
-}
-
-func (_c *MockRepositoryPort_ListRefunds_Call) RunAndReturn(run func(context.Context, int, int) ([]payment.Refund, int64, error)) *MockRepositoryPort_ListRefunds_Call {
-	_c.Call.Return(run)
-	return _c
+func (_e *MockRepositoryPort_Expecter) ListRefunds(ctx interface{}, page interface{}, pageSize interface{}) *mock.Call {
+	return _e.mock.On("ListRefunds", ctx, page, pageSize)
 }
 
 // LogCallback provides a mock function with given fields: ctx, cb
 func (_m *MockRepositoryPort) LogCallback(ctx context.Context, cb *payment.MidtransCallback) error {
 	ret := _m.Called(ctx, cb)
-
 	if len(ret) == 0 {
 		panic("no return value specified for LogCallback")
 	}
-
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, *payment.MidtransCallback) error); ok {
 		r0 = rf(ctx, cb)
 	} else {
 		r0 = ret.Error(0)
 	}
-
 	return r0
 }
 
-// MockRepositoryPort_LogCallback_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LogCallback'
-type MockRepositoryPort_LogCallback_Call struct {
-	*mock.Call
-}
-
-// LogCallback is a helper method to define mock.On call
-//   - ctx context.Context
-//   - cb *payment.MidtransCallback
-func (_e *MockRepositoryPort_Expecter) LogCallback(ctx interface{}, cb interface{}) *MockRepositoryPort_LogCallback_Call {
-	return &MockRepositoryPort_LogCallback_Call{Call: _e.mock.On("LogCallback", ctx, cb)}
-}
-
-func (_c *MockRepositoryPort_LogCallback_Call) Run(run func(ctx context.Context, cb *payment.MidtransCallback)) *MockRepositoryPort_LogCallback_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(*payment.MidtransCallback))
-	})
-	return _c
-}
-
-func (_c *MockRepositoryPort_LogCallback_Call) Return(_a0 error) *MockRepositoryPort_LogCallback_Call {
-	_c.Call.Return(_a0)
-	return _c
-}
-
-func (_c *MockRepositoryPort_LogCallback_Call) RunAndReturn(run func(context.Context, *payment.MidtransCallback) error) *MockRepositoryPort_LogCallback_Call {
-	_c.Call.Return(run)
-	return _c
+func (_e *MockRepositoryPort_Expecter) LogCallback(ctx interface{}, cb interface{}) *mock.Call {
+	return _e.mock.On("LogCallback", ctx, cb)
 }
 
 // UpdateCallback provides a mock function with given fields: ctx, cb
 func (_m *MockRepositoryPort) UpdateCallback(ctx context.Context, cb *payment.MidtransCallback) error {
 	ret := _m.Called(ctx, cb)
-
 	if len(ret) == 0 {
 		panic("no return value specified for UpdateCallback")
 	}
-
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, *payment.MidtransCallback) error); ok {
 		r0 = rf(ctx, cb)
 	} else {
 		r0 = ret.Error(0)
 	}
-
 	return r0
 }
 
-// MockRepositoryPort_UpdateCallback_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateCallback'
-type MockRepositoryPort_UpdateCallback_Call struct {
-	*mock.Call
-}
-
-// UpdateCallback is a helper method to define mock.On call
-//   - ctx context.Context
-//   - cb *payment.MidtransCallback
-func (_e *MockRepositoryPort_Expecter) UpdateCallback(ctx interface{}, cb interface{}) *MockRepositoryPort_UpdateCallback_Call {
-	return &MockRepositoryPort_UpdateCallback_Call{Call: _e.mock.On("UpdateCallback", ctx, cb)}
-}
-
-func (_c *MockRepositoryPort_UpdateCallback_Call) Run(run func(ctx context.Context, cb *payment.MidtransCallback)) *MockRepositoryPort_UpdateCallback_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(*payment.MidtransCallback))
-	})
-	return _c
-}
-
-func (_c *MockRepositoryPort_UpdateCallback_Call) Return(_a0 error) *MockRepositoryPort_UpdateCallback_Call {
-	_c.Call.Return(_a0)
-	return _c
-}
-
-func (_c *MockRepositoryPort_UpdateCallback_Call) RunAndReturn(run func(context.Context, *payment.MidtransCallback) error) *MockRepositoryPort_UpdateCallback_Call {
-	_c.Call.Return(run)
-	return _c
+func (_e *MockRepositoryPort_Expecter) UpdateCallback(ctx interface{}, cb interface{}) *mock.Call {
+	return _e.mock.On("UpdateCallback", ctx, cb)
 }
 
 // UpdatePayment provides a mock function with given fields: ctx, p
 func (_m *MockRepositoryPort) UpdatePayment(ctx context.Context, p *payment.Payment) error {
 	ret := _m.Called(ctx, p)
-
 	if len(ret) == 0 {
 		panic("no return value specified for UpdatePayment")
 	}
-
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, *payment.Payment) error); ok {
 		r0 = rf(ctx, p)
 	} else {
 		r0 = ret.Error(0)
 	}
-
 	return r0
 }
 
-// MockRepositoryPort_UpdatePayment_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdatePayment'
-type MockRepositoryPort_UpdatePayment_Call struct {
-	*mock.Call
-}
-
-// UpdatePayment is a helper method to define mock.On call
-//   - ctx context.Context
-//   - p *payment.Payment
-func (_e *MockRepositoryPort_Expecter) UpdatePayment(ctx interface{}, p interface{}) *MockRepositoryPort_UpdatePayment_Call {
-	return &MockRepositoryPort_UpdatePayment_Call{Call: _e.mock.On("UpdatePayment", ctx, p)}
-}
-
-func (_c *MockRepositoryPort_UpdatePayment_Call) Run(run func(ctx context.Context, p *payment.Payment)) *MockRepositoryPort_UpdatePayment_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(*payment.Payment))
-	})
-	return _c
-}
-
-func (_c *MockRepositoryPort_UpdatePayment_Call) Return(_a0 error) *MockRepositoryPort_UpdatePayment_Call {
-	_c.Call.Return(_a0)
-	return _c
-}
-
-func (_c *MockRepositoryPort_UpdatePayment_Call) RunAndReturn(run func(context.Context, *payment.Payment) error) *MockRepositoryPort_UpdatePayment_Call {
-	_c.Call.Return(run)
-	return _c
+func (_e *MockRepositoryPort_Expecter) UpdatePayment(ctx interface{}, p interface{}) *mock.Call {
+	return _e.mock.On("UpdatePayment", ctx, p)
 }
 
 // UpdateRefund provides a mock function with given fields: ctx, r
 func (_m *MockRepositoryPort) UpdateRefund(ctx context.Context, r *payment.Refund) error {
 	ret := _m.Called(ctx, r)
-
 	if len(ret) == 0 {
 		panic("no return value specified for UpdateRefund")
 	}
-
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, *payment.Refund) error); ok {
 		r0 = rf(ctx, r)
 	} else {
 		r0 = ret.Error(0)
 	}
-
 	return r0
 }
 
-// MockRepositoryPort_UpdateRefund_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateRefund'
-type MockRepositoryPort_UpdateRefund_Call struct {
-	*mock.Call
+func (_e *MockRepositoryPort_Expecter) UpdateRefund(ctx interface{}, r interface{}) *mock.Call {
+	return _e.mock.On("UpdateRefund", ctx, r)
 }
 
-// UpdateRefund is a helper method to define mock.On call
-//   - ctx context.Context
-//   - r *payment.Refund
-func (_e *MockRepositoryPort_Expecter) UpdateRefund(ctx interface{}, r interface{}) *MockRepositoryPort_UpdateRefund_Call {
-	return &MockRepositoryPort_UpdateRefund_Call{Call: _e.mock.On("UpdateRefund", ctx, r)}
+// StampCashierRequested provides a mock function with given fields: ctx, txID, at
+func (_m *MockRepositoryPort) StampCashierRequested(ctx context.Context, txID uuid.UUID, at time.Time) error {
+	ret := _m.Called(ctx, txID, at)
+	if len(ret) == 0 {
+		panic("no return value specified for StampCashierRequested")
+	}
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, time.Time) error); ok {
+		r0 = rf(ctx, txID, at)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
 }
 
-func (_c *MockRepositoryPort_UpdateRefund_Call) Run(run func(ctx context.Context, r *payment.Refund)) *MockRepositoryPort_UpdateRefund_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(*payment.Refund))
-	})
-	return _c
+func (_e *MockRepositoryPort_Expecter) StampCashierRequested(ctx interface{}, txID interface{}, at interface{}) *mock.Call {
+	return _e.mock.On("StampCashierRequested", ctx, txID, at)
 }
 
-func (_c *MockRepositoryPort_UpdateRefund_Call) Return(_a0 error) *MockRepositoryPort_UpdateRefund_Call {
-	_c.Call.Return(_a0)
-	return _c
+// FindPendingCashierRequests provides a mock function with given fields: ctx, since
+func (_m *MockRepositoryPort) FindPendingCashierRequests(ctx context.Context, since string) ([]payment.PendingCashierRequest, error) {
+	ret := _m.Called(ctx, since)
+	if len(ret) == 0 {
+		panic("no return value specified for FindPendingCashierRequests")
+	}
+	var r0 []payment.PendingCashierRequest
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) ([]payment.PendingCashierRequest, error)); ok {
+		return rf(ctx, since)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) []payment.PendingCashierRequest); ok {
+		r0 = rf(ctx, since)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]payment.PendingCashierRequest)
+		}
+	}
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, since)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
 }
 
-func (_c *MockRepositoryPort_UpdateRefund_Call) RunAndReturn(run func(context.Context, *payment.Refund) error) *MockRepositoryPort_UpdateRefund_Call {
-	_c.Call.Return(run)
-	return _c
+func (_e *MockRepositoryPort_Expecter) FindPendingCashierRequests(ctx interface{}, since interface{}) *mock.Call {
+	return _e.mock.On("FindPendingCashierRequests", ctx, since)
 }
 
 // NewMockRepositoryPort creates a new instance of MockRepositoryPort. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
-// The first argument is typically a *testing.T value.
 func NewMockRepositoryPort(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *MockRepositoryPort {
 	mock := &MockRepositoryPort{}
 	mock.Mock.Test(t)
-
 	t.Cleanup(func() { mock.AssertExpectations(t) })
-
 	return mock
 }

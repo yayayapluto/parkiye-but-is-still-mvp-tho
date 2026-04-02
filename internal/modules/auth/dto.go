@@ -7,21 +7,23 @@ import (
 )
 
 type LoginRequest struct {
-	Email    string `json:"email"    validate:"required,email"`
-	Password string `json:"password" validate:"required,min=8"`
+	Identifier string `json:"identifier" validate:"required"`
+	Password   string `json:"password"   validate:"required,min=8"`
 }
 
 type CreateUserRequest struct {
 	Name     string    `json:"name"     validate:"required,min=2,max=100"`
+	Username string    `json:"username" validate:"required,min=3,max=50,alphanum"`
 	Email    string    `json:"email"    validate:"required,email"`
 	Password string    `json:"password" validate:"required,min=8"`
 	RoleID   uuid.UUID `json:"role_id"  validate:"required"`
 }
 
 type UpdateUserRequest struct {
-	Name   *string    `json:"name"    validate:"omitempty,min=2,max=100"`
-	Email  *string    `json:"email"   validate:"omitempty,email"`
-	RoleID *uuid.UUID `json:"role_id" validate:"omitempty"`
+	Name     *string    `json:"name"     validate:"omitempty,min=2,max=100"`
+	Username *string    `json:"username" validate:"omitempty,min=3,max=50,alphanum"`
+	Email    *string    `json:"email"    validate:"omitempty,email"`
+	RoleID   *uuid.UUID `json:"role_id"  validate:"omitempty"`
 }
 
 type ChangePasswordRequest struct {
@@ -35,17 +37,20 @@ type AssignPermissionRequest struct {
 	PermissionID uuid.UUID `json:"permission_id" validate:"required"`
 }
 
-// LoginResponse adalah yang dikembalikan setelah login sukses.
-// Token di sini adalah raw JWT — client simpan di header untuk request berikutnya.
+// LoginResponse adalah yang dikembalikan setelah login dan refresh sukses.
+// Token dan RefreshToken adalah raw value — handler yang set ke cookie, tidak diekspos ke JSON response body.
 type LoginResponse struct {
-	Token     string       `json:"token"`
-	ExpiresAt time.Time    `json:"expires_at"`
-	User      UserResponse `json:"user"`
+	Token            string       `json:"token"`
+	ExpiresAt        time.Time    `json:"-"`
+	RefreshToken     string       `json:"-"`
+	RefreshExpiresAt time.Time    `json:"-"`
+	User             UserResponse `json:"user"`
 }
 
 type UserResponse struct {
 	ID        uuid.UUID    `json:"id"`
 	Name      string       `json:"name"`
+	Username  string       `json:"username"`
 	Email     string       `json:"email"`
 	IsActive  bool         `json:"is_active"`
 	Role      RoleResponse `json:"role"`
@@ -89,6 +94,7 @@ func toUserResponse(u *User) UserResponse {
 	return UserResponse{
 		ID:        u.ID,
 		Name:      u.Name,
+		Username:  u.Username,
 		Email:     u.Email,
 		IsActive:  u.IsActive,
 		Role:      role,

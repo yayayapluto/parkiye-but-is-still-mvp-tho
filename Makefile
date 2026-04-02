@@ -7,6 +7,10 @@ unexport OCR_STORAGE_PREFIX
 
 MAKEFLAGS += --no-print-directory
 
+GOPATH := $(shell go env GOPATH)
+GOPATH_F := $(subst \,/,$(GOPATH))
+AIR := $(GOPATH_F)/bin/air.exe
+
 help:
 	@echo ""
 	@echo "PARKIEEE - available commands"
@@ -33,6 +37,7 @@ help:
 	@echo "  make build        Build API binary"
 	@echo "  make run          Kill + build + run API"
 	@echo "  make setup        First time setup (copy .env, migrate, seed)"
+	@echo "  make air          Run API with Air (live reload)"
 	@echo ""
 
 up:
@@ -82,8 +87,8 @@ dev: up wait-db migrate-seed
 	@echo "  URL        : http://localhost:${SERVER_PORT}"
 	@echo "  Metrics    : http://localhost:${SERVER_PORT}/metrics"
 	@echo ""
-	@echo "Starting API locally..."
-	@exec go run cmd/api/main.go
+	@echo "Starting API with Air (live reload)..."
+	@$(AIR)
 
 migrate:
 	go run ./cmd/migrate
@@ -116,3 +121,6 @@ setup:
 
 nih-orang:
 	@echo "WAKAKAKAKKAKAKA"
+
+air:
+	@$(AIR)

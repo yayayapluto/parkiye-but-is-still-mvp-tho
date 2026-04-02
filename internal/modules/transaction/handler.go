@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"parkieee/pkg/config"
+	"parkieee/pkg/include"
 	"parkieee/pkg/middleware"
 	"parkieee/pkg/photo"
 	"parkieee/pkg/response"
@@ -28,7 +29,11 @@ func newHandler(svc ServicePort, v *validator.Validator, s3cfg config.S3Config) 
 func (h *handler) listTransactions(c *fiber.Ctx) error {
 	pag := response.ParsePaginationRequest(c)
 
-	filter := ListFilter{}
+	filter := ListFilter{
+		SortBy:    pag.SortBy,
+		SortOrder: pag.SortOrder,
+		Search:    c.Query("search"),
+	}
 
 	if s := c.Query("status"); s != "" {
 		status := types.TransactionStatus(s)
@@ -37,14 +42,14 @@ func (h *handler) listTransactions(c *fiber.Ctx) error {
 	if s := c.Query("zone_id"); s != "" {
 		id, err := uuid.Parse(s)
 		if err != nil {
-			return response.BadRequest(c, "invalid zone_id", nil)
+			return response.BadRequest(c, "ID zona tidak valid", nil)
 		}
 		filter.ZoneID = &id
 	}
 	if s := c.Query("entry_gate_id"); s != "" {
 		id, err := uuid.Parse(s)
 		if err != nil {
-			return response.BadRequest(c, "invalid entry_gate_id", nil)
+			return response.BadRequest(c, "ID gate masuk tidak valid", nil)
 		}
 		filter.EntryGateID = &id
 	}
@@ -52,17 +57,28 @@ func (h *handler) listTransactions(c *fiber.Ctx) error {
 		m := types.EntryMethod(s)
 		filter.EntryMethod = &m
 	}
+
+	if s := c.Query("plate_mismatch"); s != "" {
+		val := s == "true"
+		filter.PlateMismatch = &val
+	}
+
+	if s := c.Query("is_unclosed"); s != "" {
+		val := s == "true"
+		filter.IsUnclosed = &val
+	}
+
 	if s := c.Query("date_from"); s != "" {
 		t, err := time.Parse("2006-01-02", s)
 		if err != nil {
-			return response.BadRequest(c, "invalid date_from, use YYYY-MM-DD", nil)
+			return response.BadRequest(c, "Format tanggal awal tidak valid, gunakan YYYY-MM-DD", nil)
 		}
 		filter.DateFrom = &t
 	}
 	if s := c.Query("date_to"); s != "" {
 		t, err := time.Parse("2006-01-02", s)
 		if err != nil {
-			return response.BadRequest(c, "invalid date_to, use YYYY-MM-DD", nil)
+			return response.BadRequest(c, "Format tanggal akhir tidak valid, gunakan YYYY-MM-DD", nil)
 		}
 		// Include the entire day.
 		endOfDay := t.Add(24*time.Hour - time.Second)
@@ -74,17 +90,44 @@ func (h *handler) listTransactions(c *fiber.Ctx) error {
 		return err
 	}
 
+	includes := include.ParseInclude(c)
+	enrMap := h.svc.EnrichTransactionList(c.Context(), txs, includes)
+
 	res := make([]TransactionResponse, 0, len(txs))
 	for i := range txs {
-		res = append(res, toResponse(&txs[i], nil))
+		var enr *TransactionEnrichment
+		if enrMap != nil {
+			e := enrMap[txs[i].ID]
+			enr = &e
+		}
+		res = append(res, toResponse(&txs[i], nil, enr))
 	}
 
-	queryParams := map[string]string{}
+	// Prepare queryParams for reliable pagination links
+	queryParams := map[string]string{
+		"sort_by":    filter.SortBy,
+		"sort_order": filter.SortOrder,
+		"search":     filter.Search,
+	}
 	if filter.Status != nil {
 		queryParams["status"] = string(*filter.Status)
 	}
 	if filter.ZoneID != nil {
 		queryParams["zone_id"] = filter.ZoneID.String()
+	}
+	if filter.PlateMismatch != nil {
+		if *filter.PlateMismatch {
+			queryParams["plate_mismatch"] = "true"
+		} else {
+			queryParams["plate_mismatch"] = "false"
+		}
+	}
+	if filter.IsUnclosed != nil {
+		if *filter.IsUnclosed {
+			queryParams["is_unclosed"] = "true"
+		} else {
+			queryParams["is_unclosed"] = "false"
+		}
 	}
 
 	pagination := response.GeneratePagination(
@@ -99,33 +142,39 @@ func (h *handler) listTransactions(c *fiber.Ctx) error {
 func (h *handler) getTransaction(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		return response.BadRequest(c, "invalid transaction id", nil)
+		return response.BadRequest(c, "ID transaksi tidak valid", nil)
 	}
 	tx, err := h.svc.GetTransaction(c.Context(), id)
 	if err != nil {
 		return err
 	}
 	ocr := h.svc.LoadOCRSummary(c.Context(), tx.ID)
-	return response.Success(c, "ok", toResponse(tx, ocr))
+	includes := include.ParseInclude(c)
+	enr := h.svc.EnrichTransaction(c.Context(), tx, includes)
+
+	return response.Success(c, "ok", toResponse(tx, ocr, enr))
 }
 
 func (h *handler) getByCode(c *fiber.Ctx) error {
 	code := c.Params("code")
 	if code == "" {
-		return response.BadRequest(c, "transaction code is required", nil)
+		return response.BadRequest(c, "Kode transaksi wajib diisi", nil)
 	}
 	tx, err := h.svc.GetByCode(c.Context(), code)
 	if err != nil {
 		return err
 	}
 	ocr := h.svc.LoadOCRSummary(c.Context(), tx.ID)
-	return response.Success(c, "ok", toResponse(tx, ocr))
+	includes := include.ParseInclude(c)
+	enr := h.svc.EnrichTransaction(c.Context(), tx, includes)
+
+	return response.Success(c, "ok", toResponse(tx, ocr, enr))
 }
 
 func (h *handler) getLogs(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		return response.BadRequest(c, "invalid transaction id", nil)
+		return response.BadRequest(c, "ID transaksi tidak valid", nil)
 	}
 	logs, err := h.svc.GetLogs(c.Context(), id)
 	if err != nil {
@@ -141,10 +190,10 @@ func (h *handler) getLogs(c *fiber.Ctx) error {
 func (h *handler) recordEntry(c *fiber.Ctx) error {
 	var req RecordEntryRequest
 	if err := c.BodyParser(&req); err != nil {
-		return response.BadRequest(c, "invalid request body", nil)
+		return response.BadRequest(c, "Format data tidak valid", nil)
 	}
 	if errs := h.v.Validate(req); errs != nil {
-		return response.BadRequest(c, "validation failed", errs)
+		return response.BadRequest(c, "Validasi gagal", errs)
 	}
 
 	if form, err := c.MultipartForm(); err == nil {
@@ -164,33 +213,40 @@ func (h *handler) recordEntry(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return response.Created(c, fmt.Sprintf("entry recorded: %s", tx.TransactionCode), toResponse(tx, nil))
+
+	includes := include.ParseInclude(c)
+	enr := h.svc.EnrichTransaction(c.Context(), tx, includes)
+
+	return response.Created(c, fmt.Sprintf("entry recorded: %s", tx.TransactionCode), toResponse(tx, nil, enr))
 }
 
 func (h *handler) getOpenByRFID(c *fiber.Ctx) error {
 	uid := c.Params("uid")
 	if uid == "" {
-		return response.BadRequest(c, "rfid uid is required", nil)
+		return response.BadRequest(c, "UID RFID wajib diisi", nil)
 	}
 	tx, err := h.svc.GetOpenByRFIDUID(c.Context(), uid)
 	if err != nil {
 		return err
 	}
-	return response.Success(c, "transaction found", toResponse(tx, nil))
+	includes := include.ParseInclude(c)
+	enr := h.svc.EnrichTransaction(c.Context(), tx, includes)
+
+	return response.Success(c, "transaction found", toResponse(tx, nil, enr))
 }
 
 func (h *handler) recordExit(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		return response.BadRequest(c, "invalid transaction id", nil)
+		return response.BadRequest(c, "ID transaksi tidak valid", nil)
 	}
 
 	var req RecordExitRequest
 	if err := c.BodyParser(&req); err != nil {
-		return response.BadRequest(c, "invalid request body", nil)
+		return response.BadRequest(c, "Format data tidak valid", nil)
 	}
 	if errs := h.v.Validate(req); errs != nil {
-		return response.BadRequest(c, "validation failed", errs)
+		return response.BadRequest(c, "Validasi gagal", errs)
 	}
 
 	if form, err := c.MultipartForm(); err == nil {
@@ -210,39 +266,46 @@ func (h *handler) recordExit(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return response.Success(c, fmt.Sprintf("exit recorded, fee: Rp%d", *tx.CalculatedFee), toResponse(tx, nil))
+
+	includes := include.ParseInclude(c)
+	enr := h.svc.EnrichTransaction(c.Context(), tx, includes)
+
+	return response.Success(c, fmt.Sprintf("exit recorded, fee: Rp%d", *tx.CalculatedFee), toResponse(tx, nil, enr))
 }
 
 func (h *handler) simulate(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		return response.BadRequest(c, "invalid transaction id", nil)
+		return response.BadRequest(c, "ID transaksi tidak valid", nil)
 	}
 	var body struct {
 		MinutesAgo int `json:"minutes_ago"`
 	}
 	if err := c.BodyParser(&body); err != nil || body.MinutesAgo <= 0 {
-		return response.BadRequest(c, "minutes_ago must be a positive integer", nil)
+		return response.BadRequest(c, "Nilai minutes_ago harus bilangan bulat positif", nil)
 	}
 	tx, err := h.svc.SimulateEntryTime(c.Context(), id, body.MinutesAgo)
 	if err != nil {
 		return err
 	}
-	return response.Success(c, "entry_at simulated", toResponse(tx, nil))
+	includes := include.ParseInclude(c)
+	enr := h.svc.EnrichTransaction(c.Context(), tx, includes)
+
+	return response.Success(c, "entry_at simulated", toResponse(tx, nil, enr))
 }
 
 func (h *handler) cancel(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		return response.BadRequest(c, "invalid transaction id", nil)
+		return response.BadRequest(c, "ID transaksi tidak valid", nil)
 	}
 
 	var req CancelRequest
 	if err := c.BodyParser(&req); err != nil {
-		return response.BadRequest(c, "invalid request body", nil)
+		return response.BadRequest(c, "Format data tidak valid", nil)
 	}
 	if errs := h.v.Validate(req); errs != nil {
-		return response.BadRequest(c, "validation failed", errs)
+		return response.BadRequest(c, "Validasi gagal", errs)
 	}
 
 	operatorID := middleware.GetUserID(c)
@@ -251,5 +314,8 @@ func (h *handler) cancel(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return response.Success(c, "transaction cancelled", toResponse(tx, nil))
+	includes := include.ParseInclude(c)
+	enr := h.svc.EnrichTransaction(c.Context(), tx, includes)
+
+	return response.Success(c, "transaction cancelled", toResponse(tx, nil, enr))
 }

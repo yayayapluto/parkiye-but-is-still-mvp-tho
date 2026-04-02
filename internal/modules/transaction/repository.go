@@ -2,6 +2,8 @@ package transaction
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -40,6 +42,7 @@ func (r *transactionRepo) FindAll(ctx context.Context, filter ListFilter, page, 
 
 	q := r.db.WithContext(ctx).Model(&Transaction{})
 
+	// Filters
 	if filter.Status != nil {
 		q = q.Where("status = ?", *filter.Status)
 	}
@@ -58,13 +61,53 @@ func (r *transactionRepo) FindAll(ctx context.Context, filter ListFilter, page, 
 	if filter.DateTo != nil {
 		q = q.Where("entry_at <= ?", *filter.DateTo)
 	}
+	if filter.PlateMismatch != nil {
+		q = q.Where("plate_mismatch = ?", *filter.PlateMismatch)
+	}
+
+	// Search (Partial match code or plate)
+	if filter.Search != "" {
+		q = q.Joins("LEFT JOIN vehicles v ON v.id = transactions.vehicle_id").
+			Where("transaction_code ILIKE ? OR v.plate_number ILIKE ?", "%"+filter.Search+"%", "%"+filter.Search+"%")
+	}
+
+	// Unclosed Filter
+	if filter.IsUnclosed != nil {
+		if *filter.IsUnclosed {
+			q = q.Where("EXISTS (SELECT 1 FROM unclosed_transaction_flags f WHERE f.transaction_id = transactions.id AND f.resolved = false)")
+		} else {
+			q = q.Where("NOT EXISTS (SELECT 1 FROM unclosed_transaction_flags f WHERE f.transaction_id = transactions.id AND f.resolved = false)")
+		}
+	}
 
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, errors.FromDB(err, "")
 	}
 
+	// Sorting
+	sortCol := "entry_at" // default
+	sortOrder := "DESC"    // default
+
+	// Whitelist allowed sort columns
+	allowed := map[string]string{
+		"entry_at":       "entry_at",
+		"exit_at":        "exit_at",
+		"code":           "transaction_code",
+		"status":         "status",
+		"fee":            "calculated_fee",
+		"plate_mismatch": "plate_mismatch",
+	}
+
+	if dbCol, ok := allowed[filter.SortBy]; ok {
+		sortCol = dbCol
+	}
+
+	if strings.ToLower(filter.SortOrder) == "asc" {
+		sortOrder = "ASC"
+	}
+
 	offset := (page - 1) * pageSize
-	err := q.Order("entry_at DESC").Offset(offset).Limit(pageSize).Find(&txs).Error
+	err := q.Order(fmt.Sprintf("%s %s", sortCol, sortOrder)).Offset(offset).Limit(pageSize).Find(&txs).Error
 	return txs, total, errors.FromDB(err, "")
 }
 

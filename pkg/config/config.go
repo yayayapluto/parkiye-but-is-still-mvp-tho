@@ -39,7 +39,8 @@ type AppConfig struct {
 	Debug     bool
 	URL       string // base URL, e.g. http://localhost:8080
 	PlaceName string // PLACE_NAME, shown on parking ticket
-	QRSecret  string // QR_SECRET, used to obfuscate ticket filenames
+	QRSecret     string // QR_SECRET, used to obfuscate ticket filenames
+	AllowOrigins string // ALLOW_ORIGINS, e.g. "https://example.com,http://localhost:3000"
 }
 
 type StorageConfig struct {
@@ -161,7 +162,8 @@ func Load() (*Config, error) {
 			Debug:     getEnvBool("APP_DEBUG", true),
 			URL:       getEnv("APP_URL", ""),
 			PlaceName: getEnv("PLACE_NAME", "Parkir"),
-			QRSecret:  getEnvRequired("QR_SECRET"),
+			QRSecret:     getEnvRequired("QR_SECRET"),
+			AllowOrigins: getEnv("ALLOW_ORIGINS", "*"),
 		},
 		Database: DatabaseConfig{
 			Host:                   getEnv("DB_HOST", "localhost"),

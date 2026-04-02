@@ -13,11 +13,16 @@ func ErrorHandler(c *fiber.Ctx, err error) error {
 	// AppError
 	var appErr *cErrors.AppError
 	if errors.As(err, &appErr) {
+		msg := appErr.Message
+		// Sembunyikan detail error internal dari user
+		if appErr.Status >= 500 {
+			msg = "Terjadi kesalahan pada server"
+		}
 		return c.Status(appErr.Status).JSON(Response{
 			Success: false,
 			Meta: Meta{
 				Code:    string(appErr.Code),
-				Message: appErr.Message,
+				Message: msg,
 				Details: appErr.Details,
 			},
 		})
@@ -35,6 +40,6 @@ func ErrorHandler(c *fiber.Ctx, err error) error {
 	// Fallback
 	return c.Status(http.StatusInternalServerError).JSON(Response{
 		Success: false,
-		Meta:    Meta{Code: "INTERNAL_ERROR", Message: "An unexpected error occurred"},
+		Meta:    Meta{Code: "INTERNAL_ERROR", Message: "Terjadi kesalahan yang tidak terduga"},
 	})
 }

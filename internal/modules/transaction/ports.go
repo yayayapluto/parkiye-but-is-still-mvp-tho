@@ -12,12 +12,17 @@ import (
 )
 
 type ListFilter struct {
-	Status      *types.TransactionStatus
-	ZoneID      *uuid.UUID
-	EntryGateID *uuid.UUID
-	EntryMethod *types.EntryMethod
-	DateFrom    *time.Time
-	DateTo      *time.Time
+	Status        *types.TransactionStatus
+	ZoneID        *uuid.UUID
+	EntryGateID   *uuid.UUID
+	EntryMethod   *types.EntryMethod
+	DateFrom      *time.Time
+	DateTo        *time.Time
+	Search        string // Matches code or plate
+	PlateMismatch *bool
+	IsUnclosed    *bool
+	SortBy        string
+	SortOrder     string
 }
 
 type TransactionRepositoryPort interface {
@@ -81,4 +86,13 @@ type ServicePort interface {
 	ListTransactions(ctx context.Context, filter ListFilter, page, pageSize int) ([]Transaction, int64, error)
 	GetLogs(ctx context.Context, txID uuid.UUID) ([]TransactionLog, error)
 	LoadOCRSummary(ctx context.Context, txID uuid.UUID) []ocrDomain.OCRResultWithJob
+
+	// Enrichment
+	EnrichTransaction(ctx context.Context, tx *Transaction, includes map[string]bool) *TransactionEnrichment
+	EnrichTransactionList(ctx context.Context, txs []Transaction, includes map[string]bool) map[uuid.UUID]TransactionEnrichment
+
+	// Simulation SSE
+	NotifySim(event SimEvent)
+	ListenSim() (<-chan SimEvent, func())
 }
+

@@ -2,6 +2,7 @@ package payment
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -21,6 +22,9 @@ type RepositoryPort interface {
 	FindRefundByPaymentID(ctx context.Context, paymentID uuid.UUID) ([]Refund, error)
 	ListRefunds(ctx context.Context, page, pageSize int) ([]Refund, int64, error)
 	UpdateRefund(ctx context.Context, r *Refund) error
+	// Polling Cashier
+	StampCashierRequested(ctx context.Context, txID uuid.UUID, requestedAt time.Time) error
+	FindPendingCashierRequests(ctx context.Context, since string) ([]PendingCashierRequest, error)
 }
 
 type ServicePort interface {
@@ -29,8 +33,6 @@ type ServicePort interface {
 	HandleMidtransWebhook(ctx context.Context, rawBody []byte, payload MidtransWebhookPayload) error
 
 	GetPayment(ctx context.Context, id uuid.UUID) (*Payment, error)
-	// PollPaymentStatus cek status ke Midtrans langsung, update DB kalau sudah paid.
-	// Dipakai saat webhook tidak bisa masuk (localhost dev).
 	PollPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*Payment, error)
 	ListByTransaction(ctx context.Context, transactionID uuid.UUID) ([]Payment, error)
 
@@ -38,4 +40,24 @@ type ServicePort interface {
 	ApproveRefund(ctx context.Context, refundID uuid.UUID, approvedBy uuid.UUID) (*Refund, error)
 	RejectRefund(ctx context.Context, refundID uuid.UUID, approvedBy uuid.UUID) (*Refund, error)
 	ListRefunds(ctx context.Context, page, pageSize int) ([]Refund, int64, error)
+	// SSE Cashier — routing per userID (bukan broadcast)
+	NotifyCashier(cashierUserID uuid.UUID, event CashierEvent) error
+	ListenCashier(cashierUserID uuid.UUID) (<-chan CashierEvent, func())
+	NotifyKiosk(txID uuid.UUID, event KioskEvent) error
+	ListenKiosk(txID uuid.UUID) (<-chan KioskEvent, func())
+
+	// Polling Cashier (Cloudflare SSE workaround)
+	StampCashierRequested(ctx context.Context, txID uuid.UUID) error
+	GetPendingCashierRequests(ctx context.Context, since string, cashierUserID uuid.UUID) ([]PendingCashierRequest, error)
+
+	// Cashier online detection — dipakai kiosk sebelum tampilkan opsi tunai
+	TouchCashierSeen(userID uuid.UUID)
+	GetCashierStatus(gateID uuid.UUID) CashierStatusResponse
+
+	// Sandbox only
+	SimulatePay(ctx context.Context, qrisImageURL string) error
+
+	// Enrichment
+	EnrichPayment(ctx context.Context, p *Payment, includes map[string]bool) *PaymentEnrichment
+	EnrichPaymentList(ctx context.Context, payments []Payment, includes map[string]bool) map[uuid.UUID]PaymentEnrichment
 }

@@ -19,6 +19,13 @@ type UserRepositoryPort interface {
 	// Returns ErrNotFound if no match — caller decides whether to expose that to client.
 	FindByEmail(ctx context.Context, email string) (*User, error)
 
+	// FindByUsername looks up a user by their unique username. Also preloads role.
+	FindByUsername(ctx context.Context, username string) (*User, error)
+
+	// List returns a paginated slice of users with their roles preloaded.
+	// roleID is optional — pass uuid.Nil to skip role filter.
+	List(ctx context.Context, roleID *uuid.UUID, activeOnly *bool, page, pageSize int) ([]User, int64, error)
+
 	// Create inserts a new user. Email uniqueness is enforced at DB level,
 	// but service layer should check first for a cleaner error message.
 	Create(ctx context.Context, user *User) error
@@ -104,6 +111,27 @@ type SessionRepositoryPort interface {
 	DeleteExpired(ctx context.Context, before time.Time) error
 }
 
+// RefreshTokenRepositoryPort mengelola refresh_tokens table.
+type RefreshTokenRepositoryPort interface {
+	// Create menyimpan refresh token baru setelah login.
+	Create(ctx context.Context, rt *RefreshToken) error
+
+	// FindByTokenHash mencari refresh token aktif (tidak revoked, belum expired).
+	FindByTokenHash(ctx context.Context, tokenHash string) (*RefreshToken, error)
+
+	// Revoke menandai satu refresh token sebagai tidak valid.
+	Revoke(ctx context.Context, id uuid.UUID, replacedBy *uuid.UUID) error
+
+	// RevokeAllByUserID revoke semua refresh token milik user — dipakai saat password change atau force logout.
+	RevokeAllByUserID(ctx context.Context, userID uuid.UUID) error
+
+	// RevokeBySessionID revoke refresh token yang terkait satu sesi.
+	RevokeBySessionID(ctx context.Context, sessionID uuid.UUID) error
+
+	// DeleteExpired housekeeping — hapus token yang sudah expired.
+	DeleteExpired(ctx context.Context, before time.Time) error
+}
+
 // LoginLogRepositoryPort is append-only — we never update or delete login logs.
 type LoginLogRepositoryPort interface {
 	// Append records a login or logout attempt.
@@ -128,11 +156,16 @@ type LoginStatsRepositoryPort interface {
 // the concrete service struct or any repo directly.
 type ServicePort interface {
 	// Login validates credentials, creates a session, and returns a signed JWT.
+	// identifier bisa berupa email (mengandung @) atau username.
 	// Handles lockout checks and logs the attempt regardless of outcome.
-	Login(ctx context.Context, email, password, ip, userAgent string) (*LoginResponse, error)
+	Login(ctx context.Context, identifier, password, ip, userAgent string) (*LoginResponse, error)
 
-	// Logout revokes the session tied to the given token.
+	// Logout revokes the session and refresh token tied to the given access token.
 	Logout(ctx context.Context, token string) error
+
+	// Refresh validates a refresh token, revokes it, issues a new access+refresh token pair (rotation),
+	// and returns the new tokens. Returns error if token is invalid, expired, or already used.
+	Refresh(ctx context.Context, rawRefreshToken, ip, userAgent string) (*LoginResponse, error)
 
 	// ValidateToken verifies the JWT signature and checks the session is still active.
 	// Returns claims that middleware puts into fiber.Locals.
@@ -140,6 +173,12 @@ type ServicePort interface {
 
 	// GetProfile returns a user with their role, used for the /me endpoint.
 	GetProfile(ctx context.Context, userID uuid.UUID) (*User, error)
+
+	// ListUsers returns paginated users. roleID and activeOnly are optional filters.
+	ListUsers(ctx context.Context, roleID *uuid.UUID, activeOnly *bool, page, pageSize int) ([]User, int64, error)
+
+	// GetUser returns a single user by ID.
+	GetUser(ctx context.Context, userID uuid.UUID) (*User, error)
 
 	// CreateUser is admin-only. Creates a new user and assigns them a role.
 	CreateUser(ctx context.Context, req *CreateUserRequest) (*User, error)

@@ -19,7 +19,7 @@ func FromDB(err error, notFoundMsg string) error {
 		return New(ErrNotFound, notFoundMsg)
 	}
 	if strings.Contains(err.Error(), "duplicate key") {
-		return New(ErrDuplicate, "data already exists")
+		return New(ErrDuplicate, "Data sudah ada")
 	}
-	return Wrap(err, ErrDatabaseError, "database error")
+	return Wrap(err, ErrDatabaseError, "Terjadi kesalahan pada database")
 }

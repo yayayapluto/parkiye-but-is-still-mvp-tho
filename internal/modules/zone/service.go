@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -14,26 +15,29 @@ import (
 )
 
 type service struct {
-	zoneRepo     ZoneRepositoryPort
-	gateRepo     GateRepositoryPort
-	capacityRepo CapacityLogRepositoryPort
-	db           *gorm.DB
-	log          logger.Logger
+	zoneRepo       ZoneRepositoryPort
+	gateRepo       GateRepositoryPort
+	assignmentRepo GateCashierAssignmentRepositoryPort
+	capacityRepo   CapacityLogRepositoryPort
+	db             *gorm.DB
+	log            logger.Logger
 }
 
 func NewService(
 	zoneRepo ZoneRepositoryPort,
 	gateRepo GateRepositoryPort,
+	assignmentRepo GateCashierAssignmentRepositoryPort,
 	capacityRepo CapacityLogRepositoryPort,
 	db *gorm.DB,
 	log logger.Logger,
 ) ServicePort {
 	return &service{
-		zoneRepo:     zoneRepo,
-		gateRepo:     gateRepo,
-		capacityRepo: capacityRepo,
-		db:           db,
-		log:          log,
+		zoneRepo:       zoneRepo,
+		gateRepo:       gateRepo,
+		assignmentRepo: assignmentRepo,
+		capacityRepo:   capacityRepo,
+		db:             db,
+		log:            log,
 	}
 }
 
@@ -135,7 +139,7 @@ func (s *service) GetGate(ctx context.Context, id uuid.UUID) (*Gate, error) {
 func (s *service) ListGates(ctx context.Context, zoneID uuid.UUID, onlyActive bool, page, pageSize int) ([]Gate, int64, error) {
 	if _, err := s.zoneRepo.FindByID(ctx, zoneID); err != nil {
 		s.log.Warn(ctx, "list gates failed: zone not found", "zone_id", zoneID)
-		return nil, 0, errors.New(errors.ErrNotFound, "zone not found")
+		return nil, 0, errors.New(errors.ErrNotFound, "Zona tidak ditemukan")
 	}
 	gates, total, err := s.gateRepo.FindByZoneID(ctx, zoneID, onlyActive, page, pageSize)
 	if err != nil {
@@ -146,16 +150,26 @@ func (s *service) ListGates(ctx context.Context, zoneID uuid.UUID, onlyActive bo
 	return gates, total, nil
 }
 
+func (s *service) ListAllGates(ctx context.Context, zoneID *uuid.UUID, gateType *string, onlyActive bool, page, pageSize int) ([]Gate, int64, error) {
+	gates, total, err := s.gateRepo.FindAll(ctx, zoneID, gateType, onlyActive, page, pageSize)
+	if err != nil {
+		s.log.Error(ctx, "list all gates failed", "error", err)
+		return nil, 0, err
+	}
+	s.log.Debug(ctx, "all gates listed", "count", len(gates), "total", total)
+	return gates, total, nil
+}
+
 func (s *service) CreateGate(ctx context.Context, req *CreateGateRequest, actorID uuid.UUID) (*Gate, error) {
 	if _, err := s.zoneRepo.FindByID(ctx, req.ZoneID); err != nil {
 		s.log.Warn(ctx, "create gate failed: zone not found", "zone_id", req.ZoneID)
-		return nil, errors.New(errors.ErrNotFound, "zone not found")
+		return nil, errors.New(errors.ErrNotFound, "Zona tidak ditemukan")
 	}
 
 	token, err := generateGateToken()
 	if err != nil {
 		s.log.Error(ctx, "failed to generate gate token", "error", err)
-		return nil, errors.New(errors.ErrInternal, "failed to generate gate token")
+		return nil, errors.New(errors.ErrInternal, "Gagal membuat token gate")
 	}
 
 	gate := &Gate{
@@ -163,9 +177,10 @@ func (s *service) CreateGate(ctx context.Context, req *CreateGateRequest, actorI
 		ZoneID:       req.ZoneID,
 		Name:         req.Name,
 		GateType:     req.GateType,
+		Mode:         types.GateModeManless,
 		LocationDesc: req.LocationDesc,
 		GateToken:    token,
-		IsActive:     true,
+		IsActive:     false,
 		CreatedBy:    &actorID,
 	}
 
@@ -226,7 +241,7 @@ func (s *service) RegenerateGateToken(ctx context.Context, id uuid.UUID) (*Gate,
 	token, err := generateGateToken()
 	if err != nil {
 		s.log.Error(ctx, "failed to generate new gate token", "gate_id", id, "error", err)
-		return nil, errors.New(errors.ErrInternal, "failed to generate gate token")
+		return nil, errors.New(errors.ErrInternal, "Gagal membuat token gate")
 	}
 
 	gate.GateToken = token
@@ -239,7 +254,99 @@ func (s *service) RegenerateGateToken(ctx context.Context, id uuid.UUID) (*Gate,
 	return s.gateRepo.FindByID(ctx, id)
 }
 
-// generateGateToken menghasilkan token unik format: gat_ + 32 hex chars (16 random bytes).
+func (s *service) UpdateGateMode(ctx context.Context, id uuid.UUID, mode types.GateMode, actorID uuid.UUID) (*Gate, error) {
+	gate, err := s.gateRepo.FindByID(ctx, id)
+	if err != nil {
+		s.log.Warn(ctx, "update gate mode failed: gate not found", "gate_id", id)
+		return nil, err
+	}
+
+	if gate.GateType != types.GateTypeExit {
+		return nil, errors.New(errors.ErrValidation, "Mode gate hanya berlaku untuk gate keluar")
+	}
+
+	if mode == types.GateModeWithCashier {
+		if _, err := s.assignmentRepo.FindByGateID(ctx, id); err != nil {
+			s.log.Warn(ctx, "update gate mode failed: no cashier assigned", "gate_id", id)
+			return nil, errors.New(errors.ErrValidation, "Tetapkan kasir ke gate ini sebelum beralih ke mode with_cashier")
+		}
+	}
+
+	if err := s.gateRepo.UpdateMode(ctx, id, mode); err != nil {
+		s.log.Error(ctx, "failed to update gate mode", "gate_id", id, "mode", mode, "error", err)
+		return nil, err
+	}
+
+	s.log.Info(ctx, "gate mode updated", "gate_id", id, "mode", mode, "actor_id", actorID)
+	return s.gateRepo.FindByID(ctx, id)
+}
+
+func (s *service) AssignCashier(ctx context.Context, gateID, userID, assignedBy uuid.UUID) (*GateCashierAssignment, error) {
+	gate, err := s.gateRepo.FindByID(ctx, gateID)
+	if err != nil {
+		s.log.Warn(ctx, "assign cashier failed: gate not found", "gate_id", gateID)
+		return nil, err
+	}
+
+	if gate.GateType != types.GateTypeExit {
+		return nil, errors.New(errors.ErrValidation, "Penugasan kasir hanya berlaku untuk gate keluar")
+	}
+
+	a := &GateCashierAssignment{
+		ID:         uuid.New(),
+		GateID:     gateID,
+		UserID:     userID,
+		AssignedBy: assignedBy,
+		AssignedAt: time.Now(),
+	}
+
+	if err := s.assignmentRepo.Upsert(ctx, a); err != nil {
+		s.log.Error(ctx, "failed to upsert cashier assignment", "gate_id", gateID, "user_id", userID, "error", err)
+		return nil, err
+	}
+
+	s.log.Info(ctx, "cashier assigned to gate", "gate_id", gateID, "user_id", userID, "assigned_by", assignedBy)
+	return s.assignmentRepo.FindByGateID(ctx, gateID)
+}
+
+func (s *service) UnassignCashier(ctx context.Context, gateID uuid.UUID) error {
+	gate, err := s.gateRepo.FindByID(ctx, gateID)
+	if err != nil {
+		s.log.Warn(ctx, "unassign cashier failed: gate not found", "gate_id", gateID)
+		return err
+	}
+
+	if gate.Mode == types.GateModeWithCashier {
+		return errors.New(errors.ErrValidation, "Ubah mode gate ke manless sebelum menghapus penugasan kasir")
+	}
+
+	if err := s.assignmentRepo.DeleteByGateID(ctx, gateID); err != nil {
+		s.log.Error(ctx, "failed to delete cashier assignment", "gate_id", gateID, "error", err)
+		return err
+	}
+
+	s.log.Info(ctx, "cashier unassigned from gate", "gate_id", gateID)
+	return nil
+}
+
+func (s *service) GetCashierAssignment(ctx context.Context, gateID uuid.UUID) (*GateCashierAssignment, error) {
+	a, err := s.assignmentRepo.FindByGateID(ctx, gateID)
+	if err != nil {
+		s.log.Debug(ctx, "get cashier assignment: none", "gate_id", gateID)
+		return nil, err
+	}
+	return a, nil
+}
+
+func (s *service) GetAssignmentByUser(ctx context.Context, userID uuid.UUID) (*GateCashierAssignment, error) {
+	a, err := s.assignmentRepo.FindByUserID(ctx, userID)
+	if err != nil {
+		s.log.Debug(ctx, "get assignment by user: none", "user_id", userID)
+		return nil, err
+	}
+	return a, nil
+}
+
 func generateGateToken() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
@@ -271,8 +378,18 @@ func (s *service) GetCapacity(ctx context.Context, zoneID uuid.UUID) (*ZoneCapac
 	}, nil
 }
 
-// RecordCapacityEvent is called by the transaction module after a confirmed entry or exit.
-// It reads the latest log, computes new counts, then appends a new row.
+// ListAllCapacities returns the latest capacity snapshot for ALL active zones
+// in a single aggregated query via the repository.
+func (s *service) ListAllCapacities(ctx context.Context) ([]ZoneCapacityResponse, error) {
+	result, err := s.capacityRepo.AllCapacities(ctx)
+	if err != nil {
+		s.log.Error(ctx, "list all capacities failed", "error", err)
+		return nil, err
+	}
+	s.log.Debug(ctx, "all zone capacities fetched", "count", len(result))
+	return result, nil
+}
+
 func (s *service) RecordCapacityEvent(ctx context.Context, zoneID, transactionID uuid.UUID, event types.ZoneEventType) error {
 	zone, err := s.zoneRepo.FindByID(ctx, zoneID)
 	if err != nil {

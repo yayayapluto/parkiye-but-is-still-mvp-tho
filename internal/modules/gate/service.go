@@ -12,45 +12,46 @@ import (
 	"parkieee/pkg/errors"
 	"parkieee/pkg/logger"
 	"parkieee/pkg/middleware"
+	"parkieee/pkg/types"
 )
 
 type service struct {
-	gateRepo    zoneDomain.GateRepositoryPort
-	pairingRepo PairingRepositoryPort
-	cfg         *config.Config
-	log         logger.Logger
+	gateRepo       zoneDomain.GateRepositoryPort
+	pairingRepo    PairingRepositoryPort
+	assignmentRepo zoneDomain.GateCashierAssignmentRepositoryPort
+	cfg            *config.Config
+	log            logger.Logger
 }
 
 func NewService(
 	gateRepo zoneDomain.GateRepositoryPort,
 	pairingRepo PairingRepositoryPort,
+	assignmentRepo zoneDomain.GateCashierAssignmentRepositoryPort,
 	cfg *config.Config,
 	log logger.Logger,
 ) ServicePort {
 	return &service{
-		gateRepo:    gateRepo,
-		pairingRepo: pairingRepo,
-		cfg:         cfg,
-		log:         log,
+		gateRepo:       gateRepo,
+		pairingRepo:    pairingRepo,
+		assignmentRepo: assignmentRepo,
+		cfg:            cfg,
+		log:            log,
 	}
 }
-
-// ── Token-first flow ──────────────────────────────────────────────────────────
 
 func (s *service) Authenticate(ctx context.Context, gateToken string) (*GateAuthResponse, error) {
 	gate, err := s.gateRepo.FindByToken(ctx, gateToken)
 	if err != nil {
-		return nil, errors.New(errors.ErrUnauthorized, "invalid gate token")
+		return nil, errors.New(errors.ErrUnauthorized, "Token gate tidak valid")
 	}
-
 	if !gate.IsActive {
-		return nil, errors.New(errors.ErrUnauthorized, "gate is inactive")
+		return nil, errors.New(errors.ErrUnauthorized, "Gate tidak aktif")
 	}
 
 	token, expiresAt, err := s.generateGateJWT(gate)
 	if err != nil {
 		s.log.Error(ctx, "failed to generate gate JWT", "error", err, "gate_id", gate.ID)
-		return nil, errors.New(errors.ErrInternal, "failed to generate token")
+		return nil, errors.New(errors.ErrInternal, "Gagal membuat token")
 	}
 
 	go func() {
@@ -59,21 +60,10 @@ func (s *service) Authenticate(ctx context.Context, gateToken string) (*GateAuth
 
 	s.log.Info(ctx, "gate authenticated via token", "gate_id", gate.ID, "gate_name", gate.Name)
 
-	zoneName := ""
-	if gate.Zone != nil {
-		zoneName = gate.Zone.Name
-	}
-
 	return &GateAuthResponse{
 		Token:     token,
 		ExpiresAt: expiresAt,
-		Gate: GateInfo{
-			ID:       gate.ID,
-			Name:     gate.Name,
-			GateType: gate.GateType,
-			ZoneID:   gate.ZoneID,
-			ZoneName: zoneName,
-		},
+		Gate:      toGateInfo(gate),
 	}, nil
 }
 
@@ -81,36 +71,36 @@ func (s *service) ValidateGateToken(ctx context.Context, jwtToken string) (*midd
 	t, err := jwt.Parse(jwtToken, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			s.log.Warn(ctx, "validate gate token failed: unexpected signing method")
-			return nil, errors.New(errors.ErrUnauthorized, "unexpected signing method")
+			return nil, errors.New(errors.ErrUnauthorized, "Token tidak valid atau sudah kedaluwarsa")
 		}
 		return []byte(s.cfg.GateJWTSecret()), nil
 	})
 	if err != nil || !t.Valid {
 		s.log.Warn(ctx, "validate gate token failed: invalid or expired token")
-		return nil, errors.New(errors.ErrUnauthorized, "invalid gate token")
+		return nil, errors.New(errors.ErrUnauthorized, "Token gate tidak valid")
 	}
 
 	claims, ok := t.Claims.(jwt.MapClaims)
 	if !ok {
 		s.log.Warn(ctx, "validate gate token failed: cannot parse claims")
-		return nil, errors.New(errors.ErrUnauthorized, "invalid token claims")
+		return nil, errors.New(errors.ErrUnauthorized, "Token tidak valid atau sudah kedaluwarsa")
 	}
 
 	if kind, _ := claims["kind"].(string); kind != "gate" {
 		s.log.Warn(ctx, "validate gate token failed: not a gate token", "kind", kind)
-		return nil, errors.New(errors.ErrUnauthorized, "not a gate token")
+		return nil, errors.New(errors.ErrUnauthorized, "Token tidak valid atau sudah kedaluwarsa")
 	}
 
 	gateID, err := uuid.Parse(claims["gate_id"].(string))
 	if err != nil {
 		s.log.Warn(ctx, "validate gate token failed: invalid gate_id")
-		return nil, errors.New(errors.ErrUnauthorized, "invalid gate_id in token")
+		return nil, errors.New(errors.ErrUnauthorized, "Token tidak valid atau sudah kedaluwarsa")
 	}
 
 	zoneID, err := uuid.Parse(claims["zone_id"].(string))
 	if err != nil {
 		s.log.Warn(ctx, "validate gate token failed: invalid zone_id")
-		return nil, errors.New(errors.ErrUnauthorized, "invalid zone_id in token")
+		return nil, errors.New(errors.ErrUnauthorized, "Token tidak valid atau sudah kedaluwarsa")
 	}
 
 	s.log.Debug(ctx, "gate token validated", "gate_id", gateID, "zone_id", zoneID)
@@ -122,19 +112,15 @@ func (s *service) ValidateGateToken(ctx context.Context, jwtToken string) (*midd
 	}, nil
 }
 
-// ── QR Pairing flow ───────────────────────────────────────────────────────────
-
 func (s *service) RequestPairing(ctx context.Context, ip string) (*PairingResponse, error) {
-	// Expire paksa semua pending code dari IP yang sama — screen request baru
 	if err := s.pairingRepo.InvalidatePendingByIP(ctx, ip); err != nil {
 		s.log.Error(ctx, "failed to invalidate old pairing codes", "ip", ip, "error", err)
-		// non-fatal, lanjut
 	}
 
 	code, err := generatePairingCode()
 	if err != nil {
 		s.log.Error(ctx, "failed to generate pairing code", "ip", ip, "error", err)
-		return nil, errors.New(errors.ErrInternal, "failed to generate pairing code")
+		return nil, errors.New(errors.ErrInternal, "Gagal membuat kode pairing")
 	}
 
 	expiresAt := time.Now().Add(5 * time.Minute)
@@ -142,7 +128,7 @@ func (s *service) RequestPairing(ctx context.Context, ip string) (*PairingRespon
 	qrContent, err := buildQRContent(s.cfg.BaseURL(), code, expiresAt)
 	if err != nil {
 		s.log.Error(ctx, "failed to build QR content", "code", code, "error", err)
-		return nil, errors.New(errors.ErrInternal, "failed to build QR content")
+		return nil, errors.New(errors.ErrInternal, "Gagal membuat konten QR")
 	}
 
 	pairing := &GatePairingCode{
@@ -171,7 +157,7 @@ func (s *service) GetPairingInfo(ctx context.Context, code string) (*PairingInfo
 	p, err := s.pairingRepo.FindByCode(ctx, code)
 	if err != nil {
 		s.log.Warn(ctx, "get pairing info failed: code not found", "code", code)
-		return nil, errors.New(errors.ErrNotFound, "pairing code not found")
+		return nil, errors.New(errors.ErrNotFound, "Kode pairing tidak ditemukan")
 	}
 
 	isExpired := time.Now().After(p.ExpiresAt)
@@ -190,68 +176,84 @@ func (s *service) GetPairingInfo(ctx context.Context, code string) (*PairingInfo
 	}, nil
 }
 
-func (s *service) ConfirmPairing(ctx context.Context, code string, gateID uuid.UUID, adminID uuid.UUID) (*PairingConfirmResponse, error) {
+func (s *service) ConfirmPairing(ctx context.Context, code string, req ConfirmPairingRequest, adminID uuid.UUID) (*PairingConfirmResponse, error) {
 	p, err := s.pairingRepo.FindByCode(ctx, code)
 	if err != nil {
 		s.log.Warn(ctx, "confirm pairing failed: code not found", "code", code, "admin_id", adminID)
-		return nil, errors.New(errors.ErrNotFound, "pairing code not found")
+		return nil, errors.New(errors.ErrNotFound, "Kode pairing tidak ditemukan")
 	}
-
 	if p.Status == "confirmed" {
 		s.log.Warn(ctx, "confirm pairing failed: already confirmed", "code", code)
-		return nil, errors.New(errors.ErrConflict, "pairing code already confirmed")
+		return nil, errors.New(errors.ErrConflict, "Kode pairing sudah dikonfirmasi")
 	}
-
 	if time.Now().After(p.ExpiresAt) {
 		s.log.Warn(ctx, "confirm pairing failed: code expired", "code", code)
-		return nil, errors.New(errors.ErrValidation, "pairing code has expired")
+		return nil, errors.New(errors.ErrValidation, "Kode pairing sudah kedaluwarsa")
 	}
 
-	gate, err := s.gateRepo.FindByID(ctx, gateID)
+	gate, err := s.gateRepo.FindByID(ctx, req.GateID)
 	if err != nil {
-		s.log.Warn(ctx, "confirm pairing failed: gate not found", "gate_id", gateID)
-		return nil, errors.New(errors.ErrNotFound, "gate not found")
+		s.log.Warn(ctx, "confirm pairing failed: gate not found", "gate_id", req.GateID)
+		return nil, errors.New(errors.ErrNotFound, "Gate tidak ditemukan")
+	}
+
+	// Kalau gate exit dan cashier_user_id diisi → set mode with_cashier + buat assignment
+	if gate.GateType == types.GateTypeExit && req.CashierUserID != nil {
+		assignment := &zoneDomain.GateCashierAssignment{
+			ID:         uuid.New(),
+			GateID:     gate.ID,
+			UserID:     *req.CashierUserID,
+			AssignedBy: adminID,
+			AssignedAt: time.Now(),
+		}
+		if err := s.assignmentRepo.Upsert(ctx, assignment); err != nil {
+			s.log.Error(ctx, "confirm pairing: failed to upsert cashier assignment", "gate_id", gate.ID, "user_id", *req.CashierUserID, "error", err)
+			return nil, err
+		}
+		if err := s.gateRepo.UpdateMode(ctx, gate.ID, types.GateModeWithCashier); err != nil {
+			s.log.Error(ctx, "confirm pairing: failed to set gate mode with_cashier", "gate_id", gate.ID, "error", err)
+			return nil, err
+		}
+		gate.Mode = types.GateModeWithCashier
+		s.log.Info(ctx, "confirm pairing: cashier assigned and mode set to with_cashier", "gate_id", gate.ID, "cashier_user_id", *req.CashierUserID)
 	}
 
 	if !gate.IsActive {
-		s.log.Warn(ctx, "confirm pairing failed: gate inactive", "gate_id", gateID)
+		s.log.Warn(ctx, "confirm pairing failed: gate inactive", "gate_id", gate.ID)
 		return nil, errors.New(errors.ErrValidation, "gate is inactive")
 	}
 
 	gateJWT, expiresAt, err := s.generateGateJWT(gate)
 	if err != nil {
 		s.log.Error(ctx, "failed to generate gate JWT for pairing", "error", err, "gate_id", gate.ID)
-		return nil, errors.New(errors.ErrInternal, "failed to generate gate token")
+		return nil, errors.New(errors.ErrInternal, "Gagal membuat token gate")
 	}
 
-	if err := s.pairingRepo.Confirm(ctx, p.ID, gateID, adminID, gateJWT); err != nil {
-		s.log.Error(ctx, "failed to confirm pairing", "code", code, "gate_id", gateID, "error", err)
+	if err := s.pairingRepo.Confirm(ctx, p.ID, req.GateID, adminID, gateJWT); err != nil {
+		s.log.Error(ctx, "failed to confirm pairing", "code", code, "gate_id", req.GateID, "error", err)
 		return nil, err
 	}
 
-	// Push JWT ke screen via SSE
+	gate.IsActive = true
+	if err := s.gateRepo.Update(ctx, gate); err != nil {
+		s.log.Error(ctx, "failed to activate gate after pairing", "gate_id", gate.ID, "error", err)
+	}
+
 	if ch, ok := s.pairingRepo.GetSSEClient(code); ok {
 		ch <- gateJWT
 		s.pairingRepo.RemoveSSEClient(code)
 	}
 
-	zoneName := ""
-	if gate.Zone != nil {
-		zoneName = gate.Zone.Name
-	}
+	go func() {
+		_ = s.gateRepo.UpdateTokenLastUsed(context.Background(), gate.ID)
+	}()
 
-	s.log.Info(ctx, "pairing confirmed", "code", code, "gate_id", gateID, "admin_id", adminID)
+	s.log.Info(ctx, "pairing confirmed", "code", code, "gate_id", req.GateID, "admin_id", adminID)
 
 	return &PairingConfirmResponse{
 		GateJWT:   gateJWT,
 		ExpiresAt: expiresAt,
-		Gate: GateInfo{
-			ID:       gate.ID,
-			Name:     gate.Name,
-			GateType: gate.GateType,
-			ZoneID:   gate.ZoneID,
-			ZoneName: zoneName,
-		},
+		Gate:      toGateInfo(gate),
 	}, nil
 }
 
@@ -259,43 +261,51 @@ func (s *service) ListenPairing(ctx context.Context, code string) (<-chan string
 	p, err := s.pairingRepo.FindByCode(ctx, code)
 	if err != nil {
 		s.log.Warn(ctx, "listen pairing failed: code not found", "code", code)
-		return nil, errors.New(errors.ErrNotFound, "pairing code not found")
+		return nil, errors.New(errors.ErrNotFound, "Kode pairing tidak ditemukan")
 	}
-
 	if p.Status == "confirmed" {
 		s.log.Warn(ctx, "listen pairing failed: already confirmed", "code", code)
-		return nil, errors.New(errors.ErrConflict, "pairing code already confirmed")
+		return nil, errors.New(errors.ErrConflict, "Kode pairing sudah dikonfirmasi")
 	}
-
 	if time.Now().After(p.ExpiresAt) {
 		s.log.Warn(ctx, "listen pairing failed: code expired", "code", code)
-		return nil, errors.New(errors.ErrValidation, "pairing code has expired")
+		return nil, errors.New(errors.ErrValidation, "Kode pairing sudah kedaluwarsa")
 	}
 
-	// Buffer 1 supaya push tidak blocking
 	ch := make(chan string, 1)
 	s.pairingRepo.SetSSEClient(code, ch)
-
 	s.log.Info(ctx, "SSE pairing listener connected", "code", code)
 	return ch, nil
 }
 
-// ── helpers ───────────────────────────────────────────────────────────────────
-
 func (s *service) generateGateJWT(gate *zoneDomain.Gate) (string, time.Time, error) {
 	expiresAt := time.Now().Add(s.cfg.JWT.GateTokenTTL)
-
 	claims := jwt.MapClaims{
 		"kind":      "gate",
 		"gate_id":   gate.ID.String(),
 		"gate_type": string(gate.GateType),
+		"gate_mode": string(gate.Mode),
 		"zone_id":   gate.ZoneID.String(),
 		"gate_name": gate.Name,
 		"exp":       expiresAt.Unix(),
 		"iat":       time.Now().Unix(),
 	}
-
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	token, err := t.SignedString([]byte(s.cfg.GateJWTSecret()))
 	return token, expiresAt, err
+}
+
+func toGateInfo(gate *zoneDomain.Gate) GateInfo {
+	zoneName := ""
+	if gate.Zone != nil {
+		zoneName = gate.Zone.Name
+	}
+	return GateInfo{
+		ID:       gate.ID,
+		Name:     gate.Name,
+		GateType: gate.GateType,
+		Mode:     gate.Mode,
+		ZoneID:   gate.ZoneID,
+		ZoneName: zoneName,
+	}
 }

@@ -12,7 +12,7 @@ type CreateZoneRequest struct {
 	Description      string     `json:"description"         validate:"omitempty,max=500"`
 	Capacity         int        `json:"capacity"            validate:"required,min=1"`
 	AdditionalFee    int        `json:"additional_fee"      validate:"min=0"`
-	ForVehicleTypeID *uuid.UUID `json:"for_vehicle_type_id" validate:"omitempty,uuid4"` // default vehicle type for OCR in this zone
+	ForVehicleTypeID *uuid.UUID `json:"for_vehicle_type_id" validate:"omitempty,uuid4"`
 }
 
 type UpdateZoneRequest struct {
@@ -38,6 +38,14 @@ type UpdateGateRequest struct {
 	IsActive     *bool           `json:"is_active"`
 }
 
+type UpdateGateModeRequest struct {
+	Mode types.GateMode `json:"mode" validate:"required,oneof=manless with_cashier"`
+}
+
+type AssignCashierRequest struct {
+	UserID uuid.UUID `json:"user_id" validate:"required"`
+}
+
 type ZoneResponse struct {
 	ID               uuid.UUID  `json:"id"`
 	Name             string     `json:"name"`
@@ -55,12 +63,21 @@ type GateResponse struct {
 	ZoneID          uuid.UUID      `json:"zone_id"`
 	Name            string         `json:"name"`
 	GateType        types.GateType `json:"gate_type"`
+	Mode            types.GateMode `json:"mode"`
 	LocationDesc    string         `json:"location_desc"`
-	GateToken       string         `json:"gate_token"` // hanya tampil ke admin — jangan expose ke publik
+	GateToken       string         `json:"gate_token"`
 	TokenLastUsedAt *time.Time     `json:"token_last_used_at"`
 	IsActive        bool           `json:"is_active"`
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`
+}
+
+type GateCashierAssignmentResponse struct {
+	ID         uuid.UUID `json:"id"`
+	GateID     uuid.UUID `json:"gate_id"`
+	UserID     uuid.UUID `json:"user_id"`
+	AssignedBy uuid.UUID `json:"assigned_by"`
+	AssignedAt time.Time `json:"assigned_at"`
 }
 
 type ZoneCapacityResponse struct {
@@ -91,11 +108,22 @@ func toGateResponse(g *Gate) GateResponse {
 		ZoneID:          g.ZoneID,
 		Name:            g.Name,
 		GateType:        g.GateType,
+		Mode:            g.Mode,
 		LocationDesc:    g.LocationDesc,
 		GateToken:       g.GateToken,
 		TokenLastUsedAt: g.TokenLastUsedAt,
 		IsActive:        g.IsActive,
 		CreatedAt:       g.CreatedAt,
 		UpdatedAt:       g.UpdatedAt,
+	}
+}
+
+func toAssignmentResponse(a *GateCashierAssignment) GateCashierAssignmentResponse {
+	return GateCashierAssignmentResponse{
+		ID:         a.ID,
+		GateID:     a.GateID,
+		UserID:     a.UserID,
+		AssignedBy: a.AssignedBy,
+		AssignedAt: a.AssignedAt,
 	}
 }

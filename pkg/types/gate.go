@@ -7,6 +7,13 @@ const (
 	GateTypeExit  GateType = "exit"
 )
 
+type GateMode string
+
+const (
+	GateModeManless     GateMode = "manless"
+	GateModeWithCashier GateMode = "with_cashier"
+)
+
 type DeviceType string
 
 const (

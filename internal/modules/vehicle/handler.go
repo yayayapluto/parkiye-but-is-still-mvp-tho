@@ -1,10 +1,12 @@
 package vehicle
 
 import (
+	"time"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"parkieee/pkg/middleware"
 	"parkieee/pkg/response"
+	"parkieee/pkg/types"
 	"parkieee/pkg/validator"
 )
 
@@ -32,7 +34,7 @@ func (h *handler) listVehicleTypes(c *fiber.Ctx) error {
 func (h *handler) getVehicleType(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		return response.BadRequest(c, "invalid vehicle type id", nil)
+		return response.BadRequest(c, "ID jenis kendaraan tidak valid", nil)
 	}
 	vt, err := h.svc.GetVehicleType(c.Context(), id)
 	if err != nil {
@@ -44,10 +46,10 @@ func (h *handler) getVehicleType(c *fiber.Ctx) error {
 func (h *handler) createVehicleType(c *fiber.Ctx) error {
 	var req CreateVehicleTypeRequest
 	if err := c.BodyParser(&req); err != nil {
-		return response.BadRequest(c, "invalid request body", nil)
+		return response.BadRequest(c, "Format data tidak valid", nil)
 	}
 	if errs := h.v.Validate(req); errs != nil {
-		return response.BadRequest(c, "validation failed", errs)
+		return response.BadRequest(c, "Validasi gagal", errs)
 	}
 	vt, err := h.svc.CreateVehicleType(c.Context(), &req)
 	if err != nil {
@@ -59,14 +61,14 @@ func (h *handler) createVehicleType(c *fiber.Ctx) error {
 func (h *handler) updateVehicleType(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		return response.BadRequest(c, "invalid vehicle type id", nil)
+		return response.BadRequest(c, "ID jenis kendaraan tidak valid", nil)
 	}
 	var req UpdateVehicleTypeRequest
 	if err := c.BodyParser(&req); err != nil {
-		return response.BadRequest(c, "invalid request body", nil)
+		return response.BadRequest(c, "Format data tidak valid", nil)
 	}
 	if errs := h.v.Validate(req); errs != nil {
-		return response.BadRequest(c, "validation failed", errs)
+		return response.BadRequest(c, "Validasi gagal", errs)
 	}
 	vt, err := h.svc.UpdateVehicleType(c.Context(), id, &req)
 	if err != nil {
@@ -78,7 +80,7 @@ func (h *handler) updateVehicleType(c *fiber.Ctx) error {
 func (h *handler) deleteVehicleType(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		return response.BadRequest(c, "invalid vehicle type id", nil)
+		return response.BadRequest(c, "ID jenis kendaraan tidak valid", nil)
 	}
 	if err := h.svc.DeleteVehicleType(c.Context(), id); err != nil {
 		return err
@@ -87,17 +89,46 @@ func (h *handler) deleteVehicleType(c *fiber.Ctx) error {
 }
 
 func (h *handler) listVehicles(c *fiber.Ctx) error {
-	var typeID *uuid.UUID
+	filter := ListVehicleFilter{
+		Search:      c.Query("search"),
+		PlateNumber: c.Query("plate_number"),
+		SortBy:      c.Query("sort_by"),
+		SortOrder:   c.Query("sort_order"),
+	}
+
 	if raw := c.Query("type_id"); raw != "" {
 		parsed, err := uuid.Parse(raw)
 		if err != nil {
-			return response.BadRequest(c, "invalid type_id", nil)
+			return response.BadRequest(c, "ID jenis kendaraan tidak valid", nil)
 		}
-		typeID = &parsed
+		filter.VehicleTypeID = &parsed
+	}
+
+	if s := c.Query("source"); s != "" {
+		source := types.VehicleSource(s)
+		filter.Source = &source
+	}
+
+	if s := c.Query("date_from"); s != "" {
+		t, err := time.Parse("2006-01-02", s)
+		if err != nil {
+			return response.BadRequest(c, "Format tanggal awal tidak valid, gunakan YYYY-MM-DD", nil)
+		}
+		filter.DateFrom = &t
+	}
+
+	if s := c.Query("date_to"); s != "" {
+		t, err := time.Parse("2006-01-02", s)
+		if err != nil {
+			return response.BadRequest(c, "Format tanggal akhir tidak valid, gunakan YYYY-MM-DD", nil)
+		}
+		// Include the entire day.
+		endOfDay := t.Add(24*time.Hour - time.Second)
+		filter.DateTo = &endOfDay
 	}
 
 	pagReq := response.ParsePaginationRequest(c)
-	vehicles, total, err := h.svc.ListVehicles(c.Context(), typeID, pagReq.Page, pagReq.PageSize)
+	vehicles, total, err := h.svc.ListVehicles(c.Context(), filter, pagReq.Page, pagReq.PageSize)
 	if err != nil {
 		return err
 	}
@@ -107,9 +138,17 @@ func (h *handler) listVehicles(c *fiber.Ctx) error {
 		res = append(res, toVehicleResponse(&vehicles[i]))
 	}
 
-	queryParams := map[string]string{}
-	if typeID != nil {
-		queryParams["type_id"] = typeID.String()
+	queryParams := map[string]string{
+		"search":       filter.Search,
+		"plate_number": filter.PlateNumber,
+		"sort_by":      filter.SortBy,
+		"sort_order":   filter.SortOrder,
+	}
+	if filter.VehicleTypeID != nil {
+		queryParams["type_id"] = filter.VehicleTypeID.String()
+	}
+	if filter.Source != nil {
+		queryParams["source"] = string(*filter.Source)
 	}
 
 	pagination := response.GeneratePagination(
@@ -126,7 +165,7 @@ func (h *handler) listVehicles(c *fiber.Ctx) error {
 func (h *handler) getVehicle(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		return response.BadRequest(c, "invalid vehicle id", nil)
+		return response.BadRequest(c, "ID kendaraan tidak valid", nil)
 	}
 	v, err := h.svc.GetVehicle(c.Context(), id)
 	if err != nil {
@@ -138,7 +177,7 @@ func (h *handler) getVehicle(c *fiber.Ctx) error {
 func (h *handler) getVehicleByPlate(c *fiber.Ctx) error {
 	plate := c.Params("plate")
 	if plate == "" {
-		return response.BadRequest(c, "plate number is required", nil)
+		return response.BadRequest(c, "Nomor plat wajib diisi", nil)
 	}
 	v, err := h.svc.GetVehicleByPlate(c.Context(), plate)
 	if err != nil {
@@ -150,10 +189,10 @@ func (h *handler) getVehicleByPlate(c *fiber.Ctx) error {
 func (h *handler) upsertVehicle(c *fiber.Ctx) error {
 	var req UpsertVehicleRequest
 	if err := c.BodyParser(&req); err != nil {
-		return response.BadRequest(c, "invalid request body", nil)
+		return response.BadRequest(c, "Format data tidak valid", nil)
 	}
 	if errs := h.v.Validate(req); errs != nil {
-		return response.BadRequest(c, "validation failed", errs)
+		return response.BadRequest(c, "Validasi gagal", errs)
 	}
 	_ = middleware.GetUserID(c)
 	v, err := h.svc.UpsertVehicle(c.Context(), &req)
@@ -166,14 +205,14 @@ func (h *handler) upsertVehicle(c *fiber.Ctx) error {
 func (h *handler) updateVehicle(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
-		return response.BadRequest(c, "invalid vehicle id", nil)
+		return response.BadRequest(c, "ID kendaraan tidak valid", nil)
 	}
 	var req UpdateVehicleRequest
 	if err := c.BodyParser(&req); err != nil {
-		return response.BadRequest(c, "invalid request body", nil)
+		return response.BadRequest(c, "Format data tidak valid", nil)
 	}
 	if errs := h.v.Validate(req); errs != nil {
-		return response.BadRequest(c, "validation failed", errs)
+		return response.BadRequest(c, "Validasi gagal", errs)
 	}
 	v, err := h.svc.UpdateVehicle(c.Context(), id, &req)
 	if err != nil {
