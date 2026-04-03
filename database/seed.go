@@ -83,9 +83,8 @@ func Seed(db *gorm.DB) error {
 		{"roles", seedRoles},
 		{"permissions", seedPermissions},
 		{"role_permissions", seedRolePermissions},
-		{"admin user", seedAdminUser},
-		{"operator user", seedOperatorUser},
-		{"users", seedUsers},
+		{"hardcoded users", seedHardcodedUsers},
+		{"random users", seedUsers},
 		{"vehicle_types", seedVehicleTypes},
 		{"vehicles", seedVehicles},
 		{"zones + gates", seedZonesAndGates},
@@ -173,6 +172,8 @@ func seedRolePermissions(db *gorm.DB) error {
 			"transaction.cancel",
 			"override.perform",
 			"rfid.view",
+			"audit.read",
+			"report.view",
 		},
 		"admin": {
 			"gate.override",
@@ -210,10 +211,17 @@ func seedRolePermissions(db *gorm.DB) error {
 			"transaction.view",
 			"report.view",
 			"config.edit",
+			"audit.read",
+			"rfid.view",
+			"payment.refund",
 		},
 		"engineer": {
 			"gate.view",
 			"zone.view",
+			"gate.manage",
+			"gate.pair",
+			"zone.manage",
+			"transaction.view",
 			"audit.read",
 			"config.edit",
 		},
@@ -222,6 +230,7 @@ func seedRolePermissions(db *gorm.DB) error {
 			"payment.cash",
 			"payment.qris",
 			"transaction.view",
+			"fee.view",
 		},
 	}
 
@@ -240,58 +249,50 @@ func seedRolePermissions(db *gorm.DB) error {
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&rps).Error
 }
 
-func seedAdminUser(db *gorm.DB) error {
-	var count int64
-	db.Model(&authDomain.User{}).Where("email = ?", "admin@parkieee.local").Count(&count)
-	if count > 0 {
-		return nil
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte("Admin@123!"), bcrypt.DefaultCost)
-	if err != nil {
-		return err
+func seedHardcodedUsers(db *gorm.DB) error {
+	type hardcodedUser struct {
+		Name     string
+		Username string
+		Email    string
+		Password string
+		Role     string
 	}
 
-	usernameFromEmail := "admin"
-	if err := db.Create(&authDomain.User{
-		ID:           uuid.New(),
-		Name:         "System Administrator",
-		Username:     usernameFromEmail,
-		Email:        "admin@parkieee.local",
-		PasswordHash: string(hash),
-		RoleID:       roleID("admin"),
-		IsActive:     true,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
-	}).Error; err != nil {
-		return fmt.Errorf("create admin user: %w", err)
-	}
-	return nil
-}
-
-func seedOperatorUser(db *gorm.DB) error {
-	var count int64
-	db.Model(&authDomain.User{}).Where("email = ?", "bakayaro@email.local").Count(&count)
-	if count > 0 {
-		return nil
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte("tripleT123"), bcrypt.DefaultCost)
-	if err != nil {
-		return err
+	accounts := []hardcodedUser{
+		{Name: "System Administrator", Username: "admin", Email: "admin@parkieee.local", Password: "Admin@123!", Role: "admin"},
+		{Name: "Bakayaro Operator", Username: "bakayaro", Email: "bakayaro@email.local", Password: "tripleT123", Role: "operator"},
+		{Name: "Parkieee Owner", Username: "owner", Email: "owner@parkieee.local", Password: "Owner@123!", Role: "owner"},
+		{Name: "System Engineer", Username: "engineer", Email: "engineer@parkieee.local", Password: "Engineer@123!", Role: "engineer"},
+		{Name: "Main Cashier", Username: "cashier", Email: "cashier@parkieee.local", Password: "Cashier@123!", Role: "cashier"},
 	}
 
-	if err := db.Create(&authDomain.User{
-		ID:           uuid.New(),
-		Name:         "Bakayaro Operator",
-		Username:     "bakayaro",
-		Email:        "bakayaro@email.local",
-		PasswordHash: string(hash),
-		RoleID:       roleID("operator"),
-		IsActive:     true,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
-	}).Error; err != nil {
-		return fmt.Errorf("create operator user: %w", err)
+	for _, acc := range accounts {
+		var count int64
+		db.Model(&authDomain.User{}).Where("email = ?", acc.Email).Count(&count)
+		if count > 0 {
+			continue
+		}
+
+		hash, err := bcrypt.GenerateFromPassword([]byte(acc.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return fmt.Errorf("hash password for %s: %w", acc.Email, err)
+		}
+
+		if err := db.Create(&authDomain.User{
+			ID:           uuid.New(),
+			Name:         acc.Name,
+			Username:     acc.Username,
+			Email:        acc.Email,
+			PasswordHash: string(hash),
+			RoleID:       roleID(acc.Role),
+			IsActive:     true,
+			CreatedAt:    time.Now(),
+			UpdatedAt:    time.Now(),
+		}).Error; err != nil {
+			return fmt.Errorf("create hardcoded user %s: %w", acc.Email, err)
+		}
 	}
+
 	return nil
 }
 
@@ -422,8 +423,8 @@ func seedZonesAndGates(db *gorm.DB) error {
 
 	fixed := []zoneDomain.Zone{
 		{ID: deterministicUUID("zone:motor"), Name: "Parkir Motor", Description: "Area parkir sepeda motor lantai 1", Capacity: 200, AdditionalFee: 0, ForVehicleTypeID: &vtMotorcycle, IsActive: true, CreatedBy: &adminID},
-		{ID: deterministicUUID("zone:mobil"), Name: "Parkir Mobil", Description: "Area parkir mobil lantai 2", Capacity: 80, AdditionalFee: 2000, ForVehicleTypeID: &vtCar, IsActive: true, CreatedBy: &adminID},
-		{ID: deterministicUUID("zone:vip"), Name: "Parkir VIP", Description: "Area parkir VIP covered basement", Capacity: 20, AdditionalFee: 5000, ForVehicleTypeID: &vtCar, IsActive: true, CreatedBy: &adminID},
+		{ID: deterministicUUID("zone:mobil"), Name: "Parkir Mobil", Description: "Area parkir mobil lantai 2", Capacity: 80, AdditionalFee: 2000, ForVehicleTypeID: &vtCar, IsActive: false, CreatedBy: &adminID},
+		{ID: deterministicUUID("zone:vip"), Name: "Parkir VIP", Description: "Area parkir VIP covered basement", Capacity: 20, AdditionalFee: 5000, ForVehicleTypeID: &vtCar, IsActive: false, CreatedBy: &adminID},
 	}
 
 	areaWords := []string{"Gedung", "Blok", "Lantai", "Area", "Sektor", "Zona"}
@@ -461,7 +462,11 @@ func seedZonesAndGates(db *gorm.DB) error {
 
 	seenTokens := map[string]bool{}
 	var gates []zoneDomain.Gate
-	for _, z := range allZones {
+	for i, z := range allZones {
+		// Skip the last zone to leave it without gates (for testing zone-gate pairing UI)
+		if i == len(allZones)-1 {
+			continue
+		}
 		gates = append(gates,
 			zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Masuk", GateType: types.GateTypeEntry, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: true, CreatedBy: &adminID},
 			zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Keluar", GateType: types.GateTypeExit, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: true, CreatedBy: &adminID},
