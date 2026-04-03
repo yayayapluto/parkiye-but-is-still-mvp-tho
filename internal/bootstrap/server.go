@@ -15,6 +15,7 @@ import (
 	recover2 "github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 
+	"parkieee/internal/modules/audit"
 	"parkieee/internal/modules/auth"
 	"parkieee/internal/modules/dashboard"
 	"parkieee/internal/modules/fee"
@@ -94,6 +95,7 @@ func NewServer(container *Container) *fiber.App {
 	override.RegisterRoutes(api, container.OverrideService, container.AuthService, container.Validator)
 	dashboard.RegisterRoutes(api, container.DashboardService, container.AuthService)
 	notification.NewModule(container.DB, container.Log).RegisterRoutes(api, container.AuthService)
+	audit.RegisterRoutes(api, container.AuditService, container.AuthService)
 
 	return app
 }
