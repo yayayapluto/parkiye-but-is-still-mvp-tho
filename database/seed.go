@@ -422,7 +422,7 @@ func seedZonesAndGates(db *gorm.DB) error {
 	vtPool := []uuid.UUID{vtMotorcycle, vtMotorcycle, vtMotorcycle, vtCar, vtCar, vtCar, vtTruck}
 
 	fixed := []zoneDomain.Zone{
-		{ID: deterministicUUID("zone:motor"), Name: "Parkir Motor", Description: "Area parkir sepeda motor lantai 1", Capacity: 200, AdditionalFee: 0, ForVehicleTypeID: &vtMotorcycle, IsActive: true, CreatedBy: &adminID},
+		{ID: deterministicUUID("zone:motor"), Name: "Parkir Motor", Description: "Area parkir sepeda motor lantai 1", Capacity: 200, AdditionalFee: 0, ForVehicleTypeID: &vtMotorcycle, IsActive: false, CreatedBy: &adminID},
 		{ID: deterministicUUID("zone:mobil"), Name: "Parkir Mobil", Description: "Area parkir mobil lantai 2", Capacity: 80, AdditionalFee: 2000, ForVehicleTypeID: &vtCar, IsActive: false, CreatedBy: &adminID},
 		{ID: deterministicUUID("zone:vip"), Name: "Parkir VIP", Description: "Area parkir VIP covered basement", Capacity: 20, AdditionalFee: 5000, ForVehicleTypeID: &vtCar, IsActive: false, CreatedBy: &adminID},
 	}
@@ -445,7 +445,7 @@ func seedZonesAndGates(db *gorm.DB) error {
 			Capacity:         gofakeit.IntRange(10, 300),
 			AdditionalFee:    feeOptions[mathrand.Intn(len(feeOptions))],
 			ForVehicleTypeID: &vtID,
-			IsActive:         gofakeit.Bool(),
+			IsActive:         false,
 			CreatedBy:        &adminID,
 		})
 	}
