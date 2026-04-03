@@ -468,13 +468,13 @@ func seedZonesAndGates(db *gorm.DB) error {
 			continue
 		}
 		gates = append(gates,
-			zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Masuk", GateType: types.GateTypeEntry, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: true, CreatedBy: &adminID},
-			zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Keluar", GateType: types.GateTypeExit, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: true, CreatedBy: &adminID},
+			zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Masuk", GateType: types.GateTypeEntry, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: false, CreatedBy: &adminID},
+			zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Keluar", GateType: types.GateTypeExit, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: false, CreatedBy: &adminID},
 		)
 		if gofakeit.Bool() {
 			gates = append(gates,
-				zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Masuk 2", GateType: types.GateTypeEntry, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: gofakeit.Bool(), CreatedBy: &adminID},
-				zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Keluar 2", GateType: types.GateTypeExit, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: gofakeit.Bool(), CreatedBy: &adminID},
+				zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Masuk 2", GateType: types.GateTypeEntry, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: false, CreatedBy: &adminID},
+				zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Keluar 2", GateType: types.GateTypeExit, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: false, CreatedBy: &adminID},
 			)
 		}
 	}
