@@ -124,6 +124,21 @@ func (r *repository) UpdateRefund(ctx context.Context, ref *Refund) error {
 	return nil
 }
 
+func (r *repository) ListPayments(ctx context.Context, page, pageSize int) ([]Payment, int64, error) {
+	var payments []Payment
+	var total int64
+
+	offset := (page - 1) * pageSize
+
+	if err := r.db.WithContext(ctx).Model(&Payment{}).Count(&total).Error; err != nil {
+		return nil, 0, errors.Wrap(err, errors.ErrDatabaseError, "failed to count payments")
+	}
+	if err := r.db.WithContext(ctx).Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&payments).Error; err != nil {
+		return nil, 0, errors.Wrap(err, errors.ErrDatabaseError, "failed to list payments")
+	}
+	return payments, total, nil
+}
+
 func (r *repository) StampCashierRequested(ctx context.Context, txID uuid.UUID, requestedAt time.Time) error {
 	// Update transactions table directly to avoid circular dependency
 	err := r.db.WithContext(ctx).Exec("UPDATE transactions SET cashier_requested_at = ? WHERE id = ?", requestedAt, txID).Error

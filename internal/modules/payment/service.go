@@ -400,6 +400,10 @@ func (s *service) ListRefunds(ctx context.Context, page, pageSize int) ([]Refund
 	return refunds, total, nil
 }
 
+func (s *service) ListPayments(ctx context.Context, page, pageSize int) ([]Payment, int64, error) {
+	return s.repo.ListPayments(ctx, page, pageSize)
+}
+
 func (s *service) PollPaymentStatus(ctx context.Context, paymentID uuid.UUID) (*Payment, error) {
 	p, err := s.repo.FindPaymentByID(ctx, paymentID)
 	if err != nil {

@@ -22,25 +22,29 @@ func newHandler(svc ServicePort, v *validator.Validator) *handler {
 func (h *handler) listFeeConfigs(c *fiber.Ctx) error {
 	pag := response.ParsePaginationRequest(c)
 
-	var zoneID *uuid.UUID
+	filter := ListFeeConfigFilter{
+		Search:    c.Query("search"),
+		SortBy:    c.Query("sort_by"),
+		SortOrder: c.Query("sort_order"),
+	}
+
 	if raw := c.Query("zone_id"); raw != "" {
 		id, err := uuid.Parse(raw)
 		if err != nil {
 			return response.BadRequest(c, "ID zona tidak valid", nil)
 		}
-		zoneID = &id
+		filter.ZoneID = &id
 	}
 
-	var vehicleTypeID *uuid.UUID
 	if raw := c.Query("vehicle_type_id"); raw != "" {
 		id, err := uuid.Parse(raw)
 		if err != nil {
 			return response.BadRequest(c, "ID jenis kendaraan tidak valid", nil)
 		}
-		vehicleTypeID = &id
+		filter.VehicleTypeID = &id
 	}
 
-	configs, total, err := h.svc.ListFeeConfigs(c.Context(), zoneID, vehicleTypeID, pag.Page, pag.PageSize)
+	configs, total, err := h.svc.ListFeeConfigs(c.Context(), filter, pag.Page, pag.PageSize)
 	if err != nil {
 		return err
 	}
@@ -58,12 +62,16 @@ func (h *handler) listFeeConfigs(c *fiber.Ctx) error {
 		res = append(res, toFeeConfigResponse(&configs[i], enr))
 	}
 
-	queryParams := map[string]string{}
-	if zoneID != nil {
-		queryParams["zone_id"] = zoneID.String()
+	queryParams := map[string]string{
+		"search":     filter.Search,
+		"sort_by":    filter.SortBy,
+		"sort_order": filter.SortOrder,
 	}
-	if vehicleTypeID != nil {
-		queryParams["vehicle_type_id"] = vehicleTypeID.String()
+	if filter.ZoneID != nil {
+		queryParams["zone_id"] = filter.ZoneID.String()
+	}
+	if filter.VehicleTypeID != nil {
+		queryParams["vehicle_type_id"] = filter.VehicleTypeID.String()
 	}
 
 	pagination := response.GeneratePagination(
@@ -120,7 +128,14 @@ func (h *handler) deactivateFeeConfig(c *fiber.Ctx) error {
 
 func (h *handler) listHolidayRates(c *fiber.Ctx) error {
 	pag := response.ParsePaginationRequest(c)
-	rates, total, err := h.svc.ListHolidayRates(c.Context(), pag.Page, pag.PageSize)
+
+	filter := ListHolidayRateFilter{
+		Search:    c.Query("search"),
+		SortBy:    c.Query("sort_by"),
+		SortOrder: c.Query("sort_order"),
+	}
+
+	rates, total, err := h.svc.ListHolidayRates(c.Context(), filter, pag.Page, pag.PageSize)
 	if err != nil {
 		return err
 	}
@@ -130,11 +145,17 @@ func (h *handler) listHolidayRates(c *fiber.Ctx) error {
 		res = append(res, toHolidayRateResponse(&rates[i]))
 	}
 
+	queryParams := map[string]string{
+		"search":     filter.Search,
+		"sort_by":    filter.SortBy,
+		"sort_order": filter.SortOrder,
+	}
+
 	pagination := response.GeneratePagination(
 		response.GetBaseURL(c),
 		"/api/v1/fee/holiday-rates",
 		pag.Page, pag.PageSize, total,
-		nil,
+		queryParams,
 		nil,
 	)
 	return response.Paginated(c, "ok", res, pagination)

@@ -38,6 +38,14 @@ type AssignPermissionRequest struct {
 	PermissionID uuid.UUID `json:"permission_id" validate:"required"`
 }
 
+type ListUserFilter struct {
+	Search    string
+	SortBy    string
+	SortOrder string
+	RoleID    *uuid.UUID
+	IsActive  *bool
+}
+
 // LoginResponse adalah yang dikembalikan setelah login dan refresh sukses.
 // Token dan RefreshToken adalah raw value — handler yang set ke cookie, tidak diekspos ke JSON response body.
 type LoginResponse struct {

@@ -20,7 +20,10 @@ func newHandler(svc ServicePort, v *validator.Validator) *handler {
 }
 
 func (h *handler) listVehicleTypes(c *fiber.Ctx) error {
-	vts, err := h.svc.ListVehicleTypes(c.Context())
+	search := c.Query("search")
+	pagReq := response.ParsePaginationRequest(c)
+
+	vts, total, err := h.svc.ListVehicleTypesPaginated(c.Context(), search, pagReq.Page, pagReq.PageSize)
 	if err != nil {
 		return err
 	}
@@ -28,7 +31,15 @@ func (h *handler) listVehicleTypes(c *fiber.Ctx) error {
 	for i := range vts {
 		res = append(res, toVehicleTypeResponse(&vts[i]))
 	}
-	return response.Success(c, "ok", res)
+
+	pagination := response.GeneratePagination(
+		response.GetBaseURL(c),
+		"/api/v1/vehicle-types",
+		pagReq.Page, pagReq.PageSize, total,
+		map[string]string{"search": search},
+		nil,
+	)
+	return response.Paginated(c, "ok", res, pagination)
 }
 
 func (h *handler) getVehicleType(c *fiber.Ctx) error {

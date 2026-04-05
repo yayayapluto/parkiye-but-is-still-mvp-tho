@@ -24,6 +24,7 @@ func RegisterRoutes(router fiber.Router, svc ServicePort, auth middleware.TokenV
 	router.Get("/payments/cashier/pending", authMw, cashierMw, adapter.h.pendingCashierRequests)
 
 	p := router.Group("/payments", authMw)
+	p.Get("/", adapter.h.listPayments)
 	p.Get("/transaction/:txID", adapter.h.listByTransaction)
 	p.Get("/:id", adapter.h.getPayment)
 	p.Post("/cash", adapter.h.payCash)

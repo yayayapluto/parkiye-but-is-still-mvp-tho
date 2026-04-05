@@ -30,6 +30,16 @@ func (s *service) ListVehicleTypes(ctx context.Context) ([]VehicleType, error) {
 	return types, nil
 }
 
+func (s *service) ListVehicleTypesPaginated(ctx context.Context, search string, page, pageSize int) ([]VehicleType, int64, error) {
+	vts, total, err := s.vtRepo.FindAllPaginated(ctx, search, page, pageSize)
+	if err != nil {
+		s.log.Error(ctx, "list vehicle types paginated failed", "error", err)
+		return nil, 0, err
+	}
+	s.log.Debug(ctx, "vehicle types listed (paginated)", "count", len(vts), "total", total)
+	return vts, total, nil
+}
+
 func (s *service) GetVehicleType(ctx context.Context, id uuid.UUID) (*VehicleType, error) {
 	vt, err := s.vtRepo.FindByID(ctx, id)
 	if err != nil {

@@ -2,6 +2,8 @@ package zone
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,21 +28,33 @@ func (r *zoneRepository) FindByID(ctx context.Context, id uuid.UUID) (*Zone, err
 	return &zone, errors.FromDB(err, "zone not found")
 }
 
-func (r *zoneRepository) FindAll(ctx context.Context, onlyActive bool, page, pageSize int) ([]Zone, int64, error) {
+func (r *zoneRepository) FindAll(ctx context.Context, filter ListZoneFilter, page, pageSize int) ([]Zone, int64, error) {
 	var zones []Zone
 	var total int64
 
 	q := r.db.WithContext(ctx).Model(&Zone{})
-	if onlyActive {
+	if filter.Active {
 		q = q.Where("is_active = ?", true)
+	}
+	if filter.Search != "" {
+		q = q.Where("name ILIKE ? OR description ILIKE ?", "%"+filter.Search+"%", "%"+filter.Search+"%")
 	}
 
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, errors.FromDB(err, "")
 	}
 
+	sortCol := "name"
+	sortOrder := "asc"
+	if filter.SortBy != "" {
+		sortCol = filter.SortBy
+	}
+	if strings.ToLower(filter.SortOrder) == "desc" {
+		sortOrder = "desc"
+	}
+
 	offset := (page - 1) * pageSize
-	err := q.Order("name ASC").Offset(offset).Limit(pageSize).Find(&zones).Error
+	err := q.Order(fmt.Sprintf("%s %s", sortCol, sortOrder)).Offset(offset).Limit(pageSize).Find(&zones).Error
 	return zones, total, errors.FromDB(err, "")
 }
 
@@ -83,46 +97,72 @@ func (r *gateRepository) FindByID(ctx context.Context, id uuid.UUID) (*Gate, err
 	return &gate, errors.FromDB(err, "gate not found")
 }
 
-func (r *gateRepository) FindByZoneID(ctx context.Context, zoneID uuid.UUID, onlyActive bool, page, pageSize int) ([]Gate, int64, error) {
-	var gates []Gate
-	var total int64
-
-	q := r.db.WithContext(ctx).Model(&Gate{}).Where("zone_id = ?", zoneID)
-	if onlyActive {
-		q = q.Where("is_active = ?", true)
-	}
-
-	if err := q.Count(&total).Error; err != nil {
-		return nil, 0, errors.FromDB(err, "")
-	}
-
-	offset := (page - 1) * pageSize
-	err := q.Order("name ASC").Offset(offset).Limit(pageSize).Find(&gates).Error
-	return gates, total, errors.FromDB(err, "")
-}
-
-func (r *gateRepository) FindAll(ctx context.Context, zoneID *uuid.UUID, gateType *string, onlyActive bool, page, pageSize int) ([]Gate, int64, error) {
+func (r *gateRepository) FindByZoneID(ctx context.Context, filter ListGateFilter, page, pageSize int) ([]Gate, int64, error) {
 	var gates []Gate
 	var total int64
 
 	q := r.db.WithContext(ctx).Model(&Gate{})
-
-	if zoneID != nil {
-		q = q.Where("zone_id = ?", *zoneID)
+	if filter.ZoneID != nil {
+		q = q.Where("zone_id = ?", *filter.ZoneID)
 	}
-	if gateType != nil {
-		q = q.Where("gate_type = ?", *gateType)
-	}
-	if onlyActive {
+	if filter.Active {
 		q = q.Where("is_active = ?", true)
+	}
+	if filter.Search != "" {
+		q = q.Where("name ILIKE ? OR location_desc ILIKE ?", "%"+filter.Search+"%", "%"+filter.Search+"%")
 	}
 
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, errors.FromDB(err, "")
 	}
 
+	sortCol := "name"
+	sortOrder := "asc"
+	if filter.SortBy != "" {
+		sortCol = filter.SortBy
+	}
+	if strings.ToLower(filter.SortOrder) == "desc" {
+		sortOrder = "desc"
+	}
+
 	offset := (page - 1) * pageSize
-	err := q.Preload("Zone").Order("name ASC").Offset(offset).Limit(pageSize).Find(&gates).Error
+	err := q.Order(fmt.Sprintf("%s %s", sortCol, sortOrder)).Offset(offset).Limit(pageSize).Find(&gates).Error
+	return gates, total, errors.FromDB(err, "")
+}
+
+func (r *gateRepository) FindAll(ctx context.Context, filter ListGateFilter, page, pageSize int) ([]Gate, int64, error) {
+	var gates []Gate
+	var total int64
+
+	q := r.db.WithContext(ctx).Model(&Gate{})
+	if filter.ZoneID != nil {
+		q = q.Where("zone_id = ?", *filter.ZoneID)
+	}
+	if filter.GateType != nil {
+		q = q.Where("gate_type = ?", *filter.GateType)
+	}
+	if filter.Active {
+		q = q.Where("is_active = ?", true)
+	}
+	if filter.Search != "" {
+		q = q.Where("name ILIKE ? OR location_desc ILIKE ?", "%"+filter.Search+"%", "%"+filter.Search+"%")
+	}
+
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, errors.FromDB(err, "")
+	}
+
+	sortCol := "name"
+	sortOrder := "asc"
+	if filter.SortBy != "" {
+		sortCol = filter.SortBy
+	}
+	if strings.ToLower(filter.SortOrder) == "desc" {
+		sortOrder = "desc"
+	}
+
+	offset := (page - 1) * pageSize
+	err := q.Preload("Zone").Order(fmt.Sprintf("%s %s", sortCol, sortOrder)).Offset(offset).Limit(pageSize).Find(&gates).Error
 	return gates, total, errors.FromDB(err, "")
 }
 

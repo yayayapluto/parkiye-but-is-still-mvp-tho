@@ -9,6 +9,7 @@ import (
 type VehicleTypeRepositoryPort interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*VehicleType, error)
 	FindAll(ctx context.Context) ([]VehicleType, error)
+	FindAllPaginated(ctx context.Context, search string, page, pageSize int) ([]VehicleType, int64, error)
 	Create(ctx context.Context, vt *VehicleType) error
 	Update(ctx context.Context, vt *VehicleType) error
 	Delete(ctx context.Context, id uuid.UUID) error
@@ -25,6 +26,7 @@ type VehicleRepositoryPort interface {
 type ServicePort interface {
 	// Vehicle types
 	ListVehicleTypes(ctx context.Context) ([]VehicleType, error)
+	ListVehicleTypesPaginated(ctx context.Context, search string, page, pageSize int) ([]VehicleType, int64, error)
 	GetVehicleType(ctx context.Context, id uuid.UUID) (*VehicleType, error)
 	CreateVehicleType(ctx context.Context, req *CreateVehicleTypeRequest) (*VehicleType, error)
 	UpdateVehicleType(ctx context.Context, id uuid.UUID, req *UpdateVehicleTypeRequest) (*VehicleType, error)

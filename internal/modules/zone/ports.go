@@ -9,7 +9,7 @@ import (
 
 type ZoneRepositoryPort interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*Zone, error)
-	FindAll(ctx context.Context, onlyActive bool, page, pageSize int) ([]Zone, int64, error)
+	FindAll(ctx context.Context, filter ListZoneFilter, page, pageSize int) ([]Zone, int64, error)
 	Create(ctx context.Context, zone *Zone) error
 	Update(ctx context.Context, zone *Zone) error
 	Deactivate(ctx context.Context, id uuid.UUID) error
@@ -17,8 +17,8 @@ type ZoneRepositoryPort interface {
 
 type GateRepositoryPort interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*Gate, error)
-	FindByZoneID(ctx context.Context, zoneID uuid.UUID, onlyActive bool, page, pageSize int) ([]Gate, int64, error)
-	FindAll(ctx context.Context, zoneID *uuid.UUID, gateType *string, onlyActive bool, page, pageSize int) ([]Gate, int64, error)
+	FindByZoneID(ctx context.Context, filter ListGateFilter, page, pageSize int) ([]Gate, int64, error)
+	FindAll(ctx context.Context, filter ListGateFilter, page, pageSize int) ([]Gate, int64, error)
 	FindByToken(ctx context.Context, token string) (*Gate, error)
 	Create(ctx context.Context, gate *Gate) error
 	Update(ctx context.Context, gate *Gate) error
@@ -57,14 +57,14 @@ type CapacityLogRepositoryPort interface {
 type ServicePort interface {
 	// Zone management
 	GetZone(ctx context.Context, id uuid.UUID) (*Zone, error)
-	ListZones(ctx context.Context, onlyActive bool, page, pageSize int) ([]Zone, int64, error)
+	ListZones(ctx context.Context, filter ListZoneFilter, page, pageSize int) ([]Zone, int64, error)
 	CreateZone(ctx context.Context, req *CreateZoneRequest, actorID uuid.UUID) (*Zone, error)
 	UpdateZone(ctx context.Context, id uuid.UUID, req *UpdateZoneRequest) (*Zone, error)
 	DeactivateZone(ctx context.Context, id uuid.UUID) error
 
 	// Gate management
 	GetGate(ctx context.Context, id uuid.UUID) (*Gate, error)
-	ListGates(ctx context.Context, zoneID uuid.UUID, onlyActive bool, page, pageSize int) ([]Gate, int64, error)
+	ListGates(ctx context.Context, filter ListGateFilter, page, pageSize int) ([]Gate, int64, error)
 	CreateGate(ctx context.Context, req *CreateGateRequest, actorID uuid.UUID) (*Gate, error)
 	UpdateGate(ctx context.Context, id uuid.UUID, req *UpdateGateRequest) (*Gate, error)
 	DeactivateGate(ctx context.Context, id uuid.UUID) error
@@ -72,7 +72,7 @@ type ServicePort interface {
 	// UpdateGateMode changes the operating mode of an exit gate.
 	// Validates that a cashier assignment exists before switching to with_cashier.
 	UpdateGateMode(ctx context.Context, id uuid.UUID, mode types.GateMode, actorID uuid.UUID) (*Gate, error)
-	ListAllGates(ctx context.Context, zoneID *uuid.UUID, gateType *string, onlyActive bool, page, pageSize int) ([]Gate, int64, error)
+	ListAllGates(ctx context.Context, filter ListGateFilter, page, pageSize int) ([]Gate, int64, error)
 
 	// Cashier assignment
 	AssignCashier(ctx context.Context, gateID, userID, assignedBy uuid.UUID) (*GateCashierAssignment, error)

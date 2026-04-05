@@ -51,13 +51,13 @@ func (s *service) GetZone(ctx context.Context, id uuid.UUID) (*Zone, error) {
 	return zone, nil
 }
 
-func (s *service) ListZones(ctx context.Context, onlyActive bool, page, pageSize int) ([]Zone, int64, error) {
-	zones, total, err := s.zoneRepo.FindAll(ctx, onlyActive, page, pageSize)
+func (s *service) ListZones(ctx context.Context, filter ListZoneFilter, page, pageSize int) ([]Zone, int64, error) {
+	zones, total, err := s.zoneRepo.FindAll(ctx, filter, page, pageSize)
 	if err != nil {
 		s.log.Error(ctx, "list zones failed", "error", err)
 		return nil, 0, err
 	}
-	s.log.Debug(ctx, "zones listed", "count", len(zones), "total", total, "only_active", onlyActive)
+	s.log.Debug(ctx, "zones listed", "count", len(zones), "total", total)
 	return zones, total, nil
 }
 
@@ -136,22 +136,24 @@ func (s *service) GetGate(ctx context.Context, id uuid.UUID) (*Gate, error) {
 	return gate, nil
 }
 
-func (s *service) ListGates(ctx context.Context, zoneID uuid.UUID, onlyActive bool, page, pageSize int) ([]Gate, int64, error) {
-	if _, err := s.zoneRepo.FindByID(ctx, zoneID); err != nil {
-		s.log.Warn(ctx, "list gates failed: zone not found", "zone_id", zoneID)
-		return nil, 0, errors.New(errors.ErrNotFound, "Zona tidak ditemukan")
+func (s *service) ListGates(ctx context.Context, filter ListGateFilter, page, pageSize int) ([]Gate, int64, error) {
+	if filter.ZoneID != nil {
+		if _, err := s.zoneRepo.FindByID(ctx, *filter.ZoneID); err != nil {
+			s.log.Warn(ctx, "list gates failed: zone not found", "zone_id", filter.ZoneID)
+			return nil, 0, errors.New(errors.ErrNotFound, "Zona tidak ditemukan")
+		}
 	}
-	gates, total, err := s.gateRepo.FindByZoneID(ctx, zoneID, onlyActive, page, pageSize)
+	gates, total, err := s.gateRepo.FindByZoneID(ctx, filter, page, pageSize)
 	if err != nil {
-		s.log.Error(ctx, "list gates failed", "zone_id", zoneID, "error", err)
+		s.log.Error(ctx, "list gates failed", "error", err)
 		return nil, 0, err
 	}
-	s.log.Debug(ctx, "gates listed", "zone_id", zoneID, "count", len(gates), "total", total)
+	s.log.Debug(ctx, "gates listed", "count", len(gates), "total", total)
 	return gates, total, nil
 }
 
-func (s *service) ListAllGates(ctx context.Context, zoneID *uuid.UUID, gateType *string, onlyActive bool, page, pageSize int) ([]Gate, int64, error) {
-	gates, total, err := s.gateRepo.FindAll(ctx, zoneID, gateType, onlyActive, page, pageSize)
+func (s *service) ListAllGates(ctx context.Context, filter ListGateFilter, page, pageSize int) ([]Gate, int64, error) {
+	gates, total, err := s.gateRepo.FindAll(ctx, filter, page, pageSize)
 	if err != nil {
 		s.log.Error(ctx, "list all gates failed", "error", err)
 		return nil, 0, err

@@ -9,6 +9,20 @@ import (
 	"parkieee/pkg/types"
 )
 
+type ListFeeConfigFilter struct {
+	Search        string
+	SortBy        string
+	SortOrder     string
+	ZoneID        *uuid.UUID
+	VehicleTypeID *uuid.UUID
+}
+
+type ListHolidayRateFilter struct {
+	Search    string
+	SortBy    string
+	SortOrder string
+}
+
 // DecimalFromFloat safely converts *float64 from JSON into *decimal.Decimal.
 func decimalPtrFromFloat(f *float64) *decimal.Decimal {
 	if f == nil {

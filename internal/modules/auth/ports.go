@@ -23,8 +23,7 @@ type UserRepositoryPort interface {
 	FindByUsername(ctx context.Context, username string) (*User, error)
 
 	// List returns a paginated slice of users with their roles preloaded.
-	// roleID is optional — pass uuid.Nil to skip role filter.
-	List(ctx context.Context, roleID *uuid.UUID, activeOnly *bool, page, pageSize int) ([]User, int64, error)
+	List(ctx context.Context, filter ListUserFilter, page, pageSize int) ([]User, int64, error)
 
 	// Create inserts a new user. Email uniqueness is enforced at DB level,
 	// but service layer should check first for a cleaner error message.
@@ -49,6 +48,9 @@ type RoleRepositoryPort interface {
 
 	// FindAll returns all roles. Used in admin UI for dropdowns etc.
 	FindAll(ctx context.Context) ([]Role, error)
+
+	// FindAllPaginated returns paginated roles with optional search.
+	FindAllPaginated(ctx context.Context, search string, page, pageSize int) ([]Role, int64, error)
 
 	// Create adds a new role. Not exposed in initial MVP routes,
 	// but keeping it here so service layer isn't blocked later.
@@ -174,8 +176,8 @@ type ServicePort interface {
 	// GetProfile returns a user with their role, used for the /me endpoint.
 	GetProfile(ctx context.Context, userID uuid.UUID) (*User, error)
 
-	// ListUsers returns paginated users. roleID and activeOnly are optional filters.
-	ListUsers(ctx context.Context, roleID *uuid.UUID, activeOnly *bool, page, pageSize int) ([]User, int64, error)
+	// ListUsers returns paginated users with optional search and sort.
+	ListUsers(ctx context.Context, filter ListUserFilter, page, pageSize int) ([]User, int64, error)
 
 	// GetUser returns a single user by ID.
 	GetUser(ctx context.Context, userID uuid.UUID) (*User, error)
@@ -196,6 +198,9 @@ type ServicePort interface {
 
 	// GetAllRoles returns all available roles. Used in admin dropdowns.
 	GetAllRoles(ctx context.Context) ([]Role, error)
+
+	// ListRoles returns paginated roles with optional search.
+	ListRoles(ctx context.Context, search string, page, pageSize int) ([]Role, int64, error)
 
 	// GetAllPermissions returns all permission nodes with descriptions.
 	GetAllPermissions(ctx context.Context) ([]Permission, error)

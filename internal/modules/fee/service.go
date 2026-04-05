@@ -41,10 +41,10 @@ func NewService(
 	}
 }
 
-func (s *service) ListFeeConfigs(ctx context.Context, zoneID *uuid.UUID, vehicleTypeID *uuid.UUID, page, pageSize int) ([]FeeConfig, int64, error) {
-	cfgs, total, err := s.feeConfigRepo.FindAll(ctx, zoneID, vehicleTypeID, page, pageSize)
+func (s *service) ListFeeConfigs(ctx context.Context, filter ListFeeConfigFilter, page, pageSize int) ([]FeeConfig, int64, error) {
+	cfgs, total, err := s.feeConfigRepo.FindAll(ctx, filter, page, pageSize)
 	if err != nil {
-		s.log.Error(ctx, "list fee configs failed", "zone_id", zoneID, "vehicle_type_id", vehicleTypeID, "error", err)
+		s.log.Error(ctx, "list fee configs failed", "error", err)
 		return nil, 0, err
 	}
 	s.log.Debug(ctx, "fee configs listed", "count", len(cfgs), "total", total)
@@ -125,8 +125,8 @@ func (s *service) DeactivateFeeConfig(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *service) ListHolidayRates(ctx context.Context, page, pageSize int) ([]HolidayRate, int64, error) {
-	rates, total, err := s.holidayRateRepo.FindAll(ctx, page, pageSize)
+func (s *service) ListHolidayRates(ctx context.Context, filter ListHolidayRateFilter, page, pageSize int) ([]HolidayRate, int64, error) {
+	rates, total, err := s.holidayRateRepo.FindAll(ctx, filter, page, pageSize)
 	if err != nil {
 		s.log.Error(ctx, "list holiday rates failed", "error", err)
 		return nil, 0, err

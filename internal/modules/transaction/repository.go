@@ -106,11 +106,12 @@ func (r *transactionRepo) FindAll(ctx context.Context, filter ListFilter, page, 
 	allowed := map[string]string{
 		"entry_at":       "entry_at",
 		"exit_at":        "exit_at",
-		"code":           "transaction_code",
-		"status":         "status",
-		"fee":            "calculated_fee",
-		"calculated_fee": "calculated_fee",
-		"plate_mismatch": "plate_mismatch",
+		"code":             "transaction_code",
+		"transaction_code": "transaction_code",
+		"status":           "status",
+		"fee":              "calculated_fee",
+		"calculated_fee":   "calculated_fee",
+		"plate_mismatch":   "plate_mismatch",
 	}
 
 	if dbCol, ok := allowed[filter.SortBy]; ok {

@@ -7,6 +7,22 @@ import (
 	"parkieee/pkg/types"
 )
 
+type ListZoneFilter struct {
+	Search    string
+	SortBy    string
+	SortOrder string
+	Active    bool
+}
+
+type ListGateFilter struct {
+	Search    string
+	SortBy    string
+	SortOrder string
+	ZoneID    *uuid.UUID
+	GateType  *string
+	Active    bool
+}
+
 type CreateZoneRequest struct {
 	Name             string     `json:"name"                validate:"required,min=2,max=100"`
 	Description      string     `json:"description"         validate:"omitempty,max=500"`

@@ -139,6 +139,37 @@ func (h *handler) requestRefund(c *fiber.Ctx) error {
 	return response.Created(c, "refund requested", toRefundResponse(ref))
 }
 
+func (h *handler) listPayments(c *fiber.Ctx) error {
+	pag := response.ParsePaginationRequest(c)
+	payments, total, err := h.svc.ListPayments(c.Context(), pag.Page, pag.PageSize)
+	if err != nil {
+		return err
+	}
+
+	includes := include.ParseInclude(c)
+	enrMap := h.svc.EnrichPaymentList(c.Context(), payments, includes)
+
+	res := make([]PaymentResponse, 0, len(payments))
+	for i := range payments {
+		var enr *PaymentEnrichment
+		if enrMap != nil {
+			if e, ok := enrMap[payments[i].ID]; ok {
+				enr = &e
+			}
+		}
+		res = append(res, toPaymentResponse(&payments[i], enr))
+	}
+
+	pagination := response.GeneratePagination(
+		response.GetBaseURL(c),
+		"/api/v1/payments",
+		pag.Page, pag.PageSize, total,
+		nil,
+		nil,
+	)
+	return response.Paginated(c, "ok", res, pagination)
+}
+
 func (h *handler) listRefunds(c *fiber.Ctx) error {
 	pag := response.ParsePaginationRequest(c)
 	refunds, total, err := h.svc.ListRefunds(c.Context(), pag.Page, pag.PageSize)

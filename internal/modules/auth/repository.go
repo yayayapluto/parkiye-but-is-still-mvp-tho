@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -55,24 +56,37 @@ func (r *userRepository) FindByUsername(ctx context.Context, username string) (*
 	return &user, nil
 }
 
-func (r *userRepository) List(ctx context.Context, roleID *uuid.UUID, activeOnly *bool, page, pageSize int) ([]User, int64, error) {
+func (r *userRepository) List(ctx context.Context, filter ListUserFilter, page, pageSize int) ([]User, int64, error) {
 	var users []User
 	var total int64
 
 	q := r.db.WithContext(ctx).Model(&User{}).Where("deleted_at IS NULL")
-	if roleID != nil {
-		q = q.Where("role_id = ?", *roleID)
+	if filter.RoleID != nil {
+		q = q.Where("role_id = ?", *filter.RoleID)
 	}
-	if activeOnly != nil {
-		q = q.Where("is_active = ?", *activeOnly)
+	if filter.IsActive != nil {
+		q = q.Where("is_active = ?", *filter.IsActive)
+	}
+	if filter.Search != "" {
+		q = q.Where("name ILIKE ? OR email ILIKE ? OR username ILIKE ?",
+			"%"+filter.Search+"%", "%"+filter.Search+"%", "%"+filter.Search+"%")
 	}
 
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, errors.FromDB(err, "")
 	}
 
+	sortCol := "created_at"
+	sortOrder := "desc"
+	if filter.SortBy != "" {
+		sortCol = filter.SortBy
+	}
+	if strings.ToLower(filter.SortOrder) == "asc" {
+		sortOrder = "asc"
+	}
+
 	offset := (page - 1) * pageSize
-	err := q.Preload("Role").Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&users).Error
+	err := q.Preload("Role").Order(sortCol + " " + sortOrder).Offset(offset).Limit(pageSize).Find(&users).Error
 	return users, total, errors.FromDB(err, "")
 }
 
@@ -134,6 +148,24 @@ func (r *roleRepository) FindAll(ctx context.Context) ([]Role, error) {
 		Preload("Permissions.Permission").
 		Find(&roles).Error
 	return roles, errors.FromDB(err, "")
+}
+
+func (r *roleRepository) FindAllPaginated(ctx context.Context, search string, page, pageSize int) ([]Role, int64, error) {
+	var roles []Role
+	var total int64
+
+	q := r.db.WithContext(ctx).Model(&Role{})
+	if search != "" {
+		q = q.Where("name ILIKE ? OR description ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, errors.FromDB(err, "")
+	}
+	offset := (page - 1) * pageSize
+	if err := q.Preload("Permissions.Permission").Order("name ASC").Offset(offset).Limit(pageSize).Find(&roles).Error; err != nil {
+		return nil, 0, errors.FromDB(err, "")
+	}
+	return roles, total, nil
 }
 
 func (r *roleRepository) Create(ctx context.Context, role *Role) error {

@@ -21,10 +21,16 @@ func newHandler(svc ServicePort, v *validator.Validator) *handler {
 }
 
 func (h *handler) listZones(c *fiber.Ctx) error {
-	onlyActive := c.QueryBool("active", true)
 	pagReq := response.ParsePaginationRequest(c)
 
-	zones, total, err := h.svc.ListZones(c.Context(), onlyActive, pagReq.Page, pagReq.PageSize)
+	filter := ListZoneFilter{
+		Search:    c.Query("search"),
+		SortBy:    c.Query("sort_by"),
+		SortOrder: c.Query("sort_order"),
+		Active:    c.QueryBool("active", true),
+	}
+
+	zones, total, err := h.svc.ListZones(c.Context(), filter, pagReq.Page, pagReq.PageSize)
 	if err != nil {
 		return err
 	}
@@ -38,7 +44,12 @@ func (h *handler) listZones(c *fiber.Ctx) error {
 		response.GetBaseURL(c),
 		"/api/v1/zones",
 		pagReq.Page, pagReq.PageSize, total,
-		map[string]string{"active": c.Query("active", "true")},
+		map[string]string{
+			"active":     c.Query("active", "true"),
+			"search":     filter.Search,
+			"sort_by":    filter.SortBy,
+			"sort_order": filter.SortOrder,
+		},
 		nil,
 	)
 
@@ -137,24 +148,28 @@ func (h *handler) getCapacity(c *fiber.Ctx) error {
 }
 
 func (h *handler) listAllGates(c *fiber.Ctx) error {
-	onlyActive := c.QueryBool("active", false)
 	pagReq := response.ParsePaginationRequest(c)
 
-	var zoneID *uuid.UUID
+	filter := ListGateFilter{
+		Search:    c.Query("search"),
+		SortBy:    c.Query("sort_by"),
+		SortOrder: c.Query("sort_order"),
+		Active:    c.QueryBool("active", false),
+	}
+
 	if z := c.Query("zone_id"); z != "" {
 		parsed, err := uuid.Parse(z)
 		if err != nil {
 			return response.BadRequest(c, "ID zona tidak valid", nil)
 		}
-		zoneID = &parsed
+		filter.ZoneID = &parsed
 	}
 
-	var gateType *string
 	if t := c.Query("gate_type"); t == "entry" || t == "exit" {
-		gateType = &t
+		filter.GateType = &t
 	}
 
-	gates, total, err := h.svc.ListAllGates(c.Context(), zoneID, gateType, onlyActive, pagReq.Page, pagReq.PageSize)
+	gates, total, err := h.svc.ListAllGates(c.Context(), filter, pagReq.Page, pagReq.PageSize)
 	if err != nil {
 		return err
 	}
@@ -164,12 +179,17 @@ func (h *handler) listAllGates(c *fiber.Ctx) error {
 		res = append(res, toGateResponse(&gates[i]))
 	}
 
-	extraParams := map[string]string{"active": c.Query("active", "false")}
-	if zoneID != nil {
-		extraParams["zone_id"] = zoneID.String()
+	extraParams := map[string]string{
+		"active":     c.Query("active", "false"),
+		"search":     filter.Search,
+		"sort_by":    filter.SortBy,
+		"sort_order": filter.SortOrder,
 	}
-	if gateType != nil {
-		extraParams["gate_type"] = *gateType
+	if filter.ZoneID != nil {
+		extraParams["zone_id"] = filter.ZoneID.String()
+	}
+	if filter.GateType != nil {
+		extraParams["gate_type"] = *filter.GateType
 	}
 
 	pagination := response.GeneratePagination(
@@ -188,10 +208,17 @@ func (h *handler) listGates(c *fiber.Ctx) error {
 		return response.BadRequest(c, "ID zona tidak valid", nil)
 	}
 
-	onlyActive := c.QueryBool("active", true)
 	pagReq := response.ParsePaginationRequest(c)
 
-	gates, total, err := h.svc.ListGates(c.Context(), zoneID, onlyActive, pagReq.Page, pagReq.PageSize)
+	filter := ListGateFilter{
+		Search:    c.Query("search"),
+		SortBy:    c.Query("sort_by"),
+		SortOrder: c.Query("sort_order"),
+		Active:    c.QueryBool("active", true),
+		ZoneID:    &zoneID,
+	}
+
+	gates, total, err := h.svc.ListGates(c.Context(), filter, pagReq.Page, pagReq.PageSize)
 	if err != nil {
 		return err
 	}
@@ -205,7 +232,12 @@ func (h *handler) listGates(c *fiber.Ctx) error {
 		response.GetBaseURL(c),
 		fmt.Sprintf("/api/v1/zones/%s/gates", zoneID),
 		pagReq.Page, pagReq.PageSize, total,
-		map[string]string{"active": c.Query("active", "true")},
+		map[string]string{
+			"active":     c.Query("active", "true"),
+			"search":     filter.Search,
+			"sort_by":    filter.SortBy,
+			"sort_order": filter.SortOrder,
+		},
 		nil,
 	)
 

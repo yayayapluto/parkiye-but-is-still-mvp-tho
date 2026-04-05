@@ -216,22 +216,26 @@ func (h *handler) deactivateUser(c *fiber.Ctx) error {
 func (h *handler) listUsers(c *fiber.Ctx) error {
 	pag := response.ParsePaginationRequest(c)
 
-	var roleID *uuid.UUID
+	filter := ListUserFilter{
+		Search:    c.Query("search"),
+		SortBy:    c.Query("sort_by"),
+		SortOrder: c.Query("sort_order"),
+	}
+
 	if raw := c.Query("role_id"); raw != "" {
 		id, err := uuid.Parse(raw)
 		if err != nil {
 			return response.BadRequest(c, "ID role tidak valid", nil)
 		}
-		roleID = &id
+		filter.RoleID = &id
 	}
 
-	var activeOnly *bool
 	if raw := c.Query("is_active"); raw != "" {
 		v := raw == "true"
-		activeOnly = &v
+		filter.IsActive = &v
 	}
 
-	users, total, err := h.svc.ListUsers(c.Context(), roleID, activeOnly, pag.Page, pag.PageSize)
+	users, total, err := h.svc.ListUsers(c.Context(), filter, pag.Page, pag.PageSize)
 	if err != nil {
 		return err
 	}
@@ -241,12 +245,16 @@ func (h *handler) listUsers(c *fiber.Ctx) error {
 		res = append(res, toUserResponse(&users[i]))
 	}
 
-	queryParams := map[string]string{}
-	if roleID != nil {
-		queryParams["role_id"] = roleID.String()
+	queryParams := map[string]string{
+		"search":     filter.Search,
+		"sort_by":    filter.SortBy,
+		"sort_order": filter.SortOrder,
 	}
-	if activeOnly != nil {
-		if *activeOnly {
+	if filter.RoleID != nil {
+		queryParams["role_id"] = filter.RoleID.String()
+	}
+	if filter.IsActive != nil {
+		if *filter.IsActive {
 			queryParams["is_active"] = "true"
 		} else {
 			queryParams["is_active"] = "false"
@@ -276,7 +284,10 @@ func (h *handler) getUser(c *fiber.Ctx) error {
 }
 
 func (h *handler) getRoles(c *fiber.Ctx) error {
-	roles, err := h.svc.GetAllRoles(c.Context())
+	search := c.Query("search")
+	pag := response.ParsePaginationRequest(c)
+
+	roles, total, err := h.svc.ListRoles(c.Context(), search, pag.Page, pag.PageSize)
 	if err != nil {
 		return err
 	}
@@ -286,7 +297,14 @@ func (h *handler) getRoles(c *fiber.Ctx) error {
 		res = append(res, toRoleResponse(&roles[i]))
 	}
 
-	return response.Success(c, "ok", res)
+	pagination := response.GeneratePagination(
+		response.GetBaseURL(c),
+		"/api/v1/auth/roles",
+		pag.Page, pag.PageSize, total,
+		map[string]string{"search": search},
+		nil,
+	)
+	return response.Paginated(c, "ok", res, pagination)
 }
 
 func (h *handler) getPermissions(c *fiber.Ctx) error {

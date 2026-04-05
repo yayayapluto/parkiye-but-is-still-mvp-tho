@@ -307,8 +307,8 @@ func (s *service) ValidateToken(ctx context.Context, token string) (*middleware.
 	return claims, nil
 }
 
-func (s *service) ListUsers(ctx context.Context, roleID *uuid.UUID, activeOnly *bool, page, pageSize int) ([]User, int64, error) {
-	return s.userRepo.List(ctx, roleID, activeOnly, page, pageSize)
+func (s *service) ListUsers(ctx context.Context, filter ListUserFilter, page, pageSize int) ([]User, int64, error) {
+	return s.userRepo.List(ctx, filter, page, pageSize)
 }
 
 func (s *service) GetUser(ctx context.Context, userID uuid.UUID) (*User, error) {
@@ -462,6 +462,16 @@ func (s *service) GetAllRoles(ctx context.Context) ([]Role, error) {
 	}
 	s.log.Debug(ctx, "get all roles", "count", len(roles))
 	return roles, nil
+}
+
+func (s *service) ListRoles(ctx context.Context, search string, page, pageSize int) ([]Role, int64, error) {
+	roles, total, err := s.roleRepo.FindAllPaginated(ctx, search, page, pageSize)
+	if err != nil {
+		s.log.Error(ctx, "list roles failed", "error", err)
+		return nil, 0, err
+	}
+	s.log.Debug(ctx, "roles listed", "count", len(roles), "total", total)
+	return roles, total, nil
 }
 
 func (s *service) GetAllPermissions(ctx context.Context) ([]Permission, error) {

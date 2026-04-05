@@ -38,7 +38,7 @@ func (h *handler) getTariff(c *fiber.Ctx) error {
 		return err
 	}
 
-	configs, _, err := h.feeSvc.ListFeeConfigs(c.Context(), &zoneID, nil, 1, 100)
+	configs, _, err := h.feeSvc.ListFeeConfigs(c.Context(), fee.ListFeeConfigFilter{ZoneID: &zoneID}, 1, 100)
 	if err != nil {
 		return err
 	}

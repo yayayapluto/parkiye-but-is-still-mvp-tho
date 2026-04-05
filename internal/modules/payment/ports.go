@@ -22,6 +22,7 @@ type RepositoryPort interface {
 	FindRefundByPaymentID(ctx context.Context, paymentID uuid.UUID) ([]Refund, error)
 	ListRefunds(ctx context.Context, page, pageSize int) ([]Refund, int64, error)
 	UpdateRefund(ctx context.Context, r *Refund) error
+	ListPayments(ctx context.Context, page, pageSize int) ([]Payment, int64, error)
 	// Polling Cashier
 	StampCashierRequested(ctx context.Context, txID uuid.UUID, requestedAt time.Time) error
 	FindPendingCashierRequests(ctx context.Context, since string) ([]PendingCashierRequest, error)
@@ -40,6 +41,7 @@ type ServicePort interface {
 	ApproveRefund(ctx context.Context, refundID uuid.UUID, approvedBy uuid.UUID) (*Refund, error)
 	RejectRefund(ctx context.Context, refundID uuid.UUID, approvedBy uuid.UUID) (*Refund, error)
 	ListRefunds(ctx context.Context, page, pageSize int) ([]Refund, int64, error)
+	ListPayments(ctx context.Context, page, pageSize int) ([]Payment, int64, error)
 	// SSE Cashier — routing per userID (bukan broadcast)
 	NotifyCashier(cashierUserID uuid.UUID, event CashierEvent) error
 	ListenCashier(cashierUserID uuid.UUID) (<-chan CashierEvent, func())

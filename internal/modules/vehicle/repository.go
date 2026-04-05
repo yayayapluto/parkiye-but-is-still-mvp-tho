@@ -38,6 +38,24 @@ func (r *vehicleTypeRepo) FindAll(ctx context.Context) ([]VehicleType, error) {
 	return vts, nil
 }
 
+func (r *vehicleTypeRepo) FindAllPaginated(ctx context.Context, search string, page, pageSize int) ([]VehicleType, int64, error) {
+	var vts []VehicleType
+	var total int64
+
+	q := r.db.WithContext(ctx).Model(&VehicleType{})
+	if search != "" {
+		q = q.Where("name ILIKE ? OR description ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, errors.FromDB(err, "")
+	}
+	offset := (page - 1) * pageSize
+	if err := q.Order("name ASC").Offset(offset).Limit(pageSize).Find(&vts).Error; err != nil {
+		return nil, 0, errors.FromDB(err, "")
+	}
+	return vts, total, nil
+}
+
 func (r *vehicleTypeRepo) Create(ctx context.Context, vt *VehicleType) error {
 	if err := r.db.WithContext(ctx).Create(vt).Error; err != nil {
 		return errors.FromDB(err, "failed to create vehicle type")

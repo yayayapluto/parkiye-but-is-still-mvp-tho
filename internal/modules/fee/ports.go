@@ -10,7 +10,7 @@ import (
 type FeeConfigRepositoryPort interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*FeeConfig, error)
 	FindActiveByZoneAndVehicle(ctx context.Context, zoneID, vehicleTypeID uuid.UUID) (*FeeConfig, error)
-	FindAll(ctx context.Context, zoneID *uuid.UUID, vehicleTypeID *uuid.UUID, page, pageSize int) ([]FeeConfig, int64, error)
+	FindAll(ctx context.Context, filter ListFeeConfigFilter, page, pageSize int) ([]FeeConfig, int64, error)
 	Create(ctx context.Context, config *FeeConfig) error
 	Deactivate(ctx context.Context, id uuid.UUID) error
 }
@@ -23,7 +23,7 @@ type FeeTierRepositoryPort interface {
 
 type HolidayRateRepositoryPort interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*HolidayRate, error)
-	FindAll(ctx context.Context, page, pageSize int) ([]HolidayRate, int64, error)
+	FindAll(ctx context.Context, filter ListHolidayRateFilter, page, pageSize int) ([]HolidayRate, int64, error)
 	FindActiveForDate(ctx context.Context, date time.Time, zoneID *uuid.UUID, vehicleTypeID *uuid.UUID) ([]HolidayRate, error)
 	Create(ctx context.Context, rate *HolidayRate) error
 	Update(ctx context.Context, rate *HolidayRate) error
@@ -32,14 +32,14 @@ type HolidayRateRepositoryPort interface {
 
 type ServicePort interface {
 	// FeeConfig
-	ListFeeConfigs(ctx context.Context, zoneID *uuid.UUID, vehicleTypeID *uuid.UUID, page, pageSize int) ([]FeeConfig, int64, error)
+	ListFeeConfigs(ctx context.Context, filter ListFeeConfigFilter, page, pageSize int) ([]FeeConfig, int64, error)
 	GetFeeConfig(ctx context.Context, id uuid.UUID) (*FeeConfig, error)
 	GetActiveFeeConfig(ctx context.Context, zoneID, vehicleTypeID uuid.UUID) (*FeeConfig, error)
 	CreateFeeConfig(ctx context.Context, req CreateFeeConfigRequest, createdBy uuid.UUID) (*FeeConfig, error)
 	DeactivateFeeConfig(ctx context.Context, id uuid.UUID) error
 
 	// HolidayRate
-	ListHolidayRates(ctx context.Context, page, pageSize int) ([]HolidayRate, int64, error)
+	ListHolidayRates(ctx context.Context, filter ListHolidayRateFilter, page, pageSize int) ([]HolidayRate, int64, error)
 	GetHolidayRate(ctx context.Context, id uuid.UUID) (*HolidayRate, error)
 	CreateHolidayRate(ctx context.Context, req CreateHolidayRateRequest, createdBy uuid.UUID) (*HolidayRate, error)
 	UpdateHolidayRate(ctx context.Context, id uuid.UUID, req UpdateHolidayRateRequest) (*HolidayRate, error)

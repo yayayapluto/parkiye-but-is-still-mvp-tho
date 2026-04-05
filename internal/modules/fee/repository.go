@@ -2,6 +2,8 @@ package fee
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -47,26 +49,35 @@ func (r *feeConfigRepo) FindActiveByZoneAndVehicle(ctx context.Context, zoneID, 
 	return &cfg, errors.FromDB(err, "no active fee config found for this zone and vehicle type")
 }
 
-func (r *feeConfigRepo) FindAll(ctx context.Context, zoneID *uuid.UUID, vehicleTypeID *uuid.UUID, page, pageSize int) ([]FeeConfig, int64, error) {
+func (r *feeConfigRepo) FindAll(ctx context.Context, filter ListFeeConfigFilter, page, pageSize int) ([]FeeConfig, int64, error) {
 	var configs []FeeConfig
 	var total int64
 
 	q := r.db.WithContext(ctx).Model(&FeeConfig{})
-	if zoneID != nil {
-		q = q.Where("zone_id = ?", *zoneID)
+	if filter.ZoneID != nil {
+		q = q.Where("zone_id = ?", *filter.ZoneID)
 	}
-	if vehicleTypeID != nil {
-		q = q.Where("vehicle_type_id = ?", *vehicleTypeID)
+	if filter.VehicleTypeID != nil {
+		q = q.Where("vehicle_type_id = ?", *filter.VehicleTypeID)
 	}
 
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, errors.FromDB(err, "")
 	}
 
+	sortCol := "created_at"
+	sortOrder := "desc"
+	if filter.SortBy != "" {
+		sortCol = filter.SortBy
+	}
+	if strings.ToLower(filter.SortOrder) == "asc" {
+		sortOrder = "asc"
+	}
+
 	offset := (page - 1) * pageSize
 	err := q.Preload("Tiers", func(db *gorm.DB) *gorm.DB {
 		return db.Order("tier_order ASC")
-	}).Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&configs).Error
+	}).Order(fmt.Sprintf("%s %s", sortCol, sortOrder)).Offset(offset).Limit(pageSize).Find(&configs).Error
 	return configs, total, errors.FromDB(err, "")
 }
 
@@ -114,17 +125,30 @@ func (r *holidayRateRepo) FindByID(ctx context.Context, id uuid.UUID) (*HolidayR
 	return &rate, errors.FromDB(err, "holiday rate not found")
 }
 
-func (r *holidayRateRepo) FindAll(ctx context.Context, page, pageSize int) ([]HolidayRate, int64, error) {
+func (r *holidayRateRepo) FindAll(ctx context.Context, filter ListHolidayRateFilter, page, pageSize int) ([]HolidayRate, int64, error) {
 	var rates []HolidayRate
 	var total int64
 
 	q := r.db.WithContext(ctx).Model(&HolidayRate{})
+	if filter.Search != "" {
+		q = q.Where("name ILIKE ?", "%"+filter.Search+"%")
+	}
+
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, errors.FromDB(err, "")
 	}
 
+	sortCol := "date_start"
+	sortOrder := "desc"
+	if filter.SortBy != "" {
+		sortCol = filter.SortBy
+	}
+	if strings.ToLower(filter.SortOrder) == "asc" {
+		sortOrder = "asc"
+	}
+
 	offset := (page - 1) * pageSize
-	err := q.Order("date_start DESC").Offset(offset).Limit(pageSize).Find(&rates).Error
+	err := q.Order(fmt.Sprintf("%s %s", sortCol, sortOrder)).Offset(offset).Limit(pageSize).Find(&rates).Error
 	return rates, total, errors.FromDB(err, "")
 }
 
