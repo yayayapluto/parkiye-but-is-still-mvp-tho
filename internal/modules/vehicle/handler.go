@@ -158,6 +158,7 @@ func (h *handler) listVehicles(c *fiber.Ctx) error {
 		pagReq.PageSize,
 		total,
 		queryParams,
+		nil,
 	)
 	return response.Paginated(c, "ok", res, pagination)
 }

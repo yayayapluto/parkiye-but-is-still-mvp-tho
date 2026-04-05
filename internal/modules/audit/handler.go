@@ -76,6 +76,7 @@ func (h *handler) listAuditLogs(c *fiber.Ctx) error {
 		"/api/v1/audit-logs",
 		pagReq.Page, pagReq.PageSize, total,
 		map[string]string{},
+		nil,
 	)
 
 	return response.Paginated(c, "ok", res, pagination)

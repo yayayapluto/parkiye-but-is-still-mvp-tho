@@ -258,6 +258,7 @@ func (h *handler) listUsers(c *fiber.Ctx) error {
 		"/api/v1/auth/users",
 		pag.Page, pag.PageSize, total,
 		queryParams,
+		nil,
 	)
 	return response.Paginated(c, "ok", res, pagination)
 }

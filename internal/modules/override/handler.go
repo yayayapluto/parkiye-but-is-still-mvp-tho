@@ -41,6 +41,7 @@ func (h *handler) listOverrides(c *fiber.Ctx) error {
 		"/api/v1/overrides",
 		pag.Page, pag.PageSize, total,
 		queryParams,
+		nil,
 	)
 	return response.Paginated(c, "ok", items, pagination)
 }

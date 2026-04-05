@@ -71,6 +71,7 @@ func (h *handler) listFeeConfigs(c *fiber.Ctx) error {
 		"/api/v1/fee/configs",
 		pag.Page, pag.PageSize, total,
 		queryParams,
+		nil,
 	)
 	return response.Paginated(c, "ok", res, pagination)
 }
@@ -133,6 +134,7 @@ func (h *handler) listHolidayRates(c *fiber.Ctx) error {
 		response.GetBaseURL(c),
 		"/api/v1/fee/holiday-rates",
 		pag.Page, pag.PageSize, total,
+		nil,
 		nil,
 	)
 	return response.Paginated(c, "ok", res, pagination)

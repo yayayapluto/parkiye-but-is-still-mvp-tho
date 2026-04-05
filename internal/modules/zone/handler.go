@@ -39,6 +39,7 @@ func (h *handler) listZones(c *fiber.Ctx) error {
 		"/api/v1/zones",
 		pagReq.Page, pagReq.PageSize, total,
 		map[string]string{"active": c.Query("active", "true")},
+		nil,
 	)
 
 	return response.Paginated(c, "ok", res, pagination)
@@ -176,6 +177,7 @@ func (h *handler) listAllGates(c *fiber.Ctx) error {
 		"/api/v1/gates",
 		pagReq.Page, pagReq.PageSize, total,
 		extraParams,
+		nil,
 	)
 
 	return response.Paginated(c, "ok", res, pagination)
@@ -204,6 +206,7 @@ func (h *handler) listGates(c *fiber.Ctx) error {
 		fmt.Sprintf("/api/v1/zones/%s/gates", zoneID),
 		pagReq.Page, pagReq.PageSize, total,
 		map[string]string{"active": c.Query("active", "true")},
+		nil,
 	)
 
 	return response.Paginated(c, "ok", res, pagination)

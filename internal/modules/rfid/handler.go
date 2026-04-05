@@ -89,6 +89,7 @@ func (h *handler) listCards(c *fiber.Ctx) error {
 		"/api/v1/rfid/cards",
 		pag.Page, pag.PageSize, total,
 		queryParams,
+		nil,
 	)
 	return response.Paginated(c, "ok", res, pagination)
 }

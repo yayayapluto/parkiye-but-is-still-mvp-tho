@@ -154,6 +154,7 @@ func (h *handler) listRefunds(c *fiber.Ctx) error {
 		"/api/v1/payments/refunds",
 		pag.Page, pag.PageSize, total,
 		nil,
+		nil,
 	)
 	return response.Paginated(c, "ok", res, pagination)
 }
@@ -278,7 +279,6 @@ func (h *handler) listenAsCashier(c *fiber.Ctx) error {
 	c.Set("Connection", "keep-alive")
 	c.Set("Transfer-Encoding", "chunked")
 	c.Set("X-Accel-Buffering", "no")
-	c.Set("Access-Control-Allow-Origin", "*")
 
 	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
 		defer cleanup()
@@ -332,7 +332,6 @@ func (h *handler) listenAsKiosk(c *fiber.Ctx) error {
 	c.Set("Connection", "keep-alive")
 	c.Set("Transfer-Encoding", "chunked")
 	c.Set("X-Accel-Buffering", "no")
-	c.Set("Access-Control-Allow-Origin", "*")
 
 	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
 		defer cleanup()
