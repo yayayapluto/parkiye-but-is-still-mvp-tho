@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
+	// "encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"parkieee/pkg/errors"
+	"parkieee/pkg/qr"
 )
 
 type pairingRepository struct {
@@ -129,6 +130,11 @@ func buildQRContent(baseURL, code string, expiresAt time.Time) (string, error) {
 // Di production bisa pakai library QR seperti github.com/skip2/go-qrcode.
 // Untuk sekarang kita return base64 dari JSON content-nya langsung
 // supaya frontend bisa generate QR sendiri dari string ini.
+// encodeQRBase64 generating QR image then returns its base64 data URI string.
 func encodeQRBase64(content string) string {
-	return base64.StdEncoding.EncodeToString([]byte(content))
+	res, err := qr.EncodeBase64(content)
+	if err != nil {
+		return ""
+	}
+	return res
 }
