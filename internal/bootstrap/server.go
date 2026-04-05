@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"strings"
 	"github.com/gofiber/contrib/otelfiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -48,12 +49,17 @@ func NewServer(container *Container) *fiber.App {
 		return c.Next()
 	})
 
+	origins := container.Config.App.AllowOrigins
+	if origins != "*" {
+		origins = strings.ReplaceAll(origins, " ", ",")
+	}
+
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     container.Config.App.AllowOrigins,
+		AllowOrigins:     origins,
 		AllowMethods:     "GET, POST, PUT, PATCH, DELETE, OPTIONS",
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Request-ID, Cache-Control, X-Requested-With",
 		ExposeHeaders:    "Content-Length",
-		AllowCredentials: container.Config.App.AllowOrigins != "*",
+		AllowCredentials: origins != "*",
 	}))
 
 	app.Use(recover2.New())
