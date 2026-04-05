@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"image"
@@ -226,6 +227,16 @@ func SavePNG(ctx context.Context, log logger.Logger, baseURL, filename, content 
 	url := baseURL + urlPrefix + "/" + filename + ".png"
 	log.Info(ctx, "qr: plain png saved", "dest", dest, "url", url)
 	return url, nil
+}
+
+// EncodeBase64 generates a PNG QR code of the content and returns it as a base64 data URI.
+// This is useful for ephemeral QR codes (like pairing) that don't need to be saved to disk.
+func EncodeBase64(content string) (string, error) {
+	pngByte, err := goqrcode.Encode(content, goqrcode.Medium, 256)
+	if err != nil {
+		return "", err
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngByte), nil
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
