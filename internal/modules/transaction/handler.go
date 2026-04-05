@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -68,6 +69,19 @@ func (h *handler) listTransactions(c *fiber.Ctx) error {
 		filter.IsUnclosed = &val
 	}
 
+	if s := c.Query("fee_min"); s != "" {
+		f, err := strconv.Atoi(s)
+		if err == nil {
+			filter.FeeMin = &f
+		}
+	}
+	if s := c.Query("fee_max"); s != "" {
+		f, err := strconv.Atoi(s)
+		if err == nil {
+			filter.FeeMax = &f
+		}
+	}
+
 	if s := c.Query("date_from"); s != "" {
 		t, err := time.Parse("2006-01-02", s)
 		if err != nil {
@@ -85,7 +99,7 @@ func (h *handler) listTransactions(c *fiber.Ctx) error {
 		filter.DateTo = &endOfDay
 	}
 
-	txs, total, err := h.svc.ListTransactions(c.Context(), filter, pag.Page, pag.PageSize)
+	txs, total, maxAmount, err := h.svc.ListTransactions(c.Context(), filter, pag.Page, pag.PageSize)
 	if err != nil {
 		return err
 	}
@@ -129,12 +143,19 @@ func (h *handler) listTransactions(c *fiber.Ctx) error {
 			queryParams["is_unclosed"] = "false"
 		}
 	}
+	if filter.FeeMin != nil {
+		queryParams["fee_min"] = fmt.Sprintf("%d", *filter.FeeMin)
+	}
+	if filter.FeeMax != nil {
+		queryParams["fee_max"] = fmt.Sprintf("%d", *filter.FeeMax)
+	}
 
 	pagination := response.GeneratePagination(
 		response.GetBaseURL(c),
 		"/api/v1/transactions",
 		pag.Page, pag.PageSize, total,
 		queryParams,
+		&maxAmount,
 	)
 	return response.Paginated(c, "ok", res, pagination)
 }

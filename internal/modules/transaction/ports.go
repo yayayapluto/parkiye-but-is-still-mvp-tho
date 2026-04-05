@@ -21,6 +21,8 @@ type ListFilter struct {
 	Search        string // Matches code or plate
 	PlateMismatch *bool
 	IsUnclosed    *bool
+	FeeMin        *int
+	FeeMax        *int
 	SortBy        string
 	SortOrder     string
 }
@@ -28,7 +30,7 @@ type ListFilter struct {
 type TransactionRepositoryPort interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*Transaction, error)
 	FindByCode(ctx context.Context, code string) (*Transaction, error)
-	FindAll(ctx context.Context, filter ListFilter, page, pageSize int) ([]Transaction, int64, error)
+	FindAll(ctx context.Context, filter ListFilter, page, pageSize int) ([]Transaction, int64, int64, error)
 
 	// FindOpenByRFIDCard returns the active (status=open) transaction for a card.
 	// Used to prevent double-entry by the same card.
@@ -83,7 +85,7 @@ type ServicePort interface {
 	GetTransaction(ctx context.Context, id uuid.UUID) (*Transaction, error)
 	GetByCode(ctx context.Context, code string) (*Transaction, error)
 	GetOpenByRFIDUID(ctx context.Context, uid string) (*Transaction, error)
-	ListTransactions(ctx context.Context, filter ListFilter, page, pageSize int) ([]Transaction, int64, error)
+	ListTransactions(ctx context.Context, filter ListFilter, page, pageSize int) ([]Transaction, int64, int64, error)
 	GetLogs(ctx context.Context, txID uuid.UUID) ([]TransactionLog, error)
 	LoadOCRSummary(ctx context.Context, txID uuid.UUID) []ocrDomain.OCRResultWithJob
 

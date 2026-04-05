@@ -462,14 +462,14 @@ func (s *service) LoadOCRSummary(ctx context.Context, txID uuid.UUID) []ocrDomai
 	return results
 }
 
-func (s *service) ListTransactions(ctx context.Context, filter ListFilter, page, pageSize int) ([]Transaction, int64, error) {
-	txs, total, err := s.txRepo.FindAll(ctx, filter, page, pageSize)
+func (s *service) ListTransactions(ctx context.Context, filter ListFilter, page, pageSize int) ([]Transaction, int64, int64, error) {
+	txs, total, maxAmount, err := s.txRepo.FindAll(ctx, filter, page, pageSize)
 	if err != nil {
 		s.log.Error(ctx, "list transactions: db error", "error", err)
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
-	s.log.Debug(ctx, "list transactions", "count", len(txs), "total", total, "page", page)
-	return txs, total, nil
+	s.log.Debug(ctx, "list transactions", "count", len(txs), "total", total, "max_amount", maxAmount, "page", page)
+	return txs, total, maxAmount, nil
 }
 
 func (s *service) SimulateEntryTime(ctx context.Context, id uuid.UUID, minutesAgo int) (*Transaction, error) {

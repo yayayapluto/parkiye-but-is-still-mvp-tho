@@ -36,9 +36,10 @@ func (r *transactionRepo) FindByCode(ctx context.Context, code string) (*Transac
 	return &t, errors.FromDB(err, "transaction not found")
 }
 
-func (r *transactionRepo) FindAll(ctx context.Context, filter ListFilter, page, pageSize int) ([]Transaction, int64, error) {
+func (r *transactionRepo) FindAll(ctx context.Context, filter ListFilter, page, pageSize int) ([]Transaction, int64, int64, error) {
 	var txs []Transaction
 	var total int64
+	var maxAmount int64
 
 	q := r.db.WithContext(ctx).Model(&Transaction{})
 
@@ -64,7 +65,6 @@ func (r *transactionRepo) FindAll(ctx context.Context, filter ListFilter, page, 
 	if filter.PlateMismatch != nil {
 		q = q.Where("plate_mismatch = ?", *filter.PlateMismatch)
 	}
-
 	// Search (Partial match code or plate)
 	if filter.Search != "" {
 		q = q.Joins("LEFT JOIN vehicles v ON v.id = transactions.vehicle_id").
@@ -80,8 +80,22 @@ func (r *transactionRepo) FindAll(ctx context.Context, filter ListFilter, page, 
 		}
 	}
 
+	// Calculate Max Amount from the current filtered set (before fee range pagination)
+	// We use a separate session because we don't want to include the fee filter in the max amount calculation,
+	// otherwise the slider's upper limit will shrink as the user filters.
+	if err := q.Session(&gorm.Session{}).Select("COALESCE(MAX(calculated_fee), 0)").Scan(&maxAmount).Error; err != nil {
+		return nil, 0, 0, errors.FromDB(err, "failed to calculate max amount")
+	}
+
+	if filter.FeeMin != nil {
+		q = q.Where("calculated_fee >= ?", *filter.FeeMin)
+	}
+	if filter.FeeMax != nil {
+		q = q.Where("calculated_fee <= ?", *filter.FeeMax)
+	}
+
 	if err := q.Count(&total).Error; err != nil {
-		return nil, 0, errors.FromDB(err, "")
+		return nil, 0, 0, errors.FromDB(err, "")
 	}
 
 	// Sorting
@@ -95,6 +109,7 @@ func (r *transactionRepo) FindAll(ctx context.Context, filter ListFilter, page, 
 		"code":           "transaction_code",
 		"status":         "status",
 		"fee":            "calculated_fee",
+		"calculated_fee": "calculated_fee",
 		"plate_mismatch": "plate_mismatch",
 	}
 
@@ -108,7 +123,7 @@ func (r *transactionRepo) FindAll(ctx context.Context, filter ListFilter, page, 
 
 	offset := (page - 1) * pageSize
 	err := q.Order(fmt.Sprintf("%s %s", sortCol, sortOrder)).Offset(offset).Limit(pageSize).Find(&txs).Error
-	return txs, total, errors.FromDB(err, "")
+	return txs, total, maxAmount, errors.FromDB(err, "")
 }
 
 func (r *transactionRepo) FindOpenByRFIDCard(ctx context.Context, cardID uuid.UUID) (*Transaction, error) {
