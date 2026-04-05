@@ -33,6 +33,7 @@ type PaginationMeta struct {
 	PageSize    int    `json:"per_page"`
 	To          int    `json:"to"`
 	Total       int64  `json:"total"`
+	MaxAmount   *int64 `json:"max_amount,omitempty"`
 	Path        string `json:"path"`
 }
 
@@ -64,6 +65,7 @@ func GeneratePagination(
 	pageSize int,
 	totalItems int64,
 	queryParams map[string]string,
+	maxAmount *int64,
 ) Pagination {
 	if currentPage < 1 {
 		currentPage = 1
@@ -119,6 +121,7 @@ func GeneratePagination(
 			PageSize:    pageSize,
 			To:          to,
 			Total:       totalItems,
+			MaxAmount:   maxAmount,
 			Path:        fmt.Sprintf("%s/%s", strings.TrimSuffix(baseURL, "/"), strings.TrimPrefix(route, "/")),
 		},
 	}
