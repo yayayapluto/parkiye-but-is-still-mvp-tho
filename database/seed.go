@@ -136,6 +136,7 @@ func seedPermissions(db *gorm.DB) error {
 		// User
 		{ID: permID("user.manage"), Node: string(types.PermUserManage), Description: "Create, deactivate, and assign roles to users"},
 		{ID: permID("user.view"), Node: string(types.PermUserView), Description: "View user list and profile"},
+		{ID: permID("role.manage"), Node: string(types.PermRoleManage), Description: "Manage system permissions and role matrix"},
 		{ID: permID("cashier.assign"), Node: string(types.PermCashierAssign), Description: "Assign or unassign cashier to an exit gate"},
 		// Cashier
 		{ID: permID("cashier.ability"), Node: string(types.PermCashierAbility), Description: "Access cashier station and receive payment requests from kiosk"},
@@ -186,6 +187,7 @@ func seedRolePermissions(db *gorm.DB) error {
 			"fee.view",
 			"user.manage",
 			"user.view",
+			"role.manage",
 			"cashier.assign",
 			"cashier.ability",
 			"payment.cash",
@@ -222,6 +224,7 @@ func seedRolePermissions(db *gorm.DB) error {
 			"gate.pair",
 			"zone.manage",
 			"transaction.view",
+			"role.manage",
 			"audit.read",
 			"config.edit",
 		},
@@ -403,8 +406,8 @@ func seedZonesAndGates(db *gorm.DB) error {
 			var backfillGates []zoneDomain.Gate
 			for _, z := range zonesWithoutGates {
 				backfillGates = append(backfillGates,
-					zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Masuk", GateType: types.GateTypeEntry, LocationDesc: pick(locationDescsBackfill), GateToken: uniqueToken(seenTokensBackfill), IsActive: true, CreatedBy: &adminIDBackfill},
-					zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Keluar", GateType: types.GateTypeExit, LocationDesc: pick(locationDescsBackfill), GateToken: uniqueToken(seenTokensBackfill), IsActive: true, CreatedBy: &adminIDBackfill},
+					zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Masuk", GateType: types.GateTypeEntry, LocationDesc: pick(locationDescsBackfill), GateToken: uniqueToken(seenTokensBackfill), IsActive: gofakeit.Bool(), CreatedBy: &adminIDBackfill},
+					zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Keluar", GateType: types.GateTypeExit, LocationDesc: pick(locationDescsBackfill), GateToken: uniqueToken(seenTokensBackfill), IsActive: gofakeit.Bool(), CreatedBy: &adminIDBackfill},
 				)
 			}
 			if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&backfillGates).Error; err != nil {
@@ -422,8 +425,8 @@ func seedZonesAndGates(db *gorm.DB) error {
 	vtPool := []uuid.UUID{vtMotorcycle, vtMotorcycle, vtMotorcycle, vtCar, vtCar, vtCar, vtTruck}
 
 	fixed := []zoneDomain.Zone{
-		{ID: deterministicUUID("zone:motor"), Name: "Parkir Motor", Description: "Area parkir sepeda motor lantai 1", Capacity: 200, AdditionalFee: 0, ForVehicleTypeID: &vtMotorcycle, IsActive: false, CreatedBy: &adminID},
-		{ID: deterministicUUID("zone:mobil"), Name: "Parkir Mobil", Description: "Area parkir mobil lantai 2", Capacity: 80, AdditionalFee: 2000, ForVehicleTypeID: &vtCar, IsActive: false, CreatedBy: &adminID},
+		{ID: deterministicUUID("zone:motor"), Name: "Parkir Motor", Description: "Area parkir sepeda motor lantai 1", Capacity: 200, AdditionalFee: 0, ForVehicleTypeID: &vtMotorcycle, IsActive: true, CreatedBy: &adminID},
+		{ID: deterministicUUID("zone:mobil"), Name: "Parkir Mobil", Description: "Area parkir mobil lantai 2", Capacity: 80, AdditionalFee: 2000, ForVehicleTypeID: &vtCar, IsActive: true, CreatedBy: &adminID},
 		{ID: deterministicUUID("zone:vip"), Name: "Parkir VIP", Description: "Area parkir VIP covered basement", Capacity: 20, AdditionalFee: 5000, ForVehicleTypeID: &vtCar, IsActive: false, CreatedBy: &adminID},
 	}
 
@@ -445,7 +448,7 @@ func seedZonesAndGates(db *gorm.DB) error {
 			Capacity:         gofakeit.IntRange(10, 300),
 			AdditionalFee:    feeOptions[mathrand.Intn(len(feeOptions))],
 			ForVehicleTypeID: &vtID,
-			IsActive:         false,
+			IsActive:         gofakeit.Bool(),
 			CreatedBy:        &adminID,
 		})
 	}
@@ -468,13 +471,13 @@ func seedZonesAndGates(db *gorm.DB) error {
 			continue
 		}
 		gates = append(gates,
-			zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Masuk", GateType: types.GateTypeEntry, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: false, CreatedBy: &adminID},
-			zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Keluar", GateType: types.GateTypeExit, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: false, CreatedBy: &adminID},
+			zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Masuk", GateType: types.GateTypeEntry, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: gofakeit.Bool(), CreatedBy: &adminID},
+			zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Keluar", GateType: types.GateTypeExit, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: gofakeit.Bool(), CreatedBy: &adminID},
 		)
 		if gofakeit.Bool() {
 			gates = append(gates,
-				zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Masuk 2", GateType: types.GateTypeEntry, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: false, CreatedBy: &adminID},
-				zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Keluar 2", GateType: types.GateTypeExit, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: false, CreatedBy: &adminID},
+				zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Masuk 2", GateType: types.GateTypeEntry, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: gofakeit.Bool(), CreatedBy: &adminID},
+				zoneDomain.Gate{ID: uuid.New(), ZoneID: z.ID, Name: z.Name + " - Keluar 2", GateType: types.GateTypeExit, LocationDesc: pick(locationDescs), GateToken: uniqueToken(seenTokens), IsActive: gofakeit.Bool(), CreatedBy: &adminID},
 			)
 		}
 	}
