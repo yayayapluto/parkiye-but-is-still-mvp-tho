@@ -76,6 +76,143 @@ func (s *service) GetStats(ctx context.Context) (*DashboardStats, error) {
 	return &stats, nil
 }
 
+// GetOperatorDashboard data untuk petugas lapangan.
+func (s *service) GetOperatorDashboard(ctx context.Context) (*OperatorDashboardData, error) {
+	var data OperatorDashboardData
+
+	// Get overall stats
+	stats, err := s.GetStats(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// 1. Basic Stats
+	if err := s.db.WithContext(ctx).Raw(`SELECT COALESCE(SUM(capacity), 0) FROM zones WHERE is_active = true`).Scan(&data.TotalCapacity).Error; err != nil {
+		return nil, errors.FromDB(err, "")
+	}
+	data.OccupiedSlots = stats.ActiveTransactions
+	data.ActiveEntries = stats.ActiveTransactions
+	if data.TotalCapacity > 0 {
+		data.AvailabilityPct = float64(data.TotalCapacity-data.OccupiedSlots) / float64(data.TotalCapacity) * 100
+	}
+
+	// 2. Zone Breakdown
+	if err := s.db.WithContext(ctx).Raw(`
+		SELECT z.id, z.name, z.capacity,
+			COALESCE(latest.occupied_count, 0) as occupied_count
+		FROM zones z
+		LEFT JOIN LATERAL (
+			SELECT occupied_count
+			FROM zone_capacity_logs
+			WHERE zone_id = z.id
+			ORDER BY recorded_at DESC
+			LIMIT 1
+		) latest ON true
+		WHERE z.is_active = true
+	`).Scan(&data.ZoneStatus).Error; err != nil {
+		return nil, errors.FromDB(err, "")
+	}
+
+	// Calculate percentages and statuses for each zone
+	for i := range data.ZoneStatus {
+		z := &data.ZoneStatus[i]
+		if z.Capacity > 0 {
+			z.OccupancyPct = float64(z.OccupiedCount) / float64(z.Capacity) * 100
+		}
+		if z.OccupancyPct >= 95 {
+			z.Status = "full"
+		} else if z.OccupancyPct >= 80 {
+			z.Status = "warning"
+		} else {
+			z.Status = "normal"
+		}
+	}
+
+	return &data, nil
+}
+
+// GetOwnerDashboard data untuk pemilik/manajemen.
+func (s *service) GetOwnerDashboard(ctx context.Context) (*OwnerDashboardData, error) {
+	var data OwnerDashboardData
+	today := time.Now().Truncate(24 * time.Hour)
+	tomorrow := today.Add(24 * time.Hour)
+
+	// 1. Overall stats
+	stats, err := s.GetStats(ctx)
+	if err != nil {
+		return nil, err
+	}
+	data.RevenueToday = stats.RevenueToday
+	data.TransactionCount = stats.TotalVehiclesToday
+
+	// 2. Payment Distribution
+	if err := s.db.WithContext(ctx).Raw(`
+		SELECT method, COUNT(*) as count, SUM(amount) as amount
+		FROM payments
+		WHERE status = 'completed' AND paid_at >= ? AND paid_at < ?
+		GROUP BY method
+	`, today, tomorrow).Scan(&data.PaymentDistribution).Error; err != nil {
+		return nil, errors.FromDB(err, "")
+	}
+
+	// 3. Efficiency (simplistic placeholder)
+	var totalCapacity int64
+	s.db.WithContext(ctx).Raw(`SELECT SUM(capacity) FROM zones WHERE is_active = true`).Scan(&totalCapacity)
+	if totalCapacity > 0 {
+		data.OccupancyEfficiency = (float64(stats.ActiveTransactions) / float64(totalCapacity)) * 100
+	}
+
+	return &data, nil
+}
+
+// GetAdminDashboard data untuk administrator sistem.
+func (s *service) GetAdminDashboard(ctx context.Context) (*AdminDashboardData, error) {
+	var data AdminDashboardData
+
+	// 1. User Summary
+	if err := s.db.WithContext(ctx).Raw(`SELECT COUNT(*) FROM users WHERE is_active = true`).Scan(&data.TotalUsers).Error; err != nil {
+		return nil, errors.FromDB(err, "")
+	}
+
+	// 2. Roles
+	roles, err := s.GetUserRoleSummary(ctx)
+	if err != nil {
+		return nil, err
+	}
+	data.RolesSummary = roles
+
+	// 3. Health
+	data.SystemHealth = "all_ok"
+
+	return &data, nil
+}
+
+// GetEngineerDashboard data untuk teknisi.
+func (s *service) GetEngineerDashboard(ctx context.Context) (*EngineerDashboardData, error) {
+	var data EngineerDashboardData
+
+	s.db.WithContext(ctx).Raw(`SELECT COUNT(*) FROM gates`).Scan(&data.TotalGates)
+	s.db.WithContext(ctx).Raw(`SELECT COUNT(*) FROM gates WHERE is_active = true`).Scan(&data.ActiveGates)
+	s.db.WithContext(ctx).Raw(`SELECT COUNT(*) FROM kiosks`).Scan(&data.TotalKiosks)
+	s.db.WithContext(ctx).Raw(`SELECT COUNT(*) FROM kiosks WHERE is_active = true`).Scan(&data.ActiveKiosks)
+
+	yesterday := time.Now().Add(-24 * time.Hour)
+	s.db.WithContext(ctx).Raw(`SELECT COUNT(*) FROM audit_logs WHERE level = 'error' AND created_at > ?`, yesterday).Scan(&data.RecentErrors)
+
+	return &data, nil
+}
+
+// GetCashierDashboard data untuk kasir.
+func (s *service) GetCashierDashboard(ctx context.Context) (*CashierDashboardData, error) {
+	var data CashierDashboardData
+	today := time.Now().Truncate(24 * time.Hour)
+
+	s.db.WithContext(ctx).Raw(`SELECT COUNT(*) FROM transactions WHERE status = 'awaiting_payment'`).Scan(&data.AwaitingPaymentCount)
+	s.db.WithContext(ctx).Raw(`SELECT COUNT(*) FROM transactions WHERE status IN ('paid', 'exited') AND updated_at >= ?`, today).Scan(&data.CompletedTodayCount)
+
+	return &data, nil
+}
+
 // GetUserRoleSummary mengembalikan jumlah user aktif per role.
 func (s *service) GetUserRoleSummary(ctx context.Context) ([]UserRoleSummary, error) {
 	var result []UserRoleSummary

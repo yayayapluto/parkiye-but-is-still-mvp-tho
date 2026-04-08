@@ -11,4 +11,9 @@ func RegisterRoutes(router fiber.Router, svc ServicePort, auth middleware.TokenV
 
 	router.Get("/dashboard/stats", authMw, h.getStats)
 	router.Get("/dashboard/user-role-summary", authMw, h.getUserRoleSummary)
+	router.Get("/dashboard/operator", authMw, h.getOperatorDashboard)
+	router.Get("/dashboard/owner", authMw, h.getOwnerDashboard)
+	router.Get("/dashboard/admin", authMw, h.getAdminDashboard)
+	router.Get("/dashboard/engineer", authMw, h.getEngineerDashboard)
+	router.Get("/dashboard/cashier", authMw, h.getCashierDashboard)
 }

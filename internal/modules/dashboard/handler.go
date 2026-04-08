@@ -30,3 +30,43 @@ func (h *handler) getUserRoleSummary(c *fiber.Ctx) error {
 	}
 	return response.Success(c, "ok", summary)
 }
+
+func (h *handler) getOperatorDashboard(c *fiber.Ctx) error {
+	data, err := h.svc.GetOperatorDashboard(c.Context())
+	if err != nil {
+		return err
+	}
+	return response.Success(c, "ok", data)
+}
+
+func (h *handler) getOwnerDashboard(c *fiber.Ctx) error {
+	data, err := h.svc.GetOwnerDashboard(c.Context())
+	if err != nil {
+		return err
+	}
+	return response.Success(c, "ok", data)
+}
+
+func (h *handler) getAdminDashboard(c *fiber.Ctx) error {
+	data, err := h.svc.GetAdminDashboard(c.Context())
+	if err != nil {
+		return err
+	}
+	return response.Success(c, "ok", data)
+}
+
+func (h *handler) getEngineerDashboard(c *fiber.Ctx) error {
+	data, err := h.svc.GetEngineerDashboard(c.Context())
+	if err != nil {
+		return err
+	}
+	return response.Success(c, "ok", data)
+}
+
+func (h *handler) getCashierDashboard(c *fiber.Ctx) error {
+	data, err := h.svc.GetCashierDashboard(c.Context())
+	if err != nil {
+		return err
+	}
+	return response.Success(c, "ok", data)
+}

@@ -218,11 +218,6 @@ func (s *service) ConfirmPairing(ctx context.Context, code string, req ConfirmPa
 		s.log.Info(ctx, "confirm pairing: cashier assigned and mode set to with_cashier", "gate_id", gate.ID, "cashier_user_id", *req.CashierUserID)
 	}
 
-	if !gate.IsActive {
-		s.log.Warn(ctx, "confirm pairing failed: gate inactive", "gate_id", gate.ID)
-		return nil, errors.New(errors.ErrValidation, "gate is inactive")
-	}
-
 	gateJWT, expiresAt, err := s.generateGateJWT(gate)
 	if err != nil {
 		s.log.Error(ctx, "failed to generate gate JWT for pairing", "error", err, "gate_id", gate.ID)

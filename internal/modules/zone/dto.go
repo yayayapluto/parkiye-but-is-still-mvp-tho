@@ -8,10 +8,15 @@ import (
 )
 
 type ListZoneFilter struct {
-	Search    string
-	SortBy    string
-	SortOrder string
-	Active    bool
+	Search      string
+	SortBy      string
+	SortOrder   string
+	Active      *bool
+	MinCapacity *int
+	MaxCapacity *int
+	MinFee      *int
+	MaxFee      *int
+	HasFee      *bool
 }
 
 type ListGateFilter struct {
@@ -20,7 +25,7 @@ type ListGateFilter struct {
 	SortOrder string
 	ZoneID    *uuid.UUID
 	GateType  *string
-	Active    bool
+	Active    *bool
 }
 
 type CreateZoneRequest struct {

@@ -33,11 +33,26 @@ func (r *zoneRepository) FindAll(ctx context.Context, filter ListZoneFilter, pag
 	var total int64
 
 	q := r.db.WithContext(ctx).Model(&Zone{})
-	if filter.Active {
-		q = q.Where("is_active = ?", true)
+	if filter.Active != nil {
+		q = q.Where("is_active = ?", *filter.Active)
 	}
 	if filter.Search != "" {
 		q = q.Where("name ILIKE ? OR description ILIKE ?", "%"+filter.Search+"%", "%"+filter.Search+"%")
+	}
+	if filter.HasFee != nil && *filter.HasFee {
+		q = q.Where("additional_fee > 0")
+	}
+	if filter.MinCapacity != nil {
+		q = q.Where("capacity >= ?", *filter.MinCapacity)
+	}
+	if filter.MaxCapacity != nil {
+		q = q.Where("capacity <= ?", *filter.MaxCapacity)
+	}
+	if filter.MinFee != nil {
+		q = q.Where("additional_fee >= ?", *filter.MinFee)
+	}
+	if filter.MaxFee != nil {
+		q = q.Where("additional_fee <= ?", *filter.MaxFee)
 	}
 
 	if err := q.Count(&total).Error; err != nil {
@@ -105,8 +120,8 @@ func (r *gateRepository) FindByZoneID(ctx context.Context, filter ListGateFilter
 	if filter.ZoneID != nil {
 		q = q.Where("zone_id = ?", *filter.ZoneID)
 	}
-	if filter.Active {
-		q = q.Where("is_active = ?", true)
+	if filter.Active != nil {
+		q = q.Where("is_active = ?", *filter.Active)
 	}
 	if filter.Search != "" {
 		q = q.Where("name ILIKE ? OR location_desc ILIKE ?", "%"+filter.Search+"%", "%"+filter.Search+"%")
@@ -141,8 +156,8 @@ func (r *gateRepository) FindAll(ctx context.Context, filter ListGateFilter, pag
 	if filter.GateType != nil {
 		q = q.Where("gate_type = ?", *filter.GateType)
 	}
-	if filter.Active {
-		q = q.Where("is_active = ?", true)
+	if filter.Active != nil {
+		q = q.Where("is_active = ?", *filter.Active)
 	}
 	if filter.Search != "" {
 		q = q.Where("name ILIKE ? OR location_desc ILIKE ?", "%"+filter.Search+"%", "%"+filter.Search+"%")

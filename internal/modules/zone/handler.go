@@ -2,6 +2,7 @@ package zone
 
 import (
 	"fmt"
+	"strconv"
 
 	"parkieee/pkg/middleware"
 	"parkieee/pkg/response"
@@ -10,6 +11,29 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
+
+// parseOptionalBool returns a *bool if the query param exists, nil otherwise.
+func parseOptionalBool(c *fiber.Ctx, key string) *bool {
+	raw := c.Query(key)
+	if raw == "" {
+		return nil
+	}
+	v := raw == "true" || raw == "1"
+	return &v
+}
+
+// parseOptionalInt returns a *int if the query param exists and is a valid int, nil otherwise.
+func parseOptionalInt(c *fiber.Ctx, key string) *int {
+	raw := c.Query(key)
+	if raw == "" {
+		return nil
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		return nil
+	}
+	return &v
+}
 
 type handler struct {
 	svc ServicePort
@@ -24,10 +48,15 @@ func (h *handler) listZones(c *fiber.Ctx) error {
 	pagReq := response.ParsePaginationRequest(c)
 
 	filter := ListZoneFilter{
-		Search:    c.Query("search"),
-		SortBy:    c.Query("sort_by"),
-		SortOrder: c.Query("sort_order"),
-		Active:    c.QueryBool("active", true),
+		Search:      c.Query("search"),
+		SortBy:      c.Query("sort_by"),
+		SortOrder:   c.Query("sort_order"),
+		Active:      parseOptionalBool(c, "active"),
+		MinCapacity: parseOptionalInt(c, "min_capacity"),
+		MaxCapacity: parseOptionalInt(c, "max_capacity"),
+		MinFee:      parseOptionalInt(c, "min_fee"),
+		MaxFee:      parseOptionalInt(c, "max_fee"),
+		HasFee:      parseOptionalBool(c, "has_fee"),
 	}
 
 	zones, total, err := h.svc.ListZones(c.Context(), filter, pagReq.Page, pagReq.PageSize)
@@ -45,7 +74,7 @@ func (h *handler) listZones(c *fiber.Ctx) error {
 		"/api/v1/zones",
 		pagReq.Page, pagReq.PageSize, total,
 		map[string]string{
-			"active":     c.Query("active", "true"),
+			"active":     c.Query("active"),
 			"search":     filter.Search,
 			"sort_by":    filter.SortBy,
 			"sort_order": filter.SortOrder,
@@ -154,7 +183,7 @@ func (h *handler) listAllGates(c *fiber.Ctx) error {
 		Search:    c.Query("search"),
 		SortBy:    c.Query("sort_by"),
 		SortOrder: c.Query("sort_order"),
-		Active:    c.QueryBool("active", false),
+		Active:    parseOptionalBool(c, "active"),
 	}
 
 	if z := c.Query("zone_id"); z != "" {
@@ -180,7 +209,7 @@ func (h *handler) listAllGates(c *fiber.Ctx) error {
 	}
 
 	extraParams := map[string]string{
-		"active":     c.Query("active", "false"),
+		"active":     c.Query("active"),
 		"search":     filter.Search,
 		"sort_by":    filter.SortBy,
 		"sort_order": filter.SortOrder,
@@ -214,7 +243,7 @@ func (h *handler) listGates(c *fiber.Ctx) error {
 		Search:    c.Query("search"),
 		SortBy:    c.Query("sort_by"),
 		SortOrder: c.Query("sort_order"),
-		Active:    c.QueryBool("active", true),
+		Active:    parseOptionalBool(c, "active"),
 		ZoneID:    &zoneID,
 	}
 
@@ -233,7 +262,7 @@ func (h *handler) listGates(c *fiber.Ctx) error {
 		fmt.Sprintf("/api/v1/zones/%s/gates", zoneID),
 		pagReq.Page, pagReq.PageSize, total,
 		map[string]string{
-			"active":     c.Query("active", "true"),
+			"active":     c.Query("active"),
 			"search":     filter.Search,
 			"sort_by":    filter.SortBy,
 			"sort_order": filter.SortOrder,

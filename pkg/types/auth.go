@@ -30,6 +30,7 @@ const (
 	// User & role operations
 	PermUserManage    PermissionNode = "user.manage"    // create, deactivate, ganti role user
 	PermUserView      PermissionNode = "user.view"      // lihat daftar user
+	PermRoleManage    PermissionNode = "role.manage"    // kelola perizinan dan matrix role
 	PermCashierAssign PermissionNode = "cashier.assign" // assign/unassign kasir ke exit gate
 
 	// Cashier operations
