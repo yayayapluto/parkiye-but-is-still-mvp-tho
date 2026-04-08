@@ -16,7 +16,7 @@ type FeeConfig struct {
 	VehicleTypeID      uuid.UUID  `gorm:"column:vehicle_type_id;type:uuid;not null;index"`
 	BaseFee            int        `gorm:"column:base_fee;not null;default:0"`
 	GracePeriodMinutes int        `gorm:"column:grace_period_minutes;not null;default:0"`
-	IsActive           bool       `gorm:"column:is_active;not null;default:true"`
+	IsActive           bool       `gorm:"column:is_active;not null"`
 	EffectiveFrom      time.Time  `gorm:"column:effective_from;not null"`
 	EffectiveUntil     *time.Time `gorm:"column:effective_until"`
 	CreatedBy          *uuid.UUID `gorm:"column:created_by;type:uuid"`
@@ -67,7 +67,7 @@ func (HolidayRate) TableName() string { return "holiday_rates" }
 type OCRConfig struct {
 	ID                  uuid.UUID       `gorm:"column:id;type:uuid;primaryKey;default:gen_random_uuid()"`
 	AutoAcceptThreshold decimal.Decimal `gorm:"column:auto_accept_threshold;type:decimal(5,4);not null"`
-	IsActive            bool            `gorm:"column:is_active;not null;default:true"`
+	IsActive            bool            `gorm:"column:is_active;not null"`
 	EffectiveFrom       time.Time       `gorm:"column:effective_from;not null"`
 	CreatedBy           *uuid.UUID      `gorm:"column:created_by;type:uuid"`
 	CreatedAt           time.Time       `gorm:"column:created_at;autoCreateTime"`
@@ -81,7 +81,7 @@ type OverrideConfig struct {
 	MaxOverridesPerDay     int        `gorm:"column:max_overrides_per_day;not null"`
 	MaxOverridesPerWeek    int        `gorm:"column:max_overrides_per_week;not null"`
 	EscalationNotifyUserID *uuid.UUID `gorm:"column:escalation_notify_user_id;type:uuid"`
-	IsActive               bool       `gorm:"column:is_active;not null;default:true"`
+	IsActive               bool       `gorm:"column:is_active;not null"`
 	CreatedBy              *uuid.UUID `gorm:"column:created_by;type:uuid"`
 	CreatedAt              time.Time  `gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt              time.Time  `gorm:"column:updated_at;autoUpdateTime"`

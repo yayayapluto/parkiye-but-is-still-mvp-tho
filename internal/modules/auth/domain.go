@@ -15,7 +15,7 @@ type User struct {
 	Email        string     `gorm:"type:varchar(150);uniqueIndex;not null"`
 	PasswordHash string     `gorm:"type:text;not null"`
 	RoleID       uuid.UUID  `gorm:"type:uuid;not null"`
-	IsActive     bool       `gorm:"not null;default:true"`
+	IsActive     bool       `gorm:"not null"`
 	CreatedBy    *uuid.UUID `gorm:"type:uuid"`
 	CreatedAt    time.Time  `gorm:"autoCreateTime"`
 	UpdatedAt    time.Time  `gorm:"autoUpdateTime"`

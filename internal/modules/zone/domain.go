@@ -15,7 +15,7 @@ type Zone struct {
 	Capacity         int        `gorm:"not null"`
 	AdditionalFee    int        `gorm:"not null;default:0"`
 	ForVehicleTypeID *uuid.UUID `gorm:"type:uuid"`
-	IsActive         bool       `gorm:"not null;default:true"`
+	IsActive         bool       `gorm:"not null"`
 	CreatedBy        *uuid.UUID `gorm:"type:uuid"`
 	CreatedAt        time.Time  `gorm:"autoCreateTime"`
 	UpdatedAt        time.Time  `gorm:"autoUpdateTime"`
@@ -48,7 +48,7 @@ type Gate struct {
 	LocationDesc    string         `gorm:"column:location_desc;type:text"`
 	GateToken       string         `gorm:"column:gate_token;type:varchar(60);uniqueIndex;not null"`
 	TokenLastUsedAt *time.Time     `gorm:"column:token_last_used_at"`
-	IsActive        bool           `gorm:"column:is_active;not null;default:true"`
+	IsActive        bool           `gorm:"column:is_active;not null"`
 	CreatedBy       *uuid.UUID     `gorm:"column:created_by;type:uuid"`
 	CreatedAt       time.Time      `gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt       time.Time      `gorm:"column:updated_at;autoUpdateTime"`
