@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go test:*)",
+      "Bash(go build:*)",
+      "Bash(go vet:*)",
+      "Bash(GOWORK=off go build ./internal/modules/transaction/)",
+      "Bash(go tool:*)",
+      "Bash(grep -n \"newHandler\" internal/modules/payment/*.go)"
+    ]
+  }
+}
