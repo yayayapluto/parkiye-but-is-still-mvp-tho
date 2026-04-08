@@ -181,9 +181,9 @@ func (_c *MockHolidayRateRepositoryPort_FindActiveForDate_Call) RunAndReturn(run
 	return _c
 }
 
-// FindAll provides a mock function with given fields: ctx, page, pageSize
-func (_m *MockHolidayRateRepositoryPort) FindAll(ctx context.Context, page int, pageSize int) ([]fee.HolidayRate, int64, error) {
-	ret := _m.Called(ctx, page, pageSize)
+// FindAll provides a mock function with given fields: ctx, filter, page, pageSize
+func (_m *MockHolidayRateRepositoryPort) FindAll(ctx context.Context, filter fee.ListHolidayRateFilter, page int, pageSize int) ([]fee.HolidayRate, int64, error) {
+	ret := _m.Called(ctx, filter, page, pageSize)
 
 	if len(ret) == 0 {
 		panic("no return value specified for FindAll")
@@ -192,25 +192,25 @@ func (_m *MockHolidayRateRepositoryPort) FindAll(ctx context.Context, page int, 
 	var r0 []fee.HolidayRate
 	var r1 int64
 	var r2 error
-	if rf, ok := ret.Get(0).(func(context.Context, int, int) ([]fee.HolidayRate, int64, error)); ok {
-		return rf(ctx, page, pageSize)
+	if rf, ok := ret.Get(0).(func(context.Context, fee.ListHolidayRateFilter, int, int) ([]fee.HolidayRate, int64, error)); ok {
+		return rf(ctx, filter, page, pageSize)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, int, int) []fee.HolidayRate); ok {
-		r0 = rf(ctx, page, pageSize)
+	if rf, ok := ret.Get(0).(func(context.Context, fee.ListHolidayRateFilter, int, int) []fee.HolidayRate); ok {
+		r0 = rf(ctx, filter, page, pageSize)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]fee.HolidayRate)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, int, int) int64); ok {
-		r1 = rf(ctx, page, pageSize)
+	if rf, ok := ret.Get(1).(func(context.Context, fee.ListHolidayRateFilter, int, int) int64); ok {
+		r1 = rf(ctx, filter, page, pageSize)
 	} else {
 		r1 = ret.Get(1).(int64)
 	}
 
-	if rf, ok := ret.Get(2).(func(context.Context, int, int) error); ok {
-		r2 = rf(ctx, page, pageSize)
+	if rf, ok := ret.Get(2).(func(context.Context, fee.ListHolidayRateFilter, int, int) error); ok {
+		r2 = rf(ctx, filter, page, pageSize)
 	} else {
 		r2 = ret.Error(2)
 	}
@@ -225,15 +225,16 @@ type MockHolidayRateRepositoryPort_FindAll_Call struct {
 
 // FindAll is a helper method to define mock.On call
 //   - ctx context.Context
+//   - filter fee.ListHolidayRateFilter
 //   - page int
 //   - pageSize int
-func (_e *MockHolidayRateRepositoryPort_Expecter) FindAll(ctx interface{}, page interface{}, pageSize interface{}) *MockHolidayRateRepositoryPort_FindAll_Call {
-	return &MockHolidayRateRepositoryPort_FindAll_Call{Call: _e.mock.On("FindAll", ctx, page, pageSize)}
+func (_e *MockHolidayRateRepositoryPort_Expecter) FindAll(ctx interface{}, filter interface{}, page interface{}, pageSize interface{}) *MockHolidayRateRepositoryPort_FindAll_Call {
+	return &MockHolidayRateRepositoryPort_FindAll_Call{Call: _e.mock.On("FindAll", ctx, filter, page, pageSize)}
 }
 
-func (_c *MockHolidayRateRepositoryPort_FindAll_Call) Run(run func(ctx context.Context, page int, pageSize int)) *MockHolidayRateRepositoryPort_FindAll_Call {
+func (_c *MockHolidayRateRepositoryPort_FindAll_Call) Run(run func(ctx context.Context, filter fee.ListHolidayRateFilter, page int, pageSize int)) *MockHolidayRateRepositoryPort_FindAll_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(int), args[2].(int))
+		run(args[0].(context.Context), args[1].(fee.ListHolidayRateFilter), args[2].(int), args[3].(int))
 	})
 	return _c
 }
@@ -243,7 +244,7 @@ func (_c *MockHolidayRateRepositoryPort_FindAll_Call) Return(_a0 []fee.HolidayRa
 	return _c
 }
 
-func (_c *MockHolidayRateRepositoryPort_FindAll_Call) RunAndReturn(run func(context.Context, int, int) ([]fee.HolidayRate, int64, error)) *MockHolidayRateRepositoryPort_FindAll_Call {
+func (_c *MockHolidayRateRepositoryPort_FindAll_Call) RunAndReturn(run func(context.Context, fee.ListHolidayRateFilter, int, int) ([]fee.HolidayRate, int64, error)) *MockHolidayRateRepositoryPort_FindAll_Call {
 	_c.Call.Return(run)
 	return _c
 }

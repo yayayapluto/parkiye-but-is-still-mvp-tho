@@ -118,9 +118,9 @@ func (_c *MockZoneRepositoryPort_Deactivate_Call) RunAndReturn(run func(context.
 	return _c
 }
 
-// FindAll provides a mock function with given fields: ctx, onlyActive, page, pageSize
-func (_m *MockZoneRepositoryPort) FindAll(ctx context.Context, onlyActive bool, page int, pageSize int) ([]zone.Zone, int64, error) {
-	ret := _m.Called(ctx, onlyActive, page, pageSize)
+// FindAll provides a mock function with given fields: ctx, filter, page, pageSize
+func (_m *MockZoneRepositoryPort) FindAll(ctx context.Context, filter zone.ListZoneFilter, page int, pageSize int) ([]zone.Zone, int64, error) {
+	ret := _m.Called(ctx, filter, page, pageSize)
 
 	if len(ret) == 0 {
 		panic("no return value specified for FindAll")
@@ -129,25 +129,25 @@ func (_m *MockZoneRepositoryPort) FindAll(ctx context.Context, onlyActive bool, 
 	var r0 []zone.Zone
 	var r1 int64
 	var r2 error
-	if rf, ok := ret.Get(0).(func(context.Context, bool, int, int) ([]zone.Zone, int64, error)); ok {
-		return rf(ctx, onlyActive, page, pageSize)
+	if rf, ok := ret.Get(0).(func(context.Context, zone.ListZoneFilter, int, int) ([]zone.Zone, int64, error)); ok {
+		return rf(ctx, filter, page, pageSize)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, bool, int, int) []zone.Zone); ok {
-		r0 = rf(ctx, onlyActive, page, pageSize)
+	if rf, ok := ret.Get(0).(func(context.Context, zone.ListZoneFilter, int, int) []zone.Zone); ok {
+		r0 = rf(ctx, filter, page, pageSize)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]zone.Zone)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, bool, int, int) int64); ok {
-		r1 = rf(ctx, onlyActive, page, pageSize)
+	if rf, ok := ret.Get(1).(func(context.Context, zone.ListZoneFilter, int, int) int64); ok {
+		r1 = rf(ctx, filter, page, pageSize)
 	} else {
 		r1 = ret.Get(1).(int64)
 	}
 
-	if rf, ok := ret.Get(2).(func(context.Context, bool, int, int) error); ok {
-		r2 = rf(ctx, onlyActive, page, pageSize)
+	if rf, ok := ret.Get(2).(func(context.Context, zone.ListZoneFilter, int, int) error); ok {
+		r2 = rf(ctx, filter, page, pageSize)
 	} else {
 		r2 = ret.Error(2)
 	}
@@ -162,16 +162,16 @@ type MockZoneRepositoryPort_FindAll_Call struct {
 
 // FindAll is a helper method to define mock.On call
 //   - ctx context.Context
-//   - onlyActive bool
+//   - filter zone.ListZoneFilter
 //   - page int
 //   - pageSize int
-func (_e *MockZoneRepositoryPort_Expecter) FindAll(ctx interface{}, onlyActive interface{}, page interface{}, pageSize interface{}) *MockZoneRepositoryPort_FindAll_Call {
-	return &MockZoneRepositoryPort_FindAll_Call{Call: _e.mock.On("FindAll", ctx, onlyActive, page, pageSize)}
+func (_e *MockZoneRepositoryPort_Expecter) FindAll(ctx interface{}, filter interface{}, page interface{}, pageSize interface{}) *MockZoneRepositoryPort_FindAll_Call {
+	return &MockZoneRepositoryPort_FindAll_Call{Call: _e.mock.On("FindAll", ctx, filter, page, pageSize)}
 }
 
-func (_c *MockZoneRepositoryPort_FindAll_Call) Run(run func(ctx context.Context, onlyActive bool, page int, pageSize int)) *MockZoneRepositoryPort_FindAll_Call {
+func (_c *MockZoneRepositoryPort_FindAll_Call) Run(run func(ctx context.Context, filter zone.ListZoneFilter, page int, pageSize int)) *MockZoneRepositoryPort_FindAll_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(bool), args[2].(int), args[3].(int))
+		run(args[0].(context.Context), args[1].(zone.ListZoneFilter), args[2].(int), args[3].(int))
 	})
 	return _c
 }
@@ -181,7 +181,7 @@ func (_c *MockZoneRepositoryPort_FindAll_Call) Return(_a0 []zone.Zone, _a1 int64
 	return _c
 }
 
-func (_c *MockZoneRepositoryPort_FindAll_Call) RunAndReturn(run func(context.Context, bool, int, int) ([]zone.Zone, int64, error)) *MockZoneRepositoryPort_FindAll_Call {
+func (_c *MockZoneRepositoryPort_FindAll_Call) RunAndReturn(run func(context.Context, zone.ListZoneFilter, int, int) ([]zone.Zone, int64, error)) *MockZoneRepositoryPort_FindAll_Call {
 	_c.Call.Return(run)
 	return _c
 }

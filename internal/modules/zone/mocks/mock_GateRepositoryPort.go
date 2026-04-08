@@ -63,40 +63,40 @@ func (_e *MockGateRepositoryPort_Expecter) Deactivate(ctx interface{}, id interf
 	return _e.mock.On("Deactivate", ctx, id)
 }
 
-// FindAll provides a mock function with given fields: ctx, zoneID, gateType, onlyActive, page, pageSize
-func (_m *MockGateRepositoryPort) FindAll(ctx context.Context, zoneID *uuid.UUID, gateType *string, onlyActive bool, page int, pageSize int) ([]zone.Gate, int64, error) {
-	ret := _m.Called(ctx, zoneID, gateType, onlyActive, page, pageSize)
+// FindAll provides a mock function with given fields: ctx, filter, page, pageSize
+func (_m *MockGateRepositoryPort) FindAll(ctx context.Context, filter zone.ListGateFilter, page int, pageSize int) ([]zone.Gate, int64, error) {
+	ret := _m.Called(ctx, filter, page, pageSize)
 	if len(ret) == 0 {
 		panic("no return value specified for FindAll")
 	}
 	var r0 []zone.Gate
 	var r1 int64
 	var r2 error
-	if rf, ok := ret.Get(0).(func(context.Context, *uuid.UUID, *string, bool, int, int) ([]zone.Gate, int64, error)); ok {
-		return rf(ctx, zoneID, gateType, onlyActive, page, pageSize)
+	if rf, ok := ret.Get(0).(func(context.Context, zone.ListGateFilter, int, int) ([]zone.Gate, int64, error)); ok {
+		return rf(ctx, filter, page, pageSize)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *uuid.UUID, *string, bool, int, int) []zone.Gate); ok {
-		r0 = rf(ctx, zoneID, gateType, onlyActive, page, pageSize)
+	if rf, ok := ret.Get(0).(func(context.Context, zone.ListGateFilter, int, int) []zone.Gate); ok {
+		r0 = rf(ctx, filter, page, pageSize)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]zone.Gate)
 		}
 	}
-	if rf, ok := ret.Get(1).(func(context.Context, *uuid.UUID, *string, bool, int, int) int64); ok {
-		r1 = rf(ctx, zoneID, gateType, onlyActive, page, pageSize)
+	if rf, ok := ret.Get(1).(func(context.Context, zone.ListGateFilter, int, int) int64); ok {
+		r1 = rf(ctx, filter, page, pageSize)
 	} else {
 		r1 = ret.Get(1).(int64)
 	}
-	if rf, ok := ret.Get(2).(func(context.Context, *uuid.UUID, *string, bool, int, int) error); ok {
-		r2 = rf(ctx, zoneID, gateType, onlyActive, page, pageSize)
+	if rf, ok := ret.Get(2).(func(context.Context, zone.ListGateFilter, int, int) error); ok {
+		r2 = rf(ctx, filter, page, pageSize)
 	} else {
 		r2 = ret.Error(2)
 	}
 	return r0, r1, r2
 }
 
-func (_e *MockGateRepositoryPort_Expecter) FindAll(ctx interface{}, zoneID interface{}, gateType interface{}, onlyActive interface{}, page interface{}, pageSize interface{}) *mock.Call {
-	return _e.mock.On("FindAll", ctx, zoneID, gateType, onlyActive, page, pageSize)
+func (_e *MockGateRepositoryPort_Expecter) FindAll(ctx interface{}, filter interface{}, page interface{}, pageSize interface{}) *mock.Call {
+	return _e.mock.On("FindAll", ctx, filter, page, pageSize)
 }
 
 // FindByID provides a mock function with given fields: ctx, id
@@ -159,40 +159,40 @@ func (_e *MockGateRepositoryPort_Expecter) FindByToken(ctx interface{}, token in
 	return _e.mock.On("FindByToken", ctx, token)
 }
 
-// FindByZoneID provides a mock function with given fields: ctx, zoneID, onlyActive, page, pageSize
-func (_m *MockGateRepositoryPort) FindByZoneID(ctx context.Context, zoneID uuid.UUID, onlyActive bool, page int, pageSize int) ([]zone.Gate, int64, error) {
-	ret := _m.Called(ctx, zoneID, onlyActive, page, pageSize)
+// FindByZoneID provides a mock function with given fields: ctx, filter, page, pageSize
+func (_m *MockGateRepositoryPort) FindByZoneID(ctx context.Context, filter zone.ListGateFilter, page int, pageSize int) ([]zone.Gate, int64, error) {
+	ret := _m.Called(ctx, filter, page, pageSize)
 	if len(ret) == 0 {
 		panic("no return value specified for FindByZoneID")
 	}
 	var r0 []zone.Gate
 	var r1 int64
 	var r2 error
-	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, bool, int, int) ([]zone.Gate, int64, error)); ok {
-		return rf(ctx, zoneID, onlyActive, page, pageSize)
+	if rf, ok := ret.Get(0).(func(context.Context, zone.ListGateFilter, int, int) ([]zone.Gate, int64, error)); ok {
+		return rf(ctx, filter, page, pageSize)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, bool, int, int) []zone.Gate); ok {
-		r0 = rf(ctx, zoneID, onlyActive, page, pageSize)
+	if rf, ok := ret.Get(0).(func(context.Context, zone.ListGateFilter, int, int) []zone.Gate); ok {
+		r0 = rf(ctx, filter, page, pageSize)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]zone.Gate)
 		}
 	}
-	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID, bool, int, int) int64); ok {
-		r1 = rf(ctx, zoneID, onlyActive, page, pageSize)
+	if rf, ok := ret.Get(1).(func(context.Context, zone.ListGateFilter, int, int) int64); ok {
+		r1 = rf(ctx, filter, page, pageSize)
 	} else {
 		r1 = ret.Get(1).(int64)
 	}
-	if rf, ok := ret.Get(2).(func(context.Context, uuid.UUID, bool, int, int) error); ok {
-		r2 = rf(ctx, zoneID, onlyActive, page, pageSize)
+	if rf, ok := ret.Get(2).(func(context.Context, zone.ListGateFilter, int, int) error); ok {
+		r2 = rf(ctx, filter, page, pageSize)
 	} else {
 		r2 = ret.Error(2)
 	}
 	return r0, r1, r2
 }
 
-func (_e *MockGateRepositoryPort_Expecter) FindByZoneID(ctx interface{}, zoneID interface{}, onlyActive interface{}, page interface{}, pageSize interface{}) *mock.Call {
-	return _e.mock.On("FindByZoneID", ctx, zoneID, onlyActive, page, pageSize)
+func (_e *MockGateRepositoryPort_Expecter) FindByZoneID(ctx interface{}, filter interface{}, page interface{}, pageSize interface{}) *mock.Call {
+	return _e.mock.On("FindByZoneID", ctx, filter, page, pageSize)
 }
 
 // Update provides a mock function with given fields: ctx, gate

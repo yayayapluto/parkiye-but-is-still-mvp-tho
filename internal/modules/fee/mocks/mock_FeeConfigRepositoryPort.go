@@ -178,9 +178,9 @@ func (_c *MockFeeConfigRepositoryPort_FindActiveByZoneAndVehicle_Call) RunAndRet
 	return _c
 }
 
-// FindAll provides a mock function with given fields: ctx, zoneID, vehicleTypeID, page, pageSize
-func (_m *MockFeeConfigRepositoryPort) FindAll(ctx context.Context, zoneID *uuid.UUID, vehicleTypeID *uuid.UUID, page int, pageSize int) ([]fee.FeeConfig, int64, error) {
-	ret := _m.Called(ctx, zoneID, vehicleTypeID, page, pageSize)
+// FindAll provides a mock function with given fields: ctx, filter, page, pageSize
+func (_m *MockFeeConfigRepositoryPort) FindAll(ctx context.Context, filter fee.ListFeeConfigFilter, page int, pageSize int) ([]fee.FeeConfig, int64, error) {
+	ret := _m.Called(ctx, filter, page, pageSize)
 
 	if len(ret) == 0 {
 		panic("no return value specified for FindAll")
@@ -189,25 +189,25 @@ func (_m *MockFeeConfigRepositoryPort) FindAll(ctx context.Context, zoneID *uuid
 	var r0 []fee.FeeConfig
 	var r1 int64
 	var r2 error
-	if rf, ok := ret.Get(0).(func(context.Context, *uuid.UUID, *uuid.UUID, int, int) ([]fee.FeeConfig, int64, error)); ok {
-		return rf(ctx, zoneID, vehicleTypeID, page, pageSize)
+	if rf, ok := ret.Get(0).(func(context.Context, fee.ListFeeConfigFilter, int, int) ([]fee.FeeConfig, int64, error)); ok {
+		return rf(ctx, filter, page, pageSize)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *uuid.UUID, *uuid.UUID, int, int) []fee.FeeConfig); ok {
-		r0 = rf(ctx, zoneID, vehicleTypeID, page, pageSize)
+	if rf, ok := ret.Get(0).(func(context.Context, fee.ListFeeConfigFilter, int, int) []fee.FeeConfig); ok {
+		r0 = rf(ctx, filter, page, pageSize)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]fee.FeeConfig)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *uuid.UUID, *uuid.UUID, int, int) int64); ok {
-		r1 = rf(ctx, zoneID, vehicleTypeID, page, pageSize)
+	if rf, ok := ret.Get(1).(func(context.Context, fee.ListFeeConfigFilter, int, int) int64); ok {
+		r1 = rf(ctx, filter, page, pageSize)
 	} else {
 		r1 = ret.Get(1).(int64)
 	}
 
-	if rf, ok := ret.Get(2).(func(context.Context, *uuid.UUID, *uuid.UUID, int, int) error); ok {
-		r2 = rf(ctx, zoneID, vehicleTypeID, page, pageSize)
+	if rf, ok := ret.Get(2).(func(context.Context, fee.ListFeeConfigFilter, int, int) error); ok {
+		r2 = rf(ctx, filter, page, pageSize)
 	} else {
 		r2 = ret.Error(2)
 	}
@@ -222,17 +222,16 @@ type MockFeeConfigRepositoryPort_FindAll_Call struct {
 
 // FindAll is a helper method to define mock.On call
 //   - ctx context.Context
-//   - zoneID *uuid.UUID
-//   - vehicleTypeID *uuid.UUID
+//   - filter fee.ListFeeConfigFilter
 //   - page int
 //   - pageSize int
-func (_e *MockFeeConfigRepositoryPort_Expecter) FindAll(ctx interface{}, zoneID interface{}, vehicleTypeID interface{}, page interface{}, pageSize interface{}) *MockFeeConfigRepositoryPort_FindAll_Call {
-	return &MockFeeConfigRepositoryPort_FindAll_Call{Call: _e.mock.On("FindAll", ctx, zoneID, vehicleTypeID, page, pageSize)}
+func (_e *MockFeeConfigRepositoryPort_Expecter) FindAll(ctx interface{}, filter interface{}, page interface{}, pageSize interface{}) *MockFeeConfigRepositoryPort_FindAll_Call {
+	return &MockFeeConfigRepositoryPort_FindAll_Call{Call: _e.mock.On("FindAll", ctx, filter, page, pageSize)}
 }
 
-func (_c *MockFeeConfigRepositoryPort_FindAll_Call) Run(run func(ctx context.Context, zoneID *uuid.UUID, vehicleTypeID *uuid.UUID, page int, pageSize int)) *MockFeeConfigRepositoryPort_FindAll_Call {
+func (_c *MockFeeConfigRepositoryPort_FindAll_Call) Run(run func(ctx context.Context, filter fee.ListFeeConfigFilter, page int, pageSize int)) *MockFeeConfigRepositoryPort_FindAll_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(*uuid.UUID), args[2].(*uuid.UUID), args[3].(int), args[4].(int))
+		run(args[0].(context.Context), args[1].(fee.ListFeeConfigFilter), args[2].(int), args[3].(int))
 	})
 	return _c
 }
@@ -242,7 +241,7 @@ func (_c *MockFeeConfigRepositoryPort_FindAll_Call) Return(_a0 []fee.FeeConfig, 
 	return _c
 }
 
-func (_c *MockFeeConfigRepositoryPort_FindAll_Call) RunAndReturn(run func(context.Context, *uuid.UUID, *uuid.UUID, int, int) ([]fee.FeeConfig, int64, error)) *MockFeeConfigRepositoryPort_FindAll_Call {
+func (_c *MockFeeConfigRepositoryPort_FindAll_Call) RunAndReturn(run func(context.Context, fee.ListFeeConfigFilter, int, int) ([]fee.FeeConfig, int64, error)) *MockFeeConfigRepositoryPort_FindAll_Call {
 	_c.Call.Return(run)
 	return _c
 }
