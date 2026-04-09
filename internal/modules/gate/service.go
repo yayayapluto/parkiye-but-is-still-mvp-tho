@@ -2,6 +2,7 @@ package gate
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -235,7 +236,13 @@ func (s *service) ConfirmPairing(ctx context.Context, code string, req ConfirmPa
 	}
 
 	if ch, ok := s.pairingRepo.GetSSEClient(code); ok {
-		ch <- gateJWT
+		payloadObj := PairingConfirmResponse{
+			GateJWT:   gateJWT,
+			ExpiresAt: expiresAt,
+			Gate:      toGateInfo(gate),
+		}
+		b, _ := json.Marshal(payloadObj)
+		ch <- string(b)
 		s.pairingRepo.RemoveSSEClient(code)
 	}
 

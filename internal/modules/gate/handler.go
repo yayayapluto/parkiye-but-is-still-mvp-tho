@@ -111,13 +111,13 @@ func (h *handler) listenPairing(c *fiber.Ctx) error {
 
 		for {
 			select {
-			case jwt, ok := <-ch:
+			case payload, ok := <-ch:
 				if !ok {
 					fmt.Fprintf(w, "event: kicked\ndata: {\"reason\":\"new_listener_connected\"}\n\n")
 					w.Flush()
 					return
 				}
-				fmt.Fprintf(w, "event: confirmed\ndata: {\"token\":\"%s\"}\n\n", jwt)
+				fmt.Fprintf(w, "event: confirmed\ndata: %s\n\n", payload)
 				w.Flush()
 				return
 			case <-ticker.C:

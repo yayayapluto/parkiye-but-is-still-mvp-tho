@@ -167,6 +167,7 @@ func seedRolePermissions(db *gorm.DB) error {
 		"operator": {
 			"gate.override",
 			"gate.view",
+			"gate.pair",
 			"zone.view",
 			"fee.view",
 			"transaction.view",

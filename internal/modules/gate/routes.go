@@ -27,7 +27,8 @@ func RegisterRoutes(router fiber.Router, svc ServicePort, authSvc middleware.Tok
 
 	// Endpoint admin — butuh auth
 	adminPairing := g.Group("/pairing")
-	adminPairing.Use(middleware.Auth(authSvc))
+	gatePairMw := middleware.RequirePermission("gate.pair")
+	adminPairing.Use(middleware.Auth(authSvc), gatePairMw)
 
 	// GET /api/v1/gate/pairing/:code
 	// Admin lihat info pairing setelah scan QR.
